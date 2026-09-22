@@ -128,7 +128,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.release.outputs.tag }}" "${{ steps.package.outputs.zip }}" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "JellyTag ${{ steps.release.outputs.version }}" \
-            --generate-notes
+          tag="${{ steps.release.outputs.tag }}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$tag" "${{ steps.package.outputs.zip }}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$tag" "${{ steps.package.outputs.zip }}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "JellyTag ${{ steps.release.outputs.version }}" \
+              --generate-notes
+          fi
