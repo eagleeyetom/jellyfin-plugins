@@ -32,7 +32,7 @@
         "changelog": "Prevent broken-image icons in the custom badge gallery when a preview cannot be loaded",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.1.0.3/jellytag-2.1.0.3.zip",
-        "checksum": "TBD",
+        "checksum": "FF2157E7DBAF841E56205561A035535E",
         "timestamp": "2026-09-22T00:00:00Z"
       },
       {
