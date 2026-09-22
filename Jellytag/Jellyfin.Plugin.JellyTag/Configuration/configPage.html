@@ -78,6 +78,13 @@
                             </label>
                             <div class="fieldDescription">Samsung clients will continue to show HDR10+ when enabled in the HDR panel. Other clients are unaffected.</div>
                         </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="CombineDvWithAtmos" type="checkbox" is="emby-checkbox" />
+                                <span>Combine Dolby Vision + Atmos into single badge</span>
+                            </label>
+                            <div class="fieldDescription">When a file has both Dolby Vision and Dolby Atmos, show a combined badge instead of separate icons. This matches the visual style used by TV manufacturers.</div>
+                        </div>
                     </div>
 
                     <!-- Libraries -->
@@ -144,6 +151,7 @@
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hdr10">HDR10</label><input id="cbt_hdr10" data-badge-key="hdr10" type="text" placeholder="HDR10" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hdr10plus">HDR10+</label><input id="cbt_hdr10plus" data-badge-key="hdr10plus" type="text" placeholder="HDR10+" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dv">Dolby Vision</label><input id="cbt_dv" data-badge-key="dv" type="text" placeholder="DV" is="emby-input" /></div>
+                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dvAtmos">DV + Atmos</label><input id="cbt_dvAtmos" data-badge-key="dv-atmos" type="text" placeholder="DV+ATMOS" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hlg">HLG</label><input id="cbt_hlg" data-badge-key="hlg" type="text" placeholder="HLG" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hdr">HDR (generic)</label><input id="cbt_hdr" data-badge-key="hdr" type="text" placeholder="HDR" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_atmos">Dolby Atmos</label><input id="cbt_atmos" data-badge-key="atmos" type="text" placeholder="ATMOS" is="emby-input" /></div>
@@ -757,6 +765,7 @@
         function collectConfigFromForm(config) {
             config.Enabled = q('Enabled').checked;
             config.HideDolbyVisionOnSamsungClients = q('HideDolbyVisionOnSamsungClients').checked;
+            config.CombineDvWithAtmos = q('CombineDvWithAtmos').checked;
             config.ThumbnailSameAsPoster = q('ThumbnailSameAsPoster').checked;
             config.ThumbnailSizeReduction = parseInt(q('ThumbnailSizeReduction').value, 10) || 0;
             config.PosterConfig = collectImageTypeConfig('Poster');
@@ -840,7 +849,7 @@
         // ===== Badge Gallery =====
         var allBadgeKeys = [
             {key:'4k',label:'4K'},{key:'1080p',label:'1080p'},{key:'720p',label:'720p'},{key:'sd',label:'SD'},
-            {key:'hdr10',label:'HDR10'},{key:'hdr10plus',label:'HDR10+'},{key:'dv',label:'Dolby Vision'},{key:'hlg',label:'HLG'},
+            {key:'hdr10',label:'HDR10'},{key:'hdr10plus',label:'HDR10+'},{key:'dv',label:'Dolby Vision'},{key:'dv-atmos',label:'Dolby Vision + Atmos'},{key:'hlg',label:'HLG'},
             {key:'atmos',label:'Atmos'},{key:'dtsx',label:'DTS:X'},{key:'truehd',label:'TrueHD'},{key:'dtshdma',label:'DTS-HD MA'},
             {key:'5.1',label:'5.1'},{key:'7.1',label:'7.1'},{key:'stereo',label:'Stereo'},
             {key:'h264',label:'H.264'},{key:'hevc',label:'HEVC'},{key:'av1',label:'AV1'},{key:'vp9',label:'VP9'}
@@ -903,6 +912,7 @@
             ApiClient.getPluginConfiguration(JellyTagConfig.pluginUniqueId).then(function(config) {
                 q('Enabled').checked = config.Enabled;
                 q('HideDolbyVisionOnSamsungClients').checked = config.HideDolbyVisionOnSamsungClients === true;
+                q('CombineDvWithAtmos').checked = config.CombineDvWithAtmos === true;
                 q('ThumbnailSameAsPoster').checked = config.ThumbnailSameAsPoster === true;
                 q('ThumbnailSizeReduction').value = config.ThumbnailSizeReduction != null ? config.ThumbnailSizeReduction : 10;
 

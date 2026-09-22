@@ -105,6 +105,29 @@ public partial class ImageOverlayMiddleware
             .Where(b => overlayService.ShouldShowBadge(b, imageConfig))
             .Where(b => !hideDolbyVision || !string.Equals(b.BadgeKey, "dv", StringComparison.OrdinalIgnoreCase))
             .ToList();
+        
+        // Combine DV + Atmos into single badge if enabled
+        if (config.CombineDvWithAtmos)
+        {
+            var hasDv = visibleBadges.Any(b => string.Equals(b.BadgeKey, "dv", StringComparison.OrdinalIgnoreCase));
+            var hasAtmos = visibleBadges.Any(b => string.Equals(b.BadgeKey, "atmos", StringComparison.OrdinalIgnoreCase));
+            
+            if (hasDv && hasAtmos)
+            {
+                visibleBadges = visibleBadges
+                    .Where(b => !string.Equals(b.BadgeKey, "dv", StringComparison.OrdinalIgnoreCase)
+                             && !string.Equals(b.BadgeKey, "atmos", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                
+                // Add combined badge (using Hdr category since it combines video HDR and audio)
+                visibleBadges.Add(new BadgeInfo
+                {
+                    BadgeKey = "dv-atmos",
+                    Category = BadgeCategory.Hdr,
+                    ResourceFileName = "badge-dv-atmos.svg"
+                });
+            }
+        }
         _logger.LogDebug("Visible badges after filter: {Count}: {Badges}",
             visibleBadges.Count, string.Join(", ", visibleBadges.Select(b => b.BadgeKey)));
 

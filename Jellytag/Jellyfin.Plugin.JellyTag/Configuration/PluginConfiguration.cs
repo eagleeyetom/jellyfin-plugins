@@ -129,11 +129,14 @@ public class PluginConfiguration : BasePluginConfiguration
         JpegQuality = 90;
         OutputFormat = OutputImageFormat.Jpeg;
         WebPQuality = 90;
+        CombineDvWithAtmos = true;
     }
 
     public bool Enabled { get; set; }
 
     public bool HideDolbyVisionOnSamsungClients { get; set; }
+
+    public bool CombineDvWithAtmos { get; set; }
 
     public ImageTypeConfig PosterConfig { get; set; }
     public ImageTypeConfig ThumbnailConfig { get; set; }
