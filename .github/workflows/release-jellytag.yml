@@ -1,0 +1,134 @@
+name: Release JellyTag
+
+on:
+  push:
+    tags:
+      - "jellytag-*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, for example jellytag-2.0.3.0
+        required: true
+        type: string
+      manifest_branch:
+        description: Branch containing the Jellyfin manifest
+        required: true
+        default: samsung-client-filter-test
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  PROJECT: Jellytag/Jellyfin.Plugin.JellyTag/Jellyfin.Plugin.JellyTag.csproj
+  MANIFEST_BRANCH: samsung-client-filter-test
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+            manifest_branch="${{ inputs.manifest_branch }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+            manifest_branch="${MANIFEST_BRANCH}"
+          fi
+
+          if [[ "$tag" != jellytag-* ]]; then
+            echo "Release tag must start with jellytag-: $tag" >&2
+            exit 1
+          fi
+
+          version="${tag#jellytag-}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "manifest_branch=$manifest_branch" >> "$GITHUB_OUTPUT"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Publish plugin
+        run: dotnet publish "$PROJECT" --configuration Release --output "$RUNNER_TEMP/jellytag-publish"
+
+      - name: Verify project version
+        shell: bash
+        run: |
+          project_version="$(dotnet msbuild "$PROJECT" -getProperty:Version | tail -n 1 | tr -d '\r')"
+          if [[ "$project_version" != "${{ steps.release.outputs.version }}" ]]; then
+            echo "Project version $project_version does not match release version ${{ steps.release.outputs.version }}" >&2
+            exit 1
+          fi
+
+      - name: Package plugin
+        id: package
+        shell: bash
+        run: |
+          package_dir="$RUNNER_TEMP/jellytag-package"
+          mkdir -p "$package_dir"
+          cp "$RUNNER_TEMP/jellytag-publish"/* "$package_dir"/
+          zip_path="$RUNNER_TEMP/jellytag-${{ steps.release.outputs.version }}.zip"
+          (cd "$package_dir" && zip -j -X "$zip_path" ./*)
+          checksum="$(md5sum "$zip_path" | awk '{print toupper($1)}')"
+          echo "zip=$zip_path" >> "$GITHUB_OUTPUT"
+          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
+
+      - name: Update manifest checksum
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_CHECKSUM: ${{ steps.package.outputs.checksum }}
+          MANIFEST_BRANCH: ${{ steps.release.outputs.manifest_branch }}
+        shell: bash
+        run: |
+          git fetch origin "$MANIFEST_BRANCH"
+          git switch "$MANIFEST_BRANCH" 2>/dev/null || git switch -c "$MANIFEST_BRANCH" --track "origin/$MANIFEST_BRANCH"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("manifest.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          version = os.environ["RELEASE_VERSION"]
+          checksum = os.environ["RELEASE_CHECKSUM"]
+          updated = False
+
+          for plugin in data:
+              if plugin.get("guid") != "f4a2e8c1-9b3d-4f7a-b6c5-2d8e1a3f9b04":
+                  continue
+              for release in plugin.get("versions", []):
+                  if release.get("version") == version:
+                      release["checksum"] = checksum
+                      updated = True
+
+          if not updated:
+              raise SystemExit(f"No JellyTag manifest entry found for version {version}")
+
+          path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git diff --cached --quiet || git commit -m "Update JellyTag $RELEASE_VERSION checksum"
+          git push origin "$MANIFEST_BRANCH"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.release.outputs.tag }}" "${{ steps.package.outputs.zip }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "JellyTag ${{ steps.release.outputs.version }}" \
+            --generate-notes
