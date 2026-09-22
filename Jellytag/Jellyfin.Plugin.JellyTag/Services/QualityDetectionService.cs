@@ -167,10 +167,12 @@ public class QualityDetectionService : IQualityDetectionService
                 badges.Add(CreateResolutionBadge(bestResolution));
             }
 
-            if (bestVideo != null)
+            foreach (var child in children.OfType<Video>())
             {
-                DetectHdrAndAudioBadges(bestVideo, badges);
+                DetectHdrAndAudioBadges(child, badges);
             }
+
+            DeduplicateBadges(badges);
         }
 
         return badges;
@@ -208,11 +210,7 @@ public class QualityDetectionService : IQualityDetectionService
                 }
 
                 // HDR detection - always detect, filtering happens in ShouldShowBadge
-                var hdrBadge = DetectHdr(videoStream);
-                if (hdrBadge != null)
-                {
-                    badges.Add(hdrBadge);
-                }
+                badges.AddRange(DetectHdr(videoStream));
 
                 // Video codec detection
                 var codec = videoStream.Codec?.ToLowerInvariant() ?? string.Empty;
@@ -346,43 +344,85 @@ public class QualityDetectionService : IQualityDetectionService
         return badges;
     }
 
-    private static BadgeInfo? DetectHdr(MediaStream videoStream)
+    private static List<BadgeInfo> DetectHdr(MediaStream videoStream)
     {
+        var badges = new List<BadgeInfo>();
+        var added = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var rangeType = videoStream.VideoRangeType;
+        var range = videoStream.VideoRange;
+        var profile = videoStream.Profile ?? string.Empty;
 
-        // Dolby Vision variants (highest priority)
-        if (rangeType is VideoRangeType.DOVI
-            or VideoRangeType.DOVIWithHDR10
-            or VideoRangeType.DOVIWithHLG
-            or VideoRangeType.DOVIWithSDR
-            or VideoRangeType.DOVIWithEL
-            or VideoRangeType.DOVIWithHDR10Plus
-            or VideoRangeType.DOVIWithELHDR10Plus)
+        void AddHdrBadge(string badgeKey, string resourceFileName)
         {
-            return new BadgeInfo { Category = BadgeCategory.Hdr, BadgeKey = "dv", ResourceFileName = "badge-dv.svg" };
+            if (added.Add(badgeKey))
+            {
+                badges.Add(new BadgeInfo { Category = BadgeCategory.Hdr, BadgeKey = badgeKey, ResourceFileName = resourceFileName });
+            }
         }
 
-        if (rangeType == VideoRangeType.HDR10Plus)
+        if (IsDolbyVision(rangeType, range, profile))
         {
-            return new BadgeInfo { Category = BadgeCategory.Hdr, BadgeKey = "hdr10plus", ResourceFileName = "badge-hdr10plus.svg" };
+            AddHdrBadge("dv", "badge-dv.svg");
+        }
+
+        if (IsHdr10Plus(rangeType, profile))
+        {
+            AddHdrBadge("hdr10plus", "badge-hdr10plus.svg");
         }
 
         if (rangeType == VideoRangeType.HLG)
         {
-            return new BadgeInfo { Category = BadgeCategory.Hdr, BadgeKey = "hlg", ResourceFileName = "badge-hlg.svg" };
+            AddHdrBadge("hlg", "badge-hlg.svg");
         }
 
-        if (rangeType == VideoRangeType.HDR10)
+        if (rangeType == VideoRangeType.HDR10 || rangeType is VideoRangeType.DOVIWithHDR10 or VideoRangeType.DOVIWithEL)
         {
-            return new BadgeInfo { Category = BadgeCategory.Hdr, BadgeKey = "hdr10", ResourceFileName = "badge-hdr10.svg" };
+            AddHdrBadge("hdr10", "badge-hdr10.svg");
         }
 
-        if (videoStream.VideoRange == VideoRange.HDR)
+        if (badges.Count == 0 && range == VideoRange.HDR)
         {
-            return new BadgeInfo { Category = BadgeCategory.Hdr, BadgeKey = "hdr", ResourceFileName = "badge-hdr.svg" };
+            AddHdrBadge("hdr", "badge-hdr.svg");
         }
 
-        return null;
+        return badges;
+    }
+
+    private static bool IsDolbyVision(VideoRangeType rangeType, VideoRange range, string profile)
+    {
+        return rangeType is VideoRangeType.DOVI
+                or VideoRangeType.DOVIWithHDR10
+                or VideoRangeType.DOVIWithHLG
+                or VideoRangeType.DOVIWithSDR
+                or VideoRangeType.DOVIWithEL
+                or VideoRangeType.DOVIWithHDR10Plus
+                or VideoRangeType.DOVIWithELHDR10Plus
+            || profile.Contains("DOVI", StringComparison.OrdinalIgnoreCase)
+            || profile.Contains("DOLBY VISION", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsHdr10Plus(VideoRangeType rangeType, string profile)
+    {
+        return rangeType is VideoRangeType.HDR10Plus
+                or VideoRangeType.DOVIWithHDR10Plus
+                or VideoRangeType.DOVIWithELHDR10Plus
+            || profile.Contains("HDR10+", StringComparison.OrdinalIgnoreCase)
+            || profile.Contains("HDR10 PLUS", StringComparison.OrdinalIgnoreCase)
+            || profile.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void DeduplicateBadges(List<BadgeInfo> badges)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = badges.Count - 1; i >= 0; i--)
+        {
+            var badge = badges[i];
+            var key = $"{badge.Category}:{badge.BadgeKey}";
+            if (!seen.Add(key))
+            {
+                badges.RemoveAt(i);
+            }
+        }
     }
 
     private static List<BadgeInfo> DetectAudio(IEnumerable<MediaStream> audioStreams)
