@@ -208,6 +208,7 @@ public class ImageCacheService : IImageCacheService
     {
         var sb = new StringBuilder(256);
         sb.Append(config.Enabled).Append('|');
+        sb.Append(config.HideDolbyVisionOnSamsungClients).Append('|');
         sb.Append((int)config.OutputFormat).Append(config.JpegQuality).Append(config.WebPQuality).Append('|');
         sb.Append(config.ThumbnailSameAsPoster).Append('|');
         AppendImageTypeFingerprint(sb, config.PosterConfig);

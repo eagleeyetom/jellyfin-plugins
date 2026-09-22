@@ -133,6 +133,8 @@ public class PluginConfiguration : BasePluginConfiguration
 
     public bool Enabled { get; set; }
 
+    public bool HideDolbyVisionOnSamsungClients { get; set; }
+
     public ImageTypeConfig PosterConfig { get; set; }
     public ImageTypeConfig ThumbnailConfig { get; set; }
     public bool ThumbnailSameAsPoster { get; set; }

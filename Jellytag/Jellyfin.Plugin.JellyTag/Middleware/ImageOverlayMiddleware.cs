@@ -100,7 +100,11 @@ public partial class ImageOverlayMiddleware
         _logger.LogDebug("DetectAllBadges for {Item}: {Count} badges found: {Badges}",
             item.Name, allBadges.Count, string.Join(", ", allBadges.Select(b => $"{b.Category}:{b.BadgeKey}")));
 
-        var visibleBadges = allBadges.Where(b => overlayService.ShouldShowBadge(b, imageConfig)).ToList();
+        var hideDolbyVision = config.HideDolbyVisionOnSamsungClients && IsSamsungClient(context);
+        var visibleBadges = allBadges
+            .Where(b => overlayService.ShouldShowBadge(b, imageConfig))
+            .Where(b => !hideDolbyVision || !string.Equals(b.BadgeKey, "dv", StringComparison.OrdinalIgnoreCase))
+            .ToList();
         _logger.LogDebug("Visible badges after filter: {Count}: {Badges}",
             visibleBadges.Count, string.Join(", ", visibleBadges.Select(b => b.BadgeKey)));
 
@@ -201,6 +205,14 @@ public partial class ImageOverlayMiddleware
             "THUMB" => config.ThumbnailConfig,
             _ => null
         };
+    }
+
+    private static bool IsSamsungClient(HttpContext context)
+    {
+        var client = context.Request.Headers["X-Emby-Client"].ToString();
+        var deviceName = context.Request.Headers["X-Emby-Device-Name"].ToString();
+        return client.Contains("Samsung", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Samsung", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ImageTypeConfig ApplySizeReduction(ImageTypeConfig source, int reduction)
