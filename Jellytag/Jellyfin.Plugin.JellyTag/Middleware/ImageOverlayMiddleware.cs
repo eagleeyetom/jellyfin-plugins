@@ -109,23 +109,21 @@ public partial class ImageOverlayMiddleware
         // Combine DV + Atmos into single badge if enabled
         if (config.CombineDvWithAtmos)
         {
-            var hasDv = visibleBadges.Any(b => string.Equals(b.BadgeKey, "dv", StringComparison.OrdinalIgnoreCase));
+            var dvIndex = visibleBadges.FindIndex(b => string.Equals(b.BadgeKey, "dv", StringComparison.OrdinalIgnoreCase));
             var hasAtmos = visibleBadges.Any(b => string.Equals(b.BadgeKey, "atmos", StringComparison.OrdinalIgnoreCase));
             
-            if (hasDv && hasAtmos)
+            if (dvIndex >= 0 && hasAtmos)
             {
-                visibleBadges = visibleBadges
-                    .Where(b => !string.Equals(b.BadgeKey, "dv", StringComparison.OrdinalIgnoreCase)
-                             && !string.Equals(b.BadgeKey, "atmos", StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                
-                // Add combined badge (using Hdr category since it combines video HDR and audio)
-                visibleBadges.Add(new BadgeInfo
+                // Replace DV with combined badge at DV's position to preserve badge order
+                visibleBadges[dvIndex] = new BadgeInfo
                 {
                     BadgeKey = "dv-atmos",
                     Category = BadgeCategory.Hdr,
                     ResourceFileName = "badge-dv-atmos.svg"
-                });
+                };
+                
+                // Remove atmos (it's replaced by combined badge)
+                visibleBadges.RemoveAll(b => string.Equals(b.BadgeKey, "atmos", StringComparison.OrdinalIgnoreCase));
             }
         }
         _logger.LogDebug("Visible badges after filter: {Count}: {Badges}",
