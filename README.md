@@ -1,16 +1,13 @@
-*Status: Active development is temporarily paused while I deepen my understanding of the codebase. The project is not abandoned.
-see [#17](https://github.com/Atilil/jellyfin-plugins/issues/17) for the full context.*
+# Jellyfin Plugins
 
-# Jellyfin Plugins by Atilili
-
-A collection of plugins for Jellyfin media server.
+A personal fork of Jellyfin plugins maintained for my own media server. This repository is not an official Jellyfin project and is not affiliated with or endorsed by Jellyfin or the original plugin authors.
 
 ## Installation
 
 1. Open Jellyfin and go to **Administration → Dashboard → Plugins → Repositories**
 2. Click **Add** and enter:
-   - **Name:** `Atilili Plugins`
-   - **URL:** `https://raw.githubusercontent.com/Atilil/jellyfin-plugins/main/manifest.json`
+    - **Name:** `Personal Jellyfin Plugins`
+    - **URL:** `https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/refs/heads/samsung-client-filter-test/manifest.json`
 3. Click **Save**
 4. Go to **Catalog** tab and install the plugins you want
 5. Restart Jellyfin
@@ -43,12 +40,14 @@ Automatically synchronizes watch history between libraries of different qualitie
     <img src="Jellytag/Jellyfin.Plugin.JellyTag/JellyTag.png" />
 </p>
 
-Automatically adds quality resolution badges (4K, 1080p, 720p, SD) to your media posters and thumbnails. Badges are applied server-side via HTTP middleware, visible on all Jellyfin clients without configuration.
+Adds quality badges for resolution, HDR, video codec, audio, languages, and subtitles to media posters and thumbnails. Badges are applied server-side via HTTP middleware, visible on all Jellyfin clients without client-side configuration.
 
 **Features:**
 - Automatic quality detection from video metadata
+- Samsung/Tizen TV detection with Dolby Vision filtering and HDR10+ preservation
 - Configurable badge position, size, and margin per image type
-- Support for posters, thumbnails, and backdrops
+- Support for posters and thumbnails
+- Custom SVG, PNG, and JPEG badges
 - File-based image caching for performance
 - Works on all clients (web, mobile, TV, Kodi)
 
@@ -67,7 +66,7 @@ MIT License - see [LICENSE](LICENSE) file.
 
 ## Author
 
-**Atilili**
+**eagleeyetom**
 
 ---
 
