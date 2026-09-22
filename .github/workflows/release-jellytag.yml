@@ -19,6 +19,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: jellytag-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
 env:
   PROJECT: Jellytag/Jellyfin.Plugin.JellyTag/Jellyfin.Plugin.JellyTag.csproj
   MANIFEST_BRANCH: samsung-client-filter-test
@@ -79,8 +83,9 @@ jobs:
           package_dir="$RUNNER_TEMP/jellytag-package"
           mkdir -p "$package_dir"
           cp "$RUNNER_TEMP/jellytag-publish"/* "$package_dir"/
+          find "$package_dir" -type f -exec touch -d '2000-01-01 00:00:00 UTC' {} +
           zip_path="$RUNNER_TEMP/jellytag-${{ steps.release.outputs.version }}.zip"
-          (cd "$package_dir" && zip -j -X "$zip_path" ./*)
+          (cd "$package_dir" && find . -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort | zip -j -X "$zip_path" -@)
           checksum="$(md5sum "$zip_path" | awk '{print toupper($1)}')"
           echo "zip=$zip_path" >> "$GITHUB_OUTPUT"
           echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
