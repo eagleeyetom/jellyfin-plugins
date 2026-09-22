@@ -1,6 +1,6 @@
 # Jellyfin Plugins
 
-A personal fork of Jellyfin plugins maintained for my own media server. The original project was authored by Attila; this fork contains a small set of personal maintenance changes. It is not an official Jellyfin project and is not affiliated with or endorsed by Jellyfin or the original plugin authors.
+A personal fork of [Atilil/jellyfin-plugins](https://github.com/Atilil/jellyfin-plugins), maintained for my own media server. This fork contains a small set of personal maintenance changes. It is not an official Jellyfin project and is not affiliated with or endorsed by Jellyfin or the original project.
 
 ## Installation
 
@@ -64,10 +64,10 @@ Adds quality badges for resolution, HDR, video codec, audio, languages, and subt
 
 MIT License - see [LICENSE](LICENSE) file.
 
-## Author
+## Repository
 
-**Original author:** Attila  
-**Fork maintenance:** eagleeyetom
+- **Forked from:** [Atilil/jellyfin-plugins](https://github.com/Atilil/jellyfin-plugins)
+- **Fork maintenance:** eagleeyetom
 
 ---
 
