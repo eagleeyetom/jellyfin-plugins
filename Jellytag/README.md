@@ -9,11 +9,9 @@ This repository is an independent fork maintained for personal use. It is not an
 The fork contains practical fixes and maintenance changes for a personal Jellyfin installation, including:
 
 - Samsung/Tizen client handling for Dolby Vision badges
+- Samsung TV detection that preserves and displays HDR10+ when available
 - Client-specific image cache invalidation
 - Custom badge preview and filename handling, including `5.1` and `7.1` badges
-- More reliable fallback behavior when a custom badge preview cannot be loaded
-
-The combined Dolby Vision + Atmos badge experiment was removed; Dolby Vision and Atmos are displayed independently.
 
 <p align="center">
     <img src="Jellyfin.Plugin.JellyTag/JellyTag.png" />
