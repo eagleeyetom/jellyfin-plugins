@@ -32,7 +32,7 @@
         "changelog": "Add option to combine Dolby Vision + Atmos badges into single visual, matching TV manufacturer UI patterns. Respects existing Samsung client filtering.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.1.0.0/jellytag-2.1.0.0.zip",
-        "checksum": "FA46D663CCA498E86ADFD851355DD9F1",
+        "checksum": "B9162C455DC0E312EEDE51CDF763EE8D",
         "timestamp": "2026-09-22T00:00:00Z"
       },
       {
