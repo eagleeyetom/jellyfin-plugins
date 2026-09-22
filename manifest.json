@@ -32,7 +32,7 @@
         "changelog": "Fix: preserve badge order when combining DV+Atmos to prevent ShowMode=Highest from hiding combined badge",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.1.0.1/jellytag-2.1.0.1.zip",
-        "checksum": "TBD",
+        "checksum": "1EE4AD04E64ADE62709E12BC41796034",
         "timestamp": "2026-09-22T00:00:00Z"
       },
       {
