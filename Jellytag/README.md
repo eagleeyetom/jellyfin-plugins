@@ -2,6 +2,19 @@
 
 JellyTag automatically overlays quality badges (resolution, HDR, codec, audio, language) on your media posters and thumbnails. Badges are rendered server-side via HTTP middleware, so they appear on **all Jellyfin clients** without any configuration.
 
+## About This Fork
+
+This repository is an independent fork maintained for personal use. It is not an official Jellyfin project and is not affiliated with or endorsed by Jellyfin or the original plugin authors.
+
+The fork contains practical fixes and maintenance changes for a personal Jellyfin installation, including:
+
+- Samsung/Tizen client handling for Dolby Vision badges
+- Client-specific image cache invalidation
+- Custom badge preview and filename handling, including `5.1` and `7.1` badges
+- More reliable fallback behavior when a custom badge preview cannot be loaded
+
+The combined Dolby Vision + Atmos badge experiment was removed; Dolby Vision and Atmos are displayed independently.
+
 <p align="center">
     <img src="Jellyfin.Plugin.JellyTag/JellyTag.png" />
 </p>
@@ -29,7 +42,7 @@ JellyTag automatically overlays quality badges (resolution, HDR, codec, audio, l
 1. In Jellyfin, go to **Dashboard** → **Plugins** → **Repositories**
 2. Add a new repository with this URL:
    ```
-   https://raw.githubusercontent.com/Atilil/jellyfin-plugins/main/manifest.json
+    https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/refs/heads/samsung-client-filter-test/manifest.json
    ```
 3. Go to **Catalog**, find **JellyTag** and install it
 4. Restart Jellyfin
