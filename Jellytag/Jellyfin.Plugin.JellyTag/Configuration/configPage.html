@@ -33,6 +33,7 @@
             .badge-card:hover { border-color: #00a4dc; }
             .badge-card.custom { border-color: #4caf50; }
             .badge-card img { width: 80px; height: 80px; object-fit: contain; }
+            .badge-card .badge-preview-fallback { width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: .8em; color: rgba(255,255,255,.7); }
             .badge-card .badge-label { margin-top: .4em; font-size: .85em; text-align: center; }
             .badge-card .badge-reset { position: absolute; top: 4px; right: 4px; background: #c62828; color: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; line-height: 20px; text-align: center; cursor: pointer; display: none; padding: 0; }
             .badge-card.custom .badge-reset { display: block; }
@@ -858,7 +859,14 @@
                     card.setAttribute('data-badge-key', b.key);
                     var img = document.createElement('img');
                     var previewUrl = ApiClient.getUrl('JellyTag/BadgePreview/' + b.key);
-                    img.src = previewUrl + '?t=' + Date.now() + (token ? '&api_key=' + token : ''); img.alt = b.label;
+                    img.alt = b.label;
+                    img.onerror = function() {
+                        var fallback = document.createElement('span');
+                        fallback.className = 'badge-preview-fallback';
+                        fallback.textContent = b.label;
+                        img.replaceWith(fallback);
+                    };
+                    img.src = previewUrl + '?t=' + Date.now() + (token ? '&api_key=' + token : '');
                     card.appendChild(img);
                     var lbl = document.createElement('div'); lbl.className = 'badge-label';
                     lbl.textContent = b.label + (isCustom ? ' (custom)' : ''); card.appendChild(lbl);
