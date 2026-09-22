@@ -290,7 +290,7 @@ public partial class JellyTagController : ControllerBase
 
         var files = Directory.GetFiles(customDir, "badge-*.*")
             .Where(f => SupportedBadgeExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-            .Select(f => Path.GetFileNameWithoutExtension(f).Replace("badge-", string.Empty))
+            .Select(f => Path.GetFileNameWithoutExtension(f).Replace("badge-", string.Empty).Replace('_', '.'))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
