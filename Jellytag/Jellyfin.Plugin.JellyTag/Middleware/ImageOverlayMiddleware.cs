@@ -101,9 +101,11 @@ public partial class ImageOverlayMiddleware
             item.Name, allBadges.Count, string.Join(", ", allBadges.Select(b => $"{b.Category}:{b.BadgeKey}")));
 
         var hideDolbyVision = config.HideDolbyVisionOnSamsungClients && IsSamsungClient(context);
+        var hideHdrOnWindows = config.HideHdrOnWindowsClients && IsWindowsClient(context);
         var visibleBadges = allBadges
             .Where(b => overlayService.ShouldShowBadge(b, imageConfig))
             .Where(b => !hideDolbyVision || !string.Equals(b.BadgeKey, "dv", StringComparison.OrdinalIgnoreCase))
+            .Where(b => !hideHdrOnWindows || !IsHdrBadge(b.BadgeKey))
             .ToList();
         
         _logger.LogDebug("Visible badges after filter: {Count}: {Badges}",
@@ -120,7 +122,7 @@ public partial class ImageOverlayMiddleware
 
         var query = context.Request.QueryString.Value ?? string.Empty;
         var tag = context.Request.Query["tag"].FirstOrDefault() ?? item.DateModified.Ticks.ToString();
-        var clientVariant = hideDolbyVision ? "samsung-no-dv" : "default";
+        var clientVariant = hideDolbyVision ? "samsung-no-dv" : hideHdrOnWindows ? "windows-sdr" : "default";
         var imageTag = $"{tag}_{imageType}_{clientVariant}_{query}";
 
         var cachedImage = await cacheService.GetCachedImageAsync(itemId, badgeKey, imageTag).ConfigureAwait(false);
@@ -223,6 +225,30 @@ public partial class ImageOverlayMiddleware
     {
         return value.Contains("Samsung", StringComparison.OrdinalIgnoreCase)
             || value.Contains("Tizen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsWindowsClient(HttpContext context)
+    {
+        var client = context.Request.Headers["X-Emby-Client"].ToString();
+        var deviceName = context.Request.Headers["X-Emby-Device-Name"].ToString();
+        var userAgent = context.Request.Headers.UserAgent.ToString();
+        return ContainsWindowsIndicator(client)
+            || ContainsWindowsIndicator(deviceName)
+            || ContainsWindowsIndicator(userAgent);
+    }
+
+    private static bool ContainsWindowsIndicator(string value)
+    {
+        return value.Contains("Windows", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsHdrBadge(string badgeKey)
+    {
+        return string.Equals(badgeKey, "dv", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(badgeKey, "hdr10", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(badgeKey, "hdr10plus", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(badgeKey, "hlg", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(badgeKey, "hdr", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ImageTypeConfig ApplySizeReduction(ImageTypeConfig source, int reduction)

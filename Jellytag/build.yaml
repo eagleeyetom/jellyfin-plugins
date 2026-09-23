@@ -1,7 +1,7 @@
 name: "JellyTag"
 guid: "f4a2e8c1-9b3d-4f7a-b6c5-2d8e1a3f9b04"
-version: "1.0.0.0"
-targetAbi: "10.10.0.0"
+version: "2.2.0.0"
+targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "JellyTag"
 overview: "Adds quality badges (4K, 1080p, etc.) to media posters and thumbnails."
@@ -15,14 +15,33 @@ description: |
   - Configurable badge size
   - Image caching for performance
   - Support for 4K, 1080p, 720p, and SD badges
-
 category: "General"
 artifacts:
   - "Jellyfin.Plugin.JellyTag.dll"
 changelog: |
+  ## v2.2.0.0
+  - Add option to hide HDR badges on Windows clients (SDR-only mode)
+  - Windows client detection via User-Agent and X-Emby headers
+  - Separate image caching for Windows SDR variants
+  ## v2.1.0.3
+  - Prevent broken-image icons in the custom badge gallery when a preview cannot be loaded
+  ## v2.1.0.2
+  - Remove combined DV+Atmos badge and fix custom badge previews for 5.1 and 7.1 keys
+  ## v2.1.0.1
+  - Fix: preserve badge order when combining DV+Atmos to prevent ShowMode=Highest from hiding combined badge
+  ## v2.1.0.0
+  - Add option to combine Dolby Vision + Atmos badges into single visual, matching TV manufacturer UI patterns. Respects existing Samsung client filtering.
+  ## v2.0.5.0
+  - Invalidate image caches when the plugin version changes to prevent stale client-specific badges
+  ## v2.0.4.0
+  - Improve Samsung/Tizen client detection and isolate client-specific image caches when hiding Dolby Vision badges
+  ## v2.0.3.0
+  - Add an option to hide Dolby Vision badges for Samsung clients while preserving HDR10+ badges
+  ## v2.0.2.0
+  - Fix: exclude SkiaSharp native assets that caused plugin loading crash, pin Jellyfin packages to 10.11.0 for full 10.11.x compatibility
+  ## v2.0.1.0
+  - Fix: support Jellyfin base URL configuration, fix resolution detection thresholds
+  ## v2.0.0.0
+  - v2: Multi-category badges (resolution, HDR, codec, audio, language, VOST), per-panel config, SVG rendering with SkiaSharp, custom badge upload, live preview, library filtering, config export/import
   ## v1.0.0.0
-  - Initial release
-  - Quality detection for 4K, 1080p, 720p, SD
-  - Configurable badge position and size
-  - Image caching
-  - HTTP middleware for universal client support
+  - Initial release with quality detection, configurable badges, and image caching
