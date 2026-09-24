@@ -33,6 +33,7 @@
             .badge-card:hover { border-color: #00a4dc; }
             .badge-card.custom { border-color: #4caf50; }
             .badge-card img { width: 80px; height: 80px; object-fit: contain; }
+            .badge-card .badge-preview-fallback { width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: .8em; color: rgba(255,255,255,.7); }
             .badge-card .badge-label { margin-top: .4em; font-size: .85em; text-align: center; }
             .badge-card .badge-reset { position: absolute; top: 4px; right: 4px; background: #c62828; color: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; line-height: 20px; text-align: center; cursor: pointer; display: none; padding: 0; }
             .badge-card.custom .badge-reset { display: block; }
@@ -77,6 +78,13 @@
                                 <span>Hide Dolby Vision badges on Samsung clients</span>
                             </label>
                             <div class="fieldDescription">Samsung clients will continue to show HDR10+ when enabled in the HDR panel. Other clients are unaffected.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="HideHdrOnWindowsClients" type="checkbox" is="emby-checkbox" />
+                                <span>Hide HDR badges on Windows clients (SDR only)</span>
+                            </label>
+                            <div class="fieldDescription">Windows clients (Emby Theater, web browser) will not show HDR/DV badges. Useful for SDR-only setups.</div>
                         </div>
                     </div>
 
@@ -757,6 +765,7 @@
         function collectConfigFromForm(config) {
             config.Enabled = q('Enabled').checked;
             config.HideDolbyVisionOnSamsungClients = q('HideDolbyVisionOnSamsungClients').checked;
+            config.HideHdrOnWindowsClients = q('HideHdrOnWindowsClients').checked;
             config.ThumbnailSameAsPoster = q('ThumbnailSameAsPoster').checked;
             config.ThumbnailSizeReduction = parseInt(q('ThumbnailSizeReduction').value, 10) || 0;
             config.PosterConfig = collectImageTypeConfig('Poster');
@@ -858,7 +867,14 @@
                     card.setAttribute('data-badge-key', b.key);
                     var img = document.createElement('img');
                     var previewUrl = ApiClient.getUrl('JellyTag/BadgePreview/' + b.key);
-                    img.src = previewUrl + '?t=' + Date.now() + (token ? '&api_key=' + token : ''); img.alt = b.label;
+                    img.alt = b.label;
+                    img.onerror = function() {
+                        var fallback = document.createElement('span');
+                        fallback.className = 'badge-preview-fallback';
+                        fallback.textContent = b.label;
+                        img.replaceWith(fallback);
+                    };
+                    img.src = previewUrl + '?t=' + Date.now() + (token ? '&api_key=' + token : '');
                     card.appendChild(img);
                     var lbl = document.createElement('div'); lbl.className = 'badge-label';
                     lbl.textContent = b.label + (isCustom ? ' (custom)' : ''); card.appendChild(lbl);
@@ -903,6 +919,7 @@
             ApiClient.getPluginConfiguration(JellyTagConfig.pluginUniqueId).then(function(config) {
                 q('Enabled').checked = config.Enabled;
                 q('HideDolbyVisionOnSamsungClients').checked = config.HideDolbyVisionOnSamsungClients === true;
+                q('HideHdrOnWindowsClients').checked = config.HideHdrOnWindowsClients === true;
                 q('ThumbnailSameAsPoster').checked = config.ThumbnailSameAsPoster === true;
                 q('ThumbnailSizeReduction').value = config.ThumbnailSizeReduction != null ? config.ThumbnailSizeReduction : 10;
 

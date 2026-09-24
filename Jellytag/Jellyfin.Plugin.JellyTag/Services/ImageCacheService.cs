@@ -207,6 +207,7 @@ public class ImageCacheService : IImageCacheService
     private static string ComputeConfigFingerprint(Configuration.PluginConfiguration config)
     {
         var sb = new StringBuilder(256);
+        sb.Append(typeof(ImageCacheService).Assembly.GetName().Version?.ToString() ?? "unknown").Append('|');
         sb.Append(config.Enabled).Append('|');
         sb.Append(config.HideDolbyVisionOnSamsungClients).Append('|');
         sb.Append((int)config.OutputFormat).Append(config.JpegQuality).Append(config.WebPQuality).Append('|');

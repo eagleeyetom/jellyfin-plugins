@@ -184,6 +184,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool? ShowChannelBadge { get; set; }
     public LanguageBadgeMode? LanguageBadgeMode { get; set; }
     public bool? ShowSubtitleIndicator { get; set; }
+    public bool HideHdrOnWindowsClients { get; set; }
 
     /// <summary>
     /// Migrates legacy config format to the new per-panel format.
