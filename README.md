@@ -7,7 +7,7 @@ A personal fork of [Atilil/jellyfin-plugins](https://github.com/Atilil/jellyfin-
 1. Open Jellyfin and go to **Administration → Dashboard → Plugins → Repositories**
 2. Click **Add** and enter:
     - **Name:** `Personal Jellyfin Plugins`
-    - **URL:** `https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/refs/heads/samsung-client-filter-test/manifest.json`
+    - **URL:** `https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/refs/heads/main/manifest.json`
 3. Click **Save**
 4. Go to **Catalog** tab and install the plugins you want
 5. Restart Jellyfin
