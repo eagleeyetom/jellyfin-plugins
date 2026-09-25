@@ -271,22 +271,52 @@ public class QualityDetectionService : IQualityDetectionService
 
     private static readonly Dictionary<string, string> LangCodeToFlag = new(StringComparer.OrdinalIgnoreCase)
     {
-        { "fre", "fra" }, { "ger", "deu" }, { "dut", "nld" }, { "cze", "ces" }, { "rum", "ron" }, { "chi", "zho" },
-        { "gre", "ell" }, { "may", "msa" }, { "tgl", "fil" }, { "slo", "slk" }, { "baq", "eus" }, { "wel", "cym" }
-    };
-
-    // Only include language codes that have a matching flag-{code}.svg asset
-    private static readonly HashSet<string> KnownFlagCodes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "fra", "eng", "jpn", "deu", "spa", "ita", "por", "kor", "zho", "rus",
-        "nld", "ara", "hin", "tha", "pol", "tur", "swe", "dan", "nor", "fin",
-        "ces", "hun", "ron", "ukr", "vie", "heb"
+        { "fre", "fr" }, { "fra", "fr" }, { "en", "gb" }, { "eng", "gb" },
+        { "ger", "de" }, { "deu", "de" }, { "de", "de" }, { "fr", "fr" },
+        { "dut", "nl" }, { "nld", "nl" }, { "nl", "nl" },
+        { "cze", "cz" }, { "ces", "cz" }, { "cs", "cz" },
+        { "rum", "ro" }, { "ron", "ro" }, { "ro", "ro" },
+        { "chi", "cn" }, { "zho", "cn" }, { "zh", "cn" },
+        { "gre", "gr" }, { "ell", "gr" }, { "el", "gr" },
+        { "may", "my" }, { "msa", "my" }, { "ms", "my" },
+        { "tgl", "ph" }, { "fil", "ph" }, { "tl", "ph" },
+        { "slo", "sk" }, { "slk", "sk" }, { "sk", "sk" },
+        { "baq", "es" }, { "eus", "es" }, { "eu", "es" },
+        { "wel", "gb-wls" }, { "cym", "gb-wls" }, { "cy", "gb-wls" },
+        { "spa", "es" }, { "es", "es" },
+        { "ita", "it" }, { "it", "it" },
+        { "por", "pt" }, { "pt", "pt" },
+        { "kor", "kr" }, { "ko", "kr" },
+        { "rus", "ru" }, { "ru", "ru" },
+        { "ara", "sa" }, { "ar", "sa" },
+        { "hin", "in" }, { "hi", "in" },
+        { "tha", "th" }, { "th", "th" },
+        { "pol", "pl" }, { "pl", "pl" },
+        { "tur", "tr" }, { "tr", "tr" },
+        { "swe", "se" }, { "sv", "se" },
+        { "dan", "dk" }, { "da", "dk" },
+        { "nor", "no" }, { "no", "no" },
+        { "fin", "fi" }, { "fi", "fi" },
+        { "hun", "hu" }, { "hu", "hu" },
+        { "ukr", "ua" }, { "uk", "ua" },
+        { "vie", "vn" }, { "vi", "vn" },
+        { "heb", "il" }, { "he", "il" },
+        { "hrv", "hr" }, { "hr", "hr" },
+        { "srp", "rs" }, { "sr", "rs" },
+        { "bul", "bg" }, { "bg", "bg" },
+        { "lit", "lt" }, { "lt", "lt" },
+        { "lav", "lv" }, { "lv", "lv" },
+        { "est", "ee" }, { "et", "ee" },
+        { "jpn", "jp" }, { "ja", "jp" },
+        { "ind", "id" }, { "id", "id" }
     };
 
     private static string GetFlagResourceFileName(string langCode)
     {
-        var normalized = LangCodeToFlag.TryGetValue(langCode, out var mapped) ? mapped : langCode;
-        return KnownFlagCodes.Contains(normalized) ? $"flag-{normalized.ToLowerInvariant()}.svg" : string.Empty;
+        if (string.IsNullOrEmpty(langCode)) return string.Empty;
+        var lower = langCode.ToLowerInvariant();
+        var countryCode = LangCodeToFlag.TryGetValue(lower, out var mapped) ? mapped : lower;
+        return $"flag-{countryCode}.svg";
     }
 
     /// <summary>
