@@ -263,6 +263,7 @@ public class QualityDetectionService : IQualityDetectionService
                 badges.AddRange(langBadges);
             }
 
+#if DEBUG
             // Debug manual country code override
             var config = Plugin.Instance?.Configuration;
             if (!string.IsNullOrWhiteSpace(config?.DebugCountryCode))
@@ -282,6 +283,7 @@ public class QualityDetectionService : IQualityDetectionService
                     });
                 }
             }
+#endif
         }
         catch (Exception ex)
         {

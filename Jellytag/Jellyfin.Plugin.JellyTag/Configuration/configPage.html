@@ -777,7 +777,12 @@
             config.Enabled = q('Enabled').checked;
             config.HideDolbyVisionOnSamsungClients = q('HideDolbyVisionOnSamsungClients').checked;
             config.HideHdrOnWindowsClients = q('HideHdrOnWindowsClients').checked;
-            config.DebugCountryCode = q('DebugCountryCode').value.trim() || null;
+            var debugContainer = document.getElementById('DebugCountryCodeContainer');
+            if (debugContainer && debugContainer.style.display === 'none') {
+                config.DebugCountryCode = null;
+            } else {
+                config.DebugCountryCode = q('DebugCountryCode').value.trim() || null;
+            }
             config.ThumbnailSameAsPoster = q('ThumbnailSameAsPoster').checked;
             config.ThumbnailSizeReduction = parseInt(q('ThumbnailSizeReduction').value, 10) || 0;
             config.PosterConfig = collectImageTypeConfig('Poster');
@@ -932,8 +937,14 @@
                 if (isDebug === true) {
                     var el = document.getElementById('DebugCountryCodeContainer');
                     if (el) el.style.display = '';
+                } else {
+                    var input = q('DebugCountryCode');
+                    if (input) input.value = '';
                 }
-            }).catch(function(){});
+            }).catch(function(){
+                var input = q('DebugCountryCode');
+                if (input) input.value = '';
+            });
 
             ApiClient.getPluginConfiguration(JellyTagConfig.pluginUniqueId).then(function(config) {
                 q('Enabled').checked = config.Enabled;
