@@ -86,7 +86,7 @@
                             </label>
                             <div class="fieldDescription">Windows clients (Emby Theater, web browser) will not show HDR/DV badges. Useful for SDR-only setups.</div>
                         </div>
-                        <div class="inputContainer" style="margin-top:1em;">
+                        <div id="DebugCountryCodeContainer" class="inputContainer" style="display:none; margin-top:1em;">
                             <label class="inputLabel inputLabelUnfocused" for="DebugCountryCode">Debug Country Code Override</label>
                             <input id="DebugCountryCode" type="text" is="emby-input" placeholder="e.g. fr, jp, de" />
                             <div class="fieldDescription">Manually force country flags for testing (comma-separated country codes, e.g. fr, jp, de).</div>
@@ -928,6 +928,13 @@
             document.getElementById('ThumbPanels').innerHTML = generatePanels('Thumb');
 
             Dashboard.showLoadingMsg();
+            ApiClient.getJSON(ApiClient.getUrl('JellyTag/IsDebug')).then(function(isDebug) {
+                if (isDebug === true) {
+                    var el = document.getElementById('DebugCountryCodeContainer');
+                    if (el) el.style.display = '';
+                }
+            }).catch(function(){});
+
             ApiClient.getPluginConfiguration(JellyTagConfig.pluginUniqueId).then(function(config) {
                 q('Enabled').checked = config.Enabled;
                 q('HideDolbyVisionOnSamsungClients').checked = config.HideDolbyVisionOnSamsungClients === true;
