@@ -324,6 +324,7 @@
             h += num(k + 'Size', 'Badge Size (%)', 0, 100, 1);
             h += num(k + 'Margin', 'Margin (%)', 0, 20, 0.5);
             h += sel(k + 'Style', 'Badge Style', [{v:'Image',l:'Image'},{v:'Text',l:'Text'}]);
+            h += sel(k + 'IconStyle', 'Icon Style', [{v:'Rectangular',l:'Rectangular'},{v:'Square',l:'Square'},{v:'Round',l:'Round'}]);
 
             // Text settings
             h += '<div id="' + k + 'TextSettings" class="jellytag-text-box hidden">';
@@ -354,6 +355,7 @@
             h += num(k + 'Size', 'Badge Size (%)', 0, 100, 1);
             h += num(k + 'Margin', 'Margin (%)', 0, 20, 0.5);
             h += sel(k + 'Style', 'Badge Style', [{v:'Image',l:'Image'},{v:'Text',l:'Text'}]);
+            h += sel(k + 'IconStyle', 'Icon Style', [{v:'Rectangular',l:'Rectangular'},{v:'Square',l:'Square'},{v:'Round',l:'Round'}]);
             h += '<div id="' + k + 'TextSettings" class="jellytag-text-box hidden">';
             h += colorAlpha(k + 'BgColor', k + 'BgOpacity', 'Background Color');
             h += colorOnly(k + 'TextColor', 'Text Color');
@@ -610,6 +612,7 @@
             q(k + 'Size').value = pc.SizePercent != null ? pc.SizePercent : 15;
             q(k + 'Margin').value = pc.MarginPercent != null ? pc.MarginPercent : 2.5;
             q(k + 'Style').value = pc.Style || 'Image';
+            if (q(k + 'IconStyle')) q(k + 'IconStyle').value = pc.IconStyle || 'Rectangular';
 
             // Badges
             var en = pc.EnabledBadges || [];
@@ -648,6 +651,7 @@
             q(k + 'Size').value = lc.SizePercent != null ? lc.SizePercent : 15;
             q(k + 'Margin').value = lc.MarginPercent != null ? lc.MarginPercent : 2.5;
             q(k + 'Style').value = lc.Style || 'Image';
+            if (q(k + 'IconStyle')) q(k + 'IconStyle').value = lc.IconStyle || 'Rectangular';
             q(k + 'BgColor').value = lc.TextBgColor || '#000000';
             q(k + 'BgOpacity').value = lc.TextBgOpacity != null ? lc.TextBgOpacity : 180;
             q(k + 'TextColor').value = lc.TextColor || '#FFFFFF';
@@ -710,6 +714,7 @@
                 SizePercent: parseInt(q(k + 'Size').value, 10) || 15,
                 MarginPercent: parseFloat(q(k + 'Margin').value) || 2.5,
                 Style: q(k + 'Style').value,
+                IconStyle: q(k + 'IconStyle') ? q(k + 'IconStyle').value : 'Rectangular',
                 Order: order,
                 TextBgColor: ov.textBgColor,
                 TextBgOpacity: ov.textBgOpacity,
@@ -733,6 +738,7 @@
                 SizePercent: parseInt(q(k + 'Size').value, 10) || 15,
                 MarginPercent: parseFloat(q(k + 'Margin').value) || 2.5,
                 Style: q(k + 'Style').value,
+                IconStyle: q(k + 'IconStyle') ? q(k + 'IconStyle').value : 'Rectangular',
                 Order: order.Lang != null ? order.Lang : 4,
                 TextBgColor: q(k + 'BgColor').value,
                 TextBgOpacity: parseInt(q(k + 'BgOpacity').value, 10) || 0,

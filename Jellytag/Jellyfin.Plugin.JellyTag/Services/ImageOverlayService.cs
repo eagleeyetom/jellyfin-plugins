@@ -167,7 +167,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 var filtered = new List<BadgeInfo>();
                 var ownedBitmaps = new List<SKBitmap>();
 
-                await PrepareBadgeGroup(panelBadges, sizePercent, image.Width, useText, sizes, sourceBitmaps, filtered, ownedBitmaps).ConfigureAwait(false);
+                await PrepareBadgeGroup(panelBadges, sizePercent, image.Width, useText, sizes, sourceBitmaps, filtered, ownedBitmaps, panel).ConfigureAwait(false);
                 allOwnedBitmaps.AddRange(ownedBitmaps);
 
                 if (filtered.Count == 0) continue;
@@ -312,7 +312,8 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
     private async Task PrepareBadgeGroup(
         List<BadgeInfo> badges, int sizePercent, int imageWidth, bool useTextStyle,
-        List<SKSizeI> sizes, List<SKBitmap> sourceBitmaps, List<BadgeInfo> filtered, List<SKBitmap> ownedBitmaps)
+        List<SKSizeI> sizes, List<SKBitmap> sourceBitmaps, List<BadgeInfo> filtered, List<SKBitmap> ownedBitmaps,
+        BadgePanelSettings panel)
     {
         if (useTextStyle)
         {
@@ -331,6 +332,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         else
         {
             await EnsureBadgesLoaded().ConfigureAwait(false);
+            var isSquareOrRound = panel.IconStyle is BadgeIconStyle.Square or BadgeIconStyle.Round;
 
             foreach (var badgeInfo in badges)
             {
@@ -348,15 +350,34 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     continue;
                 }
 
-                if (_svgCache.TryGetValue(resourceFileName, out var svgBytes))
+                // Try square asset variant if requested
+                string? targetResource = resourceFileName;
+                if (isSquareOrRound && resourceFileName.StartsWith("flag-", StringComparison.OrdinalIgnoreCase))
+                {
+                    var squareName = "flag-square-" + resourceFileName[5..];
+                    if (_svgCache.ContainsKey(squareName) || _rasterCache.ContainsKey(squareName))
+                    {
+                        targetResource = squareName;
+                    }
+                }
+
+                if (_svgCache.TryGetValue(targetResource, out var svgBytes))
                 {
                     var ratio = GetSvgAspectRatio(svgBytes);
-                    var badgeHeight = Math.Max(1, (int)(badgeWidth / ratio));
-                    var rasterized = RasterizeSvg(svgBytes, badgeWidth, badgeHeight);
+                    var badgeHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(badgeWidth / ratio));
+                    var rasterWidth = isSquareOrRound ? Math.Max(badgeWidth, (int)(badgeWidth * ratio)) : badgeWidth;
+                    var rasterHeight = isSquareOrRound ? rasterWidth : badgeHeight;
+
+                    var rasterized = RasterizeSvg(svgBytes, rasterWidth, rasterHeight);
                     if (rasterized != null)
                     {
-                        sourceBitmaps.Add(rasterized);
-                        ownedBitmaps.Add(rasterized);
+                        var processed = ProcessBitmapStyle(rasterized, isSquareOrRound);
+                        if (processed != rasterized)
+                        {
+                            rasterized.Dispose();
+                        }
+                        sourceBitmaps.Add(processed);
+                        ownedBitmaps.Add(processed);
                         filtered.Add(badgeInfo);
                         sizes.Add(new SKSizeI(badgeWidth, badgeHeight));
                         continue;
@@ -365,7 +386,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     var fallbackText = GetBadgeDisplayText(badgeInfo.BadgeKey);
                     if (!string.IsNullOrEmpty(fallbackText))
                     {
-                        var fbHeight = Math.Max(1, (int)(badgeWidth * 0.5));
+                        var fbHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(badgeWidth * 0.5));
                         var textBadge = new BadgeInfo { Category = badgeInfo.Category, BadgeKey = badgeInfo.BadgeKey, ResourceFileName = string.Empty };
                         filtered.Add(textBadge);
                         sizes.Add(new SKSizeI(badgeWidth, fbHeight));
@@ -374,10 +395,15 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     continue;
                 }
 
-                if (_rasterCache.TryGetValue(resourceFileName, out var rasterBitmap) && rasterBitmap != null)
+                if (_rasterCache.TryGetValue(targetResource, out var rasterBitmap) && rasterBitmap != null)
                 {
-                    var badgeHeight = Math.Max(1, (int)(rasterBitmap.Height * ((double)badgeWidth / rasterBitmap.Width)));
-                    sourceBitmaps.Add(rasterBitmap);
+                    var processed = ProcessBitmapStyle(rasterBitmap, isSquareOrRound);
+                    if (processed != rasterBitmap)
+                    {
+                        ownedBitmaps.Add(processed);
+                    }
+                    var badgeHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(processed.Height * ((double)badgeWidth / processed.Width)));
+                    sourceBitmaps.Add(processed);
                     filtered.Add(badgeInfo);
                     sizes.Add(new SKSizeI(badgeWidth, badgeHeight));
                 }
@@ -387,7 +413,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     var fallbackText = GetBadgeDisplayText(badgeInfo.BadgeKey);
                     if (!string.IsNullOrEmpty(fallbackText))
                     {
-                        var fbHeight = Math.Max(1, (int)(badgeWidth * 0.5));
+                        var fbHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(badgeWidth * 0.5));
                         var textBadge = new BadgeInfo { Category = badgeInfo.Category, BadgeKey = badgeInfo.BadgeKey, ResourceFileName = string.Empty };
                         filtered.Add(textBadge);
                         sizes.Add(new SKSizeI(badgeWidth, fbHeight));
@@ -395,6 +421,20 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 }
             }
         }
+    }
+
+    private static SKBitmap ProcessBitmapStyle(SKBitmap source, bool makeSquare)
+    {
+        if (!makeSquare) return source;
+        if (source.Width == source.Height) return source;
+        int side = Math.Min(source.Width, source.Height);
+        int x = (source.Width - side) / 2;
+        int y = (source.Height - side) / 2;
+        var dest = new SKBitmap(side, side, source.ColorType, source.AlphaType);
+        using var canvas = new SKCanvas(dest);
+        canvas.DrawBitmap(source, new SKRect(x, y, x + side, y + side), new SKRect(0, 0, side, side));
+        canvas.Flush();
+        return dest;
     }
 
     private async Task EnsureBadgesLoaded()
@@ -895,7 +935,21 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 {
                     var destRect = SKRect.Create(positions[i].X, positions[i].Y, sizes[i].Width, sizes[i].Height);
                     using var badgeImage = SKImage.FromBitmap(sourceBitmaps[bitmapIdx]);
-                    canvas.DrawImage(badgeImage, destRect, sampling, paint);
+                    
+                    if (panel.IconStyle == BadgeIconStyle.Round)
+                    {
+                        canvas.Save();
+                        using var path = new SKPath();
+                        path.AddOval(destRect);
+                        canvas.ClipPath(path, antialias: true);
+                        canvas.DrawImage(badgeImage, destRect, sampling, paint);
+                        canvas.Restore();
+                    }
+                    else
+                    {
+                        canvas.DrawImage(badgeImage, destRect, sampling, paint);
+                    }
+                    
                     bitmapIdx++;
                 }
                 else
