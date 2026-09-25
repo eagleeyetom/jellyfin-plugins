@@ -273,11 +273,12 @@ public class QualityDetectionService : IQualityDetectionService
                     var trimmed = code.Trim().ToLowerInvariant();
                     if (string.IsNullOrEmpty(trimmed)) continue;
 
+                    var mappedFlag = GetFlagResourceFileName(trimmed);
                     badges.Add(new BadgeInfo
                     {
                         Category = BadgeCategory.Language,
                         BadgeKey = trimmed,
-                        ResourceFileName = $"flag-{trimmed}.svg"
+                        ResourceFileName = mappedFlag
                     });
                 }
             }
