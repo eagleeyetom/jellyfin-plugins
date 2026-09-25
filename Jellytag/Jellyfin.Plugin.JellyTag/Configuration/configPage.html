@@ -86,6 +86,11 @@
                             </label>
                             <div class="fieldDescription">Windows clients (Emby Theater, web browser) will not show HDR/DV badges. Useful for SDR-only setups.</div>
                         </div>
+                        <div class="inputContainer" style="margin-top:1em;">
+                            <label class="inputLabel inputLabelUnfocused" for="DebugCountryCode">Debug Country Code Override</label>
+                            <input id="DebugCountryCode" type="text" is="emby-input" placeholder="e.g. fr, jp, de" />
+                            <div class="fieldDescription">Manually force country flags for testing (comma-separated country codes, e.g. fr, jp, de).</div>
+                        </div>
                     </div>
 
                     <!-- Libraries -->
@@ -772,6 +777,7 @@
             config.Enabled = q('Enabled').checked;
             config.HideDolbyVisionOnSamsungClients = q('HideDolbyVisionOnSamsungClients').checked;
             config.HideHdrOnWindowsClients = q('HideHdrOnWindowsClients').checked;
+            config.DebugCountryCode = q('DebugCountryCode').value.trim() || null;
             config.ThumbnailSameAsPoster = q('ThumbnailSameAsPoster').checked;
             config.ThumbnailSizeReduction = parseInt(q('ThumbnailSizeReduction').value, 10) || 0;
             config.PosterConfig = collectImageTypeConfig('Poster');
@@ -926,6 +932,7 @@
                 q('Enabled').checked = config.Enabled;
                 q('HideDolbyVisionOnSamsungClients').checked = config.HideDolbyVisionOnSamsungClients === true;
                 q('HideHdrOnWindowsClients').checked = config.HideHdrOnWindowsClients === true;
+                q('DebugCountryCode').value = config.DebugCountryCode || '';
                 q('ThumbnailSameAsPoster').checked = config.ThumbnailSameAsPoster === true;
                 q('ThumbnailSizeReduction').value = config.ThumbnailSizeReduction != null ? config.ThumbnailSizeReduction : 10;
 

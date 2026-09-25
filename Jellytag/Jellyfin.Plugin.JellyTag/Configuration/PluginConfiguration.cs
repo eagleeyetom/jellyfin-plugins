@@ -167,6 +167,11 @@ public class PluginConfiguration : BasePluginConfiguration
     public OutputImageFormat OutputFormat { get; set; }
     public int WebPQuality { get; set; }
 
+    /// <summary>
+    /// Debug option to manually specify country/language flag codes (comma-separated, e.g. "fr, jp, de").
+    /// </summary>
+    public string? DebugCountryCode { get; set; }
+
     // Legacy properties kept for deserialization migration
     // These will be read during migration and then ignored
     public ImageTypeSettings? PosterSettings { get; set; }

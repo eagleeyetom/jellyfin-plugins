@@ -262,6 +262,25 @@ public class QualityDetectionService : IQualityDetectionService
                 var langBadges = DetectLanguages(allStreams.ToList());
                 badges.AddRange(langBadges);
             }
+
+            // Debug manual country code override
+            var config = Plugin.Instance?.Configuration;
+            if (!string.IsNullOrWhiteSpace(config?.DebugCountryCode))
+            {
+                var debugCodes = config.DebugCountryCode.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var code in debugCodes)
+                {
+                    var trimmed = code.Trim().ToLowerInvariant();
+                    if (string.IsNullOrEmpty(trimmed)) continue;
+
+                    badges.Add(new BadgeInfo
+                    {
+                        Category = BadgeCategory.Language,
+                        BadgeKey = trimmed,
+                        ResourceFileName = $"flag-{trimmed}.svg"
+                    });
+                }
+            }
         }
         catch (Exception ex)
         {
