@@ -353,19 +353,22 @@ public class MetadataNotifierService : IHostedService
         var title = audioStream.Title ?? string.Empty;
         var channels = audioStream.Channels;
 
+        bool isAtmos = profile.Contains("Atmos", StringComparison.OrdinalIgnoreCase) ||
+                       title.Contains("Atmos", StringComparison.OrdinalIgnoreCase);
+        bool isDtsx = profile.Contains("DTS:X", StringComparison.OrdinalIgnoreCase) ||
+                      profile.Contains("DTS-X", StringComparison.OrdinalIgnoreCase) ||
+                      title.Contains("DTS:X", StringComparison.OrdinalIgnoreCase);
+
         string displayCodec;
 
         // Detect Atmos/DTS:X first (high priority)
-        if (profile.Contains("Atmos", StringComparison.OrdinalIgnoreCase) ||
-            title.Contains("Atmos", StringComparison.OrdinalIgnoreCase))
+        if (isAtmos)
         {
-            displayCodec = "Dolby Atmos";
+            displayCodec = config.UseDetailedAudioNames ? $"{GetBaseCodec(codec, true)} Atmos" : "Dolby Atmos";
         }
-        else if (profile.Contains("DTS:X", StringComparison.OrdinalIgnoreCase) ||
-                 profile.Contains("DTS-X", StringComparison.OrdinalIgnoreCase) ||
-                 title.Contains("DTS:X", StringComparison.OrdinalIgnoreCase))
+        else if (isDtsx)
         {
-            displayCodec = "DTS:X";
+            displayCodec = config.UseDetailedAudioNames ? $"{GetBaseCodec(codec, true)} DTS:X" : "DTS:X";
         }
         else if (profile.Contains("DTS-HD MA", StringComparison.OrdinalIgnoreCase) ||
                  profile.Contains("DTS-HD MASTER", StringComparison.OrdinalIgnoreCase) ||
@@ -380,40 +383,7 @@ public class MetadataNotifierService : IHostedService
         }
         else
         {
-            if (config.UseDetailedAudioNames)
-            {
-                displayCodec = codec switch
-                {
-                    "TRUEHD" or "TRUHD" => "TRUEHD",
-                    "EAC3" => "E-AC-3",
-                    "AC3" => "AC3",
-                    "DCA" or "DTS" => "DTS",
-                    "AAC" => "AAC",
-                    "FLAC" => "FLAC",
-                    "OPUS" => "OPUS",
-                    "VORBIS" => "VORBIS",
-                    "MP3" => "MP3",
-                    "PCM" or "LPCM" => "PCM",
-                    _ => codec
-                };
-            }
-            else
-            {
-                displayCodec = codec switch
-                {
-                    "TRUEHD" or "TRUHD" => "Dolby TrueHD",
-                    "EAC3" => "Dolby Digital+",
-                    "AC3" => "Dolby Digital",
-                    "DCA" or "DTS" => "DTS",
-                    "AAC" => "AAC",
-                    "FLAC" => "FLAC",
-                    "OPUS" => "Opus",
-                    "VORBIS" => "Vorbis",
-                    "MP3" => "MP3",
-                    "PCM" or "LPCM" => "PCM",
-                    _ => codec
-                };
-            }
+            displayCodec = GetBaseCodec(codec, config.UseDetailedAudioNames);
         }
 
         string channelStr = channels switch
@@ -425,6 +395,44 @@ public class MetadataNotifierService : IHostedService
         };
 
         return !string.IsNullOrEmpty(channelStr) ? $"{displayCodec} {channelStr}" : displayCodec;
+    }
+
+    private static string GetBaseCodec(string codec, bool detailed)
+    {
+        if (detailed)
+        {
+            return codec switch
+            {
+                "TRUEHD" or "TRUHD" => "TRUEHD",
+                "EAC3" => "E-AC-3",
+                "AC3" => "AC3",
+                "DCA" or "DTS" => "DTS",
+                "AAC" => "AAC",
+                "FLAC" => "FLAC",
+                "OPUS" => "OPUS",
+                "VORBIS" => "VORBIS",
+                "MP3" => "MP3",
+                "PCM" or "LPCM" => "PCM",
+                _ => codec
+            };
+        }
+        else
+        {
+            return codec switch
+            {
+                "TRUEHD" or "TRUHD" => "Dolby TrueHD",
+                "EAC3" => "Dolby Digital+",
+                "AC3" => "Dolby Digital",
+                "DCA" or "DTS" => "DTS",
+                "AAC" => "AAC",
+                "FLAC" => "FLAC",
+                "OPUS" => "Opus",
+                "VORBIS" => "Vorbis",
+                "MP3" => "MP3",
+                "PCM" or "LPCM" => "PCM",
+                _ => codec
+            };
+        }
     }
 
     private static string? GetTranscodingInfo(SessionInfo session)
