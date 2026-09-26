@@ -15,6 +15,7 @@ public class PluginConfiguration : BasePluginConfiguration
         IsEnabled = true;
         TargetSamsungOnly = true;
         NotificationDurationMs = 5000;
+        ShowSdr = true;
         ShowAudio = true;
         ShowTranscoding = true;
         ShowHdr10Plus = true;
@@ -38,6 +39,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the notification duration in milliseconds.
     /// </summary>
     public int NotificationDurationMs { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to show SDR.
+    /// </summary>
+    public bool ShowSdr { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether to display audio codec info.

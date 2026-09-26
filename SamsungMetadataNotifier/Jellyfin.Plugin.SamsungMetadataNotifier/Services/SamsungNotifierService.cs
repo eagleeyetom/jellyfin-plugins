@@ -85,7 +85,7 @@ public class SamsungNotifierService : IHostedService
 
             var parts = new List<string>();
 
-            if (config.ShowHdr10Plus || config.ShowHdr10 || config.ShowDolbyVision || config.ShowHlg)
+            if (config.ShowSdr || config.ShowHdr10Plus || config.ShowHdr10 || config.ShowDolbyVision || config.ShowHlg)
             {
                 var hdrInfo = GetHdrInfo(item, session, config);
                 if (!string.IsNullOrEmpty(hdrInfo))
@@ -211,6 +211,11 @@ public class SamsungNotifierService : IHostedService
         if (rangeType == VideoRangeType.HDR10 || range == VideoRange.HDR || displayTitle.Contains("HDR10", StringComparison.OrdinalIgnoreCase))
         {
             if (config.ShowHdr10) return "HDR10";
+        }
+
+        if (config.ShowSdr)
+        {
+            return "SDR";
         }
 
         return string.Empty;

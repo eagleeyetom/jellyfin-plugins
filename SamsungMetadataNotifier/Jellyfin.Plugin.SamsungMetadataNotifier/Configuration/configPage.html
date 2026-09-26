@@ -39,15 +39,13 @@
                     </div>
                     <div class="verticalSection">
                         <h3 class="sectionTitle">Information to Display</h3>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowAudio" is="emby-checkbox" /><span>Show Audio</span></label></div>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowTranscoding" is="emby-checkbox" /><span>Show Transcoding</span></label></div>
-                    </div>
-                    <div class="verticalSection">
-                        <h3 class="sectionTitle">HDR Formatting</h3>
+                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowSdr" is="emby-checkbox" /><span>Show SDR</span></label></div>
                         <div class="checkboxContainer"><label><input type="checkbox" id="ShowHdr10Plus" is="emby-checkbox" /><span>Show HDR10+</span></label></div>
                         <div class="checkboxContainer"><label><input type="checkbox" id="ShowHdr10" is="emby-checkbox" /><span>Show HDR10</span></label></div>
                         <div class="checkboxContainer"><label><input type="checkbox" id="ShowDolbyVision" is="emby-checkbox" /><span>Show Dolby Vision</span></label></div>
                         <div class="checkboxContainer"><label><input type="checkbox" id="ShowHlg" is="emby-checkbox" /><span>Show HLG</span></label></div>
+                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowAudio" is="emby-checkbox" /><span>Show Audio</span></label></div>
+                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowTranscoding" is="emby-checkbox" /><span>Show Transcoding</span></label></div>
                         <div class="checkboxContainer"><label><input type="checkbox" id="SuppressDvOnSamsung" is="emby-checkbox" /><span>Suppress Dolby Vision on Samsung</span></label></div>
                     </div>
                     <div>
@@ -73,6 +71,7 @@
                     document.querySelector('#IsEnabled').checked = config.IsEnabled ?? true;
                     document.querySelector('#TargetSamsungOnly').checked = config.TargetSamsungOnly ?? true;
                     document.querySelector('#NotificationDurationMs').value = config.NotificationDurationMs ?? 5000;
+                    document.querySelector('#ShowSdr').checked = config.ShowSdr ?? true;
                     document.querySelector('#ShowAudio').checked = config.ShowAudio ?? true;
                     document.querySelector('#ShowTranscoding').checked = config.ShowTranscoding ?? true;
                     document.querySelector('#ShowHdr10Plus').checked = config.ShowHdr10Plus ?? true;
@@ -93,6 +92,7 @@
                     config.IsEnabled = document.querySelector('#IsEnabled').checked;
                     config.TargetSamsungOnly = document.querySelector('#TargetSamsungOnly').checked;
                     config.NotificationDurationMs = parseInt(document.querySelector('#NotificationDurationMs').value, 10) || 5000;
+                    config.ShowSdr = document.querySelector('#ShowSdr').checked;
                     config.ShowAudio = document.querySelector('#ShowAudio').checked;
                     config.ShowTranscoding = document.querySelector('#ShowTranscoding').checked;
                     config.ShowHdr10Plus = document.querySelector('#ShowHdr10Plus').checked;
