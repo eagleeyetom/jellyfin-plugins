@@ -102,6 +102,10 @@ JellyTag intercepts Jellyfin image requests via HTTP middleware, detects media q
 - **Clearing the cache**: Use the "Clear Image Cache" button in the config page
 - **Performance**: Increase cache duration, lower JPEG quality, disable unneeded badge categories
 
+## Acknowledgments
+
+- Language and country flag icons provided by [flag-icons](https://github.com/lipis/flag-icons) by Panayotis Lipiridis (MIT License).
+
 ## License
 
 MIT License

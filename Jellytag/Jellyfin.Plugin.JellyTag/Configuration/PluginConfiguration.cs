@@ -23,6 +23,16 @@ public enum BadgeStyle
 }
 
 /// <summary>
+/// Badge icon shape style.
+/// </summary>
+public enum BadgeIconStyle
+{
+    Rectangular,
+    Square,
+    Round
+}
+
+/// <summary>
 /// Badge display mode (highest quality only, or all).
 /// </summary>
 public enum BadgeDisplayMode
@@ -74,6 +84,7 @@ public class BadgePanelSettings
     public int SizePercent { get; set; } = 15;
     public float MarginPercent { get; set; } = 2.5f;
     public BadgeStyle Style { get; set; } = BadgeStyle.Image;
+    public BadgeIconStyle IconStyle { get; set; } = BadgeIconStyle.Rectangular;
     public int Order { get; set; }
 
     // Text style settings (used when Style == Text)
@@ -155,6 +166,11 @@ public class PluginConfiguration : BasePluginConfiguration
     public int JpegQuality { get; set; }
     public OutputImageFormat OutputFormat { get; set; }
     public int WebPQuality { get; set; }
+
+    /// <summary>
+    /// Debug option to manually specify country/language flag codes (comma-separated, e.g. "fr, jp, de").
+    /// </summary>
+    public string? DebugCountryCode { get; set; }
 
     // Legacy properties kept for deserialization migration
     // These will be read during migration and then ignored

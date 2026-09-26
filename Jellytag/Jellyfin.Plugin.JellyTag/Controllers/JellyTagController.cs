@@ -36,6 +36,21 @@ public partial class JellyTagController : ControllerBase
     }
 
     /// <summary>
+    /// Gets whether the plugin is running in Debug configuration.
+    /// </summary>
+    [HttpGet("IsDebug")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetIsDebug()
+    {
+#if DEBUG
+        return Ok(true);
+#else
+        return Ok(false);
+#endif
+    }
+
+    /// <summary>
     /// Clears the image cache.
     /// </summary>
     [HttpPost("ClearCache")]
