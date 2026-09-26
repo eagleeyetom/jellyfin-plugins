@@ -222,6 +222,15 @@ public class ImageCacheService : IImageCacheService
             }
         }
 
+        sb.Append('|');
+        if (config.LanguageFlagOverrides != null)
+        {
+            foreach (var lfo in config.LanguageFlagOverrides)
+            {
+                sb.Append(lfo.LanguageCode).Append('=').Append(lfo.FlagCode).Append(',');
+            }
+        }
+
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
         return Convert.ToHexString(hashBytes)[..16];
     }
@@ -242,7 +251,7 @@ public class ImageCacheService : IImageCacheService
     {
         sb.Append(p.Enabled).Append((int)p.Position).Append((int)p.ShowMode);
         sb.Append((int)p.Layout).Append(p.GapPercent).Append(p.SizePercent).Append(p.MarginPercent);
-        sb.Append((int)p.Style).Append(p.Order);
+        sb.Append((int)p.Style).Append((int)p.IconStyle).Append(p.Order);
         sb.Append(p.TextBgColor).Append(p.TextBgOpacity).Append(p.TextColor).Append(p.TextCornerRadius);
         sb.Append(string.Join(",", p.EnabledBadges));
         if (p.BadgeTypeOverrides != null)

@@ -278,7 +278,7 @@ public class QualityDetectionService : IQualityDetectionService
                     badges.Add(new BadgeInfo
                     {
                         Category = BadgeCategory.Language,
-                        BadgeKey = trimmed,
+                        BadgeKey = NormalizeLanguageCode(trimmed),
                         ResourceFileName = mappedFlag
                     });
                 }
@@ -291,53 +291,113 @@ public class QualityDetectionService : IQualityDetectionService
         }
     }
 
-    private static readonly Dictionary<string, string> LangCodeToFlag = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>
+    /// ISO 639-2/B and 639-2/T three-letter codes to their 639-1 two-letter equivalent.
+    /// Purely mechanical aliasing, no country is implied here.
+    /// </summary>
+    private static readonly Dictionary<string, string> Alpha3ToAlpha2 = new(StringComparer.OrdinalIgnoreCase)
     {
-        { "fre", "fr" }, { "fra", "fr" }, { "en", "gb" }, { "eng", "gb" },
-        { "ger", "de" }, { "deu", "de" }, { "de", "de" }, { "fr", "fr" },
-        { "dut", "nl" }, { "nld", "nl" }, { "nl", "nl" },
-        { "cze", "cz" }, { "ces", "cz" }, { "cs", "cz" },
-        { "rum", "ro" }, { "ron", "ro" }, { "ro", "ro" },
-        { "chi", "cn" }, { "zho", "cn" }, { "zh", "cn" },
-        { "gre", "gr" }, { "ell", "gr" }, { "el", "gr" },
-        { "may", "my" }, { "msa", "my" }, { "ms", "my" },
-        { "tgl", "ph" }, { "fil", "ph" }, { "tl", "ph" },
-        { "slo", "sk" }, { "slk", "sk" }, { "sk", "sk" },
-        { "baq", "es" }, { "eus", "es" }, { "eu", "es" },
-        { "wel", "gb-wls" }, { "cym", "gb-wls" }, { "cy", "gb-wls" },
-        { "spa", "es" }, { "es", "es" },
-        { "ita", "it" }, { "it", "it" },
-        { "por", "pt" }, { "pt", "pt" },
-        { "kor", "kr" }, { "ko", "kr" },
-        { "rus", "ru" }, { "ru", "ru" },
-        { "ara", "sa" }, { "ar", "sa" },
-        { "hin", "in" }, { "hi", "in" },
-        { "tha", "th" }, { "th", "th" },
-        { "pol", "pl" }, { "pl", "pl" },
-        { "tur", "tr" }, { "tr", "tr" },
-        { "swe", "se" }, { "sv", "se" },
-        { "dan", "dk" }, { "da", "dk" },
-        { "nor", "no" }, { "no", "no" },
-        { "fin", "fi" }, { "fi", "fi" },
-        { "hun", "hu" }, { "hu", "hu" },
-        { "ukr", "ua" }, { "uk", "ua" },
-        { "vie", "vn" }, { "vi", "vn" },
-        { "heb", "il" }, { "he", "il" },
-        { "hrv", "hr" }, { "hr", "hr" },
-        { "srp", "rs" }, { "sr", "rs" },
-        { "bul", "bg" }, { "bg", "bg" },
-        { "lit", "lt" }, { "lt", "lt" },
-        { "lav", "lv" }, { "lv", "lv" },
-        { "est", "ee" }, { "et", "ee" },
-        { "jpn", "jp" }, { "ja", "jp" },
-        { "ind", "id" }, { "id", "id" }
+        { "fre", "fr" }, { "fra", "fr" },
+        { "eng", "en" },
+        { "ger", "de" }, { "deu", "de" },
+        { "dut", "nl" }, { "nld", "nl" },
+        { "cze", "cs" }, { "ces", "cs" },
+        { "rum", "ro" }, { "ron", "ro" },
+        { "chi", "zh" }, { "zho", "zh" },
+        { "gre", "el" }, { "ell", "el" },
+        { "may", "ms" }, { "msa", "ms" },
+        { "tgl", "tl" }, { "fil", "tl" },
+        { "slo", "sk" }, { "slk", "sk" },
+        { "baq", "eu" }, { "eus", "eu" },
+        { "wel", "cy" }, { "cym", "cy" },
+        { "spa", "es" }, { "ita", "it" }, { "por", "pt" }, { "kor", "ko" },
+        { "rus", "ru" }, { "ara", "ar" }, { "hin", "hi" }, { "tha", "th" },
+        { "pol", "pl" }, { "tur", "tr" }, { "swe", "sv" }, { "dan", "da" },
+        { "nor", "no" }, { "fin", "fi" }, { "hun", "hu" }, { "ukr", "uk" },
+        { "vie", "vi" }, { "heb", "he" }, { "hrv", "hr" }, { "srp", "sr" },
+        { "bul", "bg" }, { "lit", "lt" }, { "lav", "lv" }, { "est", "et" },
+        { "jpn", "ja" }, { "ind", "id" }, { "cat", "ca" }, { "glg", "gl" },
+        { "gle", "ga" }, { "slv", "sl" }, { "alb", "sq" }, { "sqi", "sq" },
+        { "ice", "is" }, { "isl", "is" }, { "mac", "mk" }, { "mkd", "mk" },
+        { "per", "fa" }, { "fas", "fa" }, { "urd", "ur" }, { "ben", "bn" },
+        { "tam", "ta" }, { "tel", "te" }, { "mal", "ml" }, { "kan", "kn" },
+        { "mar", "mr" }, { "guj", "gu" }, { "pan", "pa" }, { "afr", "af" },
+        { "swa", "sw" }, { "bel", "be" }, { "kat", "ka" }, { "geo", "ka" },
+        { "arm", "hy" }, { "hye", "hy" }, { "aze", "az" }, { "kaz", "kk" },
+        { "uzb", "uz" }, { "mon", "mn" }, { "nep", "ne" }, { "sin", "si" },
+        { "khm", "km" }, { "lao", "lo" }, { "bur", "my" }, { "mya", "my" },
+        { "mlt", "mt" }, { "bos", "bs" }, { "ltz", "lb" }, { "epo", "eo" },
+        { "lat", "la" }, { "yid", "yi" }, { "nob", "nb" }, { "nno", "nn" }
     };
 
-    private static string GetFlagResourceFileName(string langCode)
+    /// <summary>
+    /// Default country flag for a language. These are opinionated choices for languages
+    /// spoken in many countries, and can be overridden per language in the plugin config.
+    /// </summary>
+    private static readonly Dictionary<string, string> DefaultFlagForLanguage = new(StringComparer.OrdinalIgnoreCase)
     {
-        if (string.IsNullOrEmpty(langCode)) return string.Empty;
-        var lower = langCode.ToLowerInvariant();
-        var countryCode = LangCodeToFlag.TryGetValue(lower, out var mapped) ? mapped : lower;
+        { "en", "gb" }, { "ar", "sa" }, { "hi", "in" }, { "zh", "cn" },
+        { "ko", "kr" }, { "ja", "jp" }, { "cs", "cz" }, { "el", "gr" },
+        { "ms", "my" }, { "tl", "ph" }, { "eu", "es-pv" }, { "cy", "gb-wls" },
+        { "ca", "es-ct" }, { "gl", "es-ga" }, { "sv", "se" }, { "da", "dk" },
+        { "uk", "ua" }, { "vi", "vn" }, { "he", "il" }, { "sr", "rs" },
+        { "et", "ee" }, { "fa", "ir" }, { "ur", "pk" }, { "bn", "bd" },
+        { "ta", "in" }, { "te", "in" }, { "ml", "in" }, { "kn", "in" },
+        { "mr", "in" }, { "gu", "in" }, { "pa", "in" }, { "af", "za" },
+        { "sw", "tz" }, { "ka", "ge" }, { "hy", "am" }, { "kk", "kz" },
+        { "uz", "uz" }, { "ne", "np" }, { "si", "lk" }, { "km", "kh" },
+        { "lo", "la" }, { "my", "mm" }, { "nb", "no" }, { "nn", "no" },
+        { "sq", "al" }, { "sl", "si" }, { "ga", "ie" }, { "is", "is" },
+        { "lb", "lu" }, { "yi", "il" }, { "la", "va" }, { "be", "by" }
+    };
+
+    /// <summary>
+    /// Reduces any raw stream language tag to a canonical ISO 639-1 code where possible.
+    /// Handles "eng", "en-US" and "en_US" alike.
+    /// </summary>
+    public static string NormalizeLanguageCode(string? rawLanguage)
+    {
+        if (string.IsNullOrWhiteSpace(rawLanguage)) return string.Empty;
+
+        var value = rawLanguage.Trim().ToLowerInvariant();
+        var sepIndex = value.IndexOfAny(new[] { '-', '_' });
+        var primary = sepIndex > 0 ? value[..sepIndex] : value;
+
+        return Alpha3ToAlpha2.TryGetValue(primary, out var alpha2) ? alpha2 : primary;
+    }
+
+    /// <summary>
+    /// Extracts the region subtag from tags like "pt-BR", which tells us the flag directly.
+    /// </summary>
+    private static string? GetRegionSubtag(string? rawLanguage)
+    {
+        if (string.IsNullOrWhiteSpace(rawLanguage)) return null;
+
+        var value = rawLanguage.Trim().ToLowerInvariant();
+        var sepIndex = value.IndexOfAny(new[] { '-', '_' });
+        if (sepIndex <= 0 || sepIndex == value.Length - 1) return null;
+
+        var region = value[(sepIndex + 1)..];
+        return region.Length == 2 && region.All(char.IsLetter) ? region : null;
+    }
+
+    private static string GetFlagResourceFileName(string? rawLanguage)
+    {
+        if (string.IsNullOrWhiteSpace(rawLanguage)) return string.Empty;
+
+        // A region in the file's own tag beats any default we could guess.
+        var region = GetRegionSubtag(rawLanguage);
+        if (region != null) return $"flag-{region}.svg";
+
+        var canonical = NormalizeLanguageCode(rawLanguage);
+        if (canonical.Length == 0) return string.Empty;
+
+        var overrides = Plugin.Instance?.Configuration?.LanguageFlagOverrides;
+        var userFlag = overrides?.FirstOrDefault(o =>
+            string.Equals(o.LanguageCode, canonical, StringComparison.OrdinalIgnoreCase))?.FlagCode;
+        if (!string.IsNullOrWhiteSpace(userFlag)) return $"flag-{userFlag.Trim().ToLowerInvariant()}.svg";
+
+        var countryCode = DefaultFlagForLanguage.TryGetValue(canonical, out var mapped) ? mapped : canonical;
         return $"flag-{countryCode}.svg";
     }
 
@@ -357,28 +417,29 @@ public class QualityDetectionService : IQualityDetectionService
         foreach (var stream in audioStreams)
         {
             var lang = stream.Language;
-            if (!string.IsNullOrEmpty(lang) && addedLanguages.Add(lang))
+            if (string.IsNullOrEmpty(lang)) continue;
+
+            var key = NormalizeLanguageCode(lang);
+            if (key.Length == 0 || !addedLanguages.Add(key)) continue;
+
+            badges.Add(new BadgeInfo
             {
-                var langLower = lang.ToLowerInvariant();
-                badges.Add(new BadgeInfo
-                {
-                    Category = BadgeCategory.Language,
-                    BadgeKey = langLower,
-                    ResourceFileName = GetFlagResourceFileName(langLower)
-                });
-            }
+                Category = BadgeCategory.Language,
+                BadgeKey = key,
+                ResourceFileName = GetFlagResourceFileName(lang)
+            });
         }
 
         // VOST indicators - always detect, filtering happens in ShouldShowBadge
         var audioLanguages = new HashSet<string>(
-            audioStreams.Where(s => !string.IsNullOrEmpty(s.Language)).Select(s => s.Language!.ToLowerInvariant()),
+            audioStreams.Where(s => !string.IsNullOrEmpty(s.Language)).Select(s => NormalizeLanguageCode(s.Language)),
             StringComparer.OrdinalIgnoreCase);
 
         var subtitleStreams = allStreams.Where(s => s.Type == MediaStreamType.Subtitle).ToList();
         foreach (var sub in subtitleStreams)
         {
-            var subLang = sub.Language?.ToLowerInvariant();
-            if (!string.IsNullOrEmpty(subLang) && !audioLanguages.Contains(subLang))
+            var subLang = NormalizeLanguageCode(sub.Language);
+            if (subLang.Length > 0 && !audioLanguages.Contains(subLang))
             {
                 var key = "vost" + subLang;
                 if (addedLanguages.Add(key))

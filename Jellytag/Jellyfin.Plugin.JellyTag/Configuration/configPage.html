@@ -175,6 +175,27 @@
                         </div>
                     </details>
 
+                    <!-- Language Flags -->
+                    <details class="jellytag-section">
+                        <summary>Language Flags</summary>
+                        <div class="jellytag-section-body">
+                            <div class="fieldDescription" style="margin-bottom:1em;">
+                                Most languages are spoken in more than one country, so the flag shown is a choice rather than a fact.
+                                Pick the flag you prefer for each language below. Files tagged with a region (for example <code>pt-BR</code>)
+                                always use that region's flag and ignore these settings.
+                            </div>
+                            <div class="jellytag-grid" id="LanguageFlagGrid"></div>
+                            <div style="margin-top:1.5em;">
+                                <div class="fieldDescription" style="margin-bottom:0.5em;">Add another language. Use an ISO 639-1 code (for example <code>sv</code>) and a flag code (for example <code>fi</code>).</div>
+                                <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+                                    <div class="inputContainer" style="margin-bottom:0;"><label class="inputLabel inputLabelUnfocused" for="LangFlagNewLang">Language code</label><input id="LangFlagNewLang" type="text" maxlength="3" placeholder="sv" is="emby-input" /></div>
+                                    <div class="inputContainer" style="margin-bottom:0;"><label class="inputLabel inputLabelUnfocused" for="LangFlagNewFlag">Flag code</label><input id="LangFlagNewFlag" type="text" maxlength="8" placeholder="fi" is="emby-input" /></div>
+                                    <button is="emby-button" type="button" class="raised" id="LangFlagAddBtn" style="margin-bottom:0;"><span>Add</span></button>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
                     <!-- Custom Badges -->
                     <details class="jellytag-section">
                         <summary>Custom Badges</summary>
@@ -669,6 +690,133 @@
             q(k + 'VostCornerRadius').value = itc.VostCornerRadius != null ? itc.VostCornerRadius : 1;
         }
 
+        // ===== Language flags =====
+        // Languages where the "right" flag is a matter of opinion. `def` mirrors
+        // DefaultFlagForLanguage in QualityDetectionService.
+        var LANG_FLAG_CHOICES = [
+            { code:'en', label:'English',    def:'gb', opts:['gb','us','au','ca','nz','ie'] },
+            { code:'es', label:'Spanish',    def:'es', opts:['es','mx','ar','co','cl','pe'] },
+            { code:'pt', label:'Portuguese', def:'pt', opts:['pt','br'] },
+            { code:'fr', label:'French',     def:'fr', opts:['fr','ca','be','ch'] },
+            { code:'ar', label:'Arabic',     def:'sa', opts:['sa','eg','ae','ma','lb'] },
+            { code:'zh', label:'Chinese',    def:'cn', opts:['cn','tw','hk','sg'] },
+            { code:'de', label:'German',     def:'de', opts:['de','at','ch'] },
+            { code:'nl', label:'Dutch',      def:'nl', opts:['nl','be'] },
+            { code:'ru', label:'Russian',    def:'ru', opts:['ru','by','kz'] },
+            { code:'sv', label:'Swedish',    def:'se', opts:['se','fi'] },
+            { code:'ko', label:'Korean',     def:'kr', opts:['kr','kp'] },
+            { code:'ms', label:'Malay',      def:'my', opts:['my','bn','sg'] },
+            { code:'eu', label:'Basque',     def:'es-pv', opts:['es-pv','es'] },
+            { code:'ca', label:'Catalan',    def:'es-ct', opts:['es-ct','es','ad'] },
+            { code:'cy', label:'Welsh',      def:'gb-wls', opts:['gb-wls','gb'] },
+            { code:'ta', label:'Tamil',      def:'in', opts:['in','lk','sg'] }
+        ];
+
+        function langFlagRowHTML(code, label, def, opts, current) {
+            var id = 'lfo_' + code.replace(/[^a-z0-9]/g, '_');
+            var h = '<div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="' + id + '">' + label + '</label>';
+            h += '<select id="' + id + '" data-lang="' + code + '" is="emby-select">';
+            h += '<option value="">Default (' + def.toUpperCase() + ')</option>';
+            opts.forEach(function(o) {
+                var selAttr = (current && current.toLowerCase() === o) ? ' selected' : '';
+                h += '<option value="' + o + '"' + selAttr + '>' + o.toUpperCase() + '</option>';
+            });
+            h += '</select></div>';
+            return h;
+        }
+
+        function langFlagCustomRowHTML(code, flag) {
+            var id = 'lfoc_' + code.replace(/[^a-z0-9]/g, '_');
+            var h = '<div class="inputContainer" data-custom-lang-row="' + code + '">';
+            h += '<label class="inputLabel inputLabelUnfocused" for="' + id + '">' + code.toUpperCase() + '</label>';
+            h += '<div style="display:flex; gap:8px; align-items:center;">';
+            h += '<input id="' + id + '" data-lang="' + code + '" type="text" value="' + flag + '" is="emby-input" />';
+            h += '<button is="emby-button" type="button" class="raised langflag-remove" title="Remove">&#10005;</button>';
+            h += '</div></div>';
+            return h;
+        }
+
+        function renderLanguageFlagGrid(overrides) {
+            var grid = document.getElementById('LanguageFlagGrid');
+            if (!grid) return;
+
+            var map = {};
+            (overrides || []).forEach(function(o) {
+                var lc = (o.LanguageCode || o.languageCode || '').toLowerCase();
+                if (lc) map[lc] = o.FlagCode || o.flagCode || '';
+            });
+
+            var curated = {};
+            var h = '';
+            LANG_FLAG_CHOICES.forEach(function(item) {
+                curated[item.code] = true;
+                var current = map[item.code];
+                // An override outside the preset list still needs to be selectable.
+                var opts = item.opts.slice();
+                if (current && opts.indexOf(current.toLowerCase()) === -1) opts.push(current.toLowerCase());
+                h += langFlagRowHTML(item.code, item.label, item.def, opts, current);
+            });
+
+            Object.keys(map).forEach(function(lc) {
+                if (!curated[lc] && map[lc]) h += langFlagCustomRowHTML(lc, map[lc]);
+            });
+
+            grid.innerHTML = h;
+        }
+
+        function collectLanguageFlagOverrides() {
+            var out = [];
+            document.querySelectorAll('#LanguageFlagGrid [data-lang]').forEach(function(el) {
+                var lang = (el.getAttribute('data-lang') || '').trim().toLowerCase();
+                var flag = (el.value || '').trim().toLowerCase();
+                if (lang && flag) out.push({ LanguageCode: lang, FlagCode: flag });
+            });
+            return out;
+        }
+
+        var langFlagControlsReady = false;
+        function setupLanguageFlagControls() {
+            // pageshow fires repeatedly; these elements persist so bind only once.
+            if (langFlagControlsReady) return;
+            langFlagControlsReady = true;
+
+            var grid = document.getElementById('LanguageFlagGrid');
+            if (grid) {
+                grid.addEventListener('click', function(e) {
+                    var btn = e.target.closest('.langflag-remove');
+                    if (!btn) return;
+                    var row = btn.closest('[data-custom-lang-row]');
+                    if (row) row.remove();
+                });
+            }
+
+            var addBtn = document.getElementById('LangFlagAddBtn');
+            if (!addBtn) return;
+            addBtn.addEventListener('click', function() {
+                var langEl = q('LangFlagNewLang');
+                var flagEl = q('LangFlagNewFlag');
+                var lang = (langEl.value || '').trim().toLowerCase();
+                var flag = (flagEl.value || '').trim().toLowerCase();
+                if (!/^[a-z]{2,3}$/.test(lang) || !/^[a-z]{2}(-[a-z]{2,3})?$/.test(flag)) {
+                    Dashboard.alert('Enter a 2-3 letter language code and a flag code such as "us" or "es-ct".');
+                    return;
+                }
+
+                var existing = document.querySelector('#LanguageFlagGrid [data-lang="' + lang + '"]');
+                if (existing) {
+                    if (existing.tagName === 'SELECT' && !Array.prototype.some.call(existing.options, function(o) { return o.value === flag; })) {
+                        existing.add(new Option(flag.toUpperCase(), flag));
+                    }
+                    existing.value = flag;
+                } else {
+                    document.getElementById('LanguageFlagGrid').insertAdjacentHTML('beforeend', langFlagCustomRowHTML(lang, flag));
+                }
+
+                langEl.value = '';
+                flagEl.value = '';
+            });
+        }
+
         function loadImageTypeConfig(prefix, itc) {
             if (!itc) return;
             q(prefix + 'Enabled').checked = itc.Enabled !== false;
@@ -809,6 +957,8 @@
             });
             config.CustomBadgeTexts = saveCbt;
 
+            config.LanguageFlagOverrides = collectLanguageFlagOverrides();
+
             config.CacheDurationHours = parseInt(q('CacheDurationHours').value, 10);
             config.OutputFormat = q('OutputFormat').value;
             config.JpegQuality = parseInt(q('JpegQuality').value, 10);
@@ -931,6 +1081,7 @@
             // Generate panels
             document.getElementById('PosterPanels').innerHTML = generatePanels('Poster');
             document.getElementById('ThumbPanels').innerHTML = generatePanels('Thumb');
+            setupLanguageFlagControls();
 
             Dashboard.showLoadingMsg();
             ApiClient.getJSON(ApiClient.getUrl('JellyTag/IsDebug')).then(function(isDebug) {
@@ -963,6 +1114,8 @@
                 var cbtMap = {};
                 cbtList.forEach(function(item) { cbtMap[item.Key || item.key] = item.Text || item.text; });
                 cbtInputs.forEach(function(el) { el.value = cbtMap[el.getAttribute('data-badge-key')] || ''; });
+
+                renderLanguageFlagGrid(config.LanguageFlagOverrides);
 
                 q('CacheDurationHours').value = config.CacheDurationHours;
                 q('OutputFormat').value = config.OutputFormat;

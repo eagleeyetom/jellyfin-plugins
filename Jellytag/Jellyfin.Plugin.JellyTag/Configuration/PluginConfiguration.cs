@@ -72,6 +72,22 @@ public class BadgeTypeStyleOverride
 }
 
 /// <summary>
+/// User-chosen flag for a language, since most languages are spoken in several countries.
+/// </summary>
+public class LanguageFlagOverride
+{
+    /// <summary>
+    /// Canonical ISO 639-1 language code, e.g. "en".
+    /// </summary>
+    public string LanguageCode { get; set; } = "";
+
+    /// <summary>
+    /// Flag asset code, e.g. "us" or "es-ct".
+    /// </summary>
+    public string FlagCode { get; set; } = "";
+}
+
+/// <summary>
 /// Settings for a badge panel (Resolution, HDR, Codec, Audio, Language).
 /// </summary>
 public class BadgePanelSettings
@@ -136,6 +152,7 @@ public class PluginConfiguration : BasePluginConfiguration
         ExcludedLibraryIds = new List<string>();
 
         CustomBadgeTexts = new List<BadgeTextOverride>();
+        LanguageFlagOverrides = new List<LanguageFlagOverride>();
         CacheDurationHours = 24;
         JpegQuality = 90;
         OutputFormat = OutputImageFormat.Jpeg;
@@ -162,6 +179,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public List<string> ExcludedLibraryIds { get; set; }
 
     public List<BadgeTextOverride> CustomBadgeTexts { get; set; }
+
+    /// <summary>
+    /// Overrides the default country flag used for a language.
+    /// </summary>
+    public List<LanguageFlagOverride> LanguageFlagOverrides { get; set; }
+
     public int CacheDurationHours { get; set; }
     public int JpegQuality { get; set; }
     public OutputImageFormat OutputFormat { get; set; }

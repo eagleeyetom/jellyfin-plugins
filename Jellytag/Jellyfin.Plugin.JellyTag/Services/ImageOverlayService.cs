@@ -32,32 +32,11 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         { "7.1", "7.1" }, { "5.1", "5.1" }, { "stereo", "STEREO" },
         { "hdr", "HDR" }, { "3d", "3D" },
         { "UHD4K", "4K" }, { "FHD1080p", "1080p" }, { "HD720p", "720p" },
-        { "fra", "FR" }, { "fre", "FR" }, { "eng", "EN" }, { "jpn", "JP" },
-        { "deu", "DE" }, { "ger", "DE" }, { "spa", "ES" }, { "ita", "IT" },
-        { "por", "PT" }, { "kor", "KR" }, { "zho", "ZH" }, { "chi", "ZH" },
-        { "rus", "RU" }, { "nld", "NL" }, { "dut", "NL" }, { "ara", "AR" },
-        { "hin", "HI" }, { "tha", "TH" }, { "pol", "PL" }, { "tur", "TR" },
-        { "swe", "SV" }, { "dan", "DA" }, { "nor", "NO" }, { "fin", "FI" },
-        { "ces", "CS" }, { "cze", "CS" }, { "hun", "HU" }, { "ron", "RO" },
-        { "rum", "RO" }, { "ukr", "UK" }, { "vie", "VI" }, { "heb", "HE" },
-        { "vostfra", "VOSTFR" }, { "vostfre", "VOSTFR" }, { "vosteng", "VOSTEN" },
-        { "vostjpn", "VOSTJP" }, { "vostdeu", "VOSTDE" }, { "vostger", "VOSTDE" },
-        { "vostspa", "VOSTES" }, { "vostita", "VOSTIT" }, { "vostpor", "VOSTPT" },
-        { "vostkor", "VOSTKR" }, { "vostzho", "VOSTZH" }, { "vostchi", "VOSTZH" },
-        { "vostrus", "VOSTR" }, { "vostnld", "VOSTNL" }, { "vostdut", "VOSTNL" },
         { "h264", "H.264" }, { "hevc", "HEVC" }, { "av1", "AV1" }, { "vp9", "VP9" },
-        { "ell", "GR" }, { "gre", "GR" }, { "ind", "ID" }, { "msa", "MS" },
-        { "tgl", "TL" }, { "fil", "TL" }, { "hrv", "HR" }, { "srp", "SR" },
-        { "bul", "BG" }, { "slk", "SK" }, { "slo", "SK" }, { "lit", "LT" },
-        { "lav", "LV" }, { "est", "ET" }, { "cat", "CA" }, { "eus", "EU" },
-        { "baq", "EU" }, { "glg", "GL" }, { "cym", "CY" }, { "wel", "CY" },
-        { "vostell", "VOSTGR" }, { "vostgre", "VOSTGR" }, { "vostind", "VOSTID" },
-        { "vostmsa", "VOSTMS" }, { "vosttgl", "VOSTTL" }, { "vostfil", "VOSTTL" },
-        { "vosthrv", "VOSTHR" }, { "vostsrp", "VOSTSR" }, { "vostbul", "VOSTBG" },
-        { "vostslk", "VOSTSK" }, { "vostslo", "VOSTSK" }, { "vostlit", "VOSTLT" },
-        { "vostlav", "VOSTLV" }, { "vostest", "VOSTET" }, { "vostcat", "VOSTCA" },
-        { "vosteus", "VOSTEU" }, { "vostbaq", "VOSTEU" }, { "vostglg", "VOSTGL" },
-        { "vostcym", "VOSTCY" }, { "vostwel", "VOSTCY" }
+        // Language and VOST keys are canonical ISO 639-1; anything not listed falls
+        // back to the uppercased code (e.g. "en" -> "EN", "vostfr" -> "VOSTFR").
+        { "ja", "JP" }, { "ko", "KR" }, { "el", "GR" },
+        { "vostja", "VOSTJP" }, { "vostko", "VOSTKR" }, { "vostel", "VOSTGR" }
     };
 
     public ImageOverlayService(ILogger<ImageOverlayService> logger)
