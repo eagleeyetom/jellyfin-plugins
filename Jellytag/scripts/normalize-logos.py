@@ -33,16 +33,41 @@ SOURCES = {
     "logo-truehd.svg": (f"{COMMONS}/9/90/Dolby_TrueHD.svg", "#000000", True),
     "logo-hdr10.svg": (f"{COMMONS}/9/94/HDR_10_logo_%28black%29.svg", "#000000", True),
     "logo-vp9.svg": (f"{COMMONS}/c/c7/Vp9-logo-for-mediawiki.svg", "#000000", True),
-    # Full colour, so recolouring would destroy them. AV1 and DTS-HD MA are vivid
-    # enough for a dark plate; HDR10+ and H.264 are near-black art and need a light one.
-    "logo-av1.svg": (f"{COMMONS}/8/84/AV1_logo_2018.svg", "#000000", False),
-    "logo-dtshdma.svg": (f"{COMMONS}/b/bd/DTS-HD-MA.svg", "#000000", False),
+    # Partly-coloured marks. force_white still matters here: these files leave many
+    # paths unfilled, and an unfilled path defaults to black, i.e. invisible on a dark
+    # plate. Setting the group fill white catches those while explicit colours survive.
+    "logo-av1.svg": (f"{COMMONS}/8/84/AV1_logo_2018.svg", "#000000", True),
+    "logo-dtshdma.svg": (f"{COMMONS}/b/bd/DTS-HD-MA.svg", "#000000", True),
+    # Near-black art that must keep its colours, so it gets a light plate instead.
     "logo-hdr10plus.svg": (f"{COMMONS}/7/7c/HDR10%2B_Logo.svg", "#FFFFFF", False),
-    "logo-h264.svg": (f"{COMMONS}/c/cd/H.264%2C_MPEG-4_AVC_logo.svg", "#FFFFFF", False),
+    # Already carries its own dark rounded background, so it gets no plate.
+    "logo-h264.svg": (f"{COMMONS}/c/cd/H.264%2C_MPEG-4_AVC_logo.svg", None, False),
 }
 
 BLACKS = {"#000", "#000000", "black", "#020202", "#010101", "#231f20", "#333", "#333333"}
-BLACK_STYLE = re.compile(r"fill\s*:\s*(#000000|#000|black|#231f20|#333333|#333)\b", re.I)
+BLACK_STYLE = re.compile(r"fill\s*:\s*(#[0-9a-f]{3,6}|black)\b", re.I)
+HEX = re.compile(r"^#([0-9a-f]{3}|[0-9a-f]{6})$", re.I)
+
+# Anything darker than this is invisible on a dark plate and gets inverted.
+DARK_LUMA = 0.35
+
+
+def is_dark(colour):
+    if colour is None:
+        return False
+
+    value = colour.strip().lower()
+    if value == "black":
+        return True
+    if not HEX.match(value):
+        return False
+
+    digits = value[1:]
+    if len(digits) == 3:
+        digits = "".join(c * 2 for c in digits)
+
+    r, g, b = (int(digits[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) < DARK_LUMA
 
 # Only available as a bitmap. It is already black-on-white and fully opaque, so it
 # needs no plate and is shipped verbatim.
@@ -70,19 +95,41 @@ def dimensions(root):
 
 
 def whiten(element):
-    fill = element.get("fill")
-    if fill and fill.strip().lower() in BLACKS:
+    if is_dark(element.get("fill")):
         element.set("fill", "#FFFFFF")
 
     style = element.get("style")
     if style:
-        element.set("style", BLACK_STYLE.sub("fill:#FFFFFF", style))
+        element.set("style", recolour_css(style))
 
     if element.tag == f"{{{SVG_NS}}}style" and element.text:
-        element.text = BLACK_STYLE.sub("fill:#FFFFFF", element.text)
+        element.text = recolour_css(element.text)
 
     for child in element:
         whiten(child)
+
+
+def recolour_css(text):
+    return BLACK_STYLE.sub(
+        lambda m: "fill:#FFFFFF" if is_dark(m.group(1)) else m.group(0), text)
+
+
+# Structural attributes belong to the old root and must not be carried over;
+# everything else (fill, stroke, style, font-*) is inherited by the children.
+ROOT_ONLY = {
+    "width", "height", "viewBox", "version", "id", "x", "y",
+    "xmlns", "xmlns:xlink", "xmlns:svg", "space", "preserveAspectRatio",
+}
+
+
+def inherited_attributes(root):
+    out = {}
+    for key, value in root.attrib.items():
+        name = key.split("}")[-1]
+        if name in ROOT_ONLY or key.startswith("{http://www.w3.org/XML/1998/namespace}"):
+            continue
+        out[name] = value
+    return out
 
 
 def normalize(raw, plate_colour, force_white):
@@ -106,11 +153,13 @@ def normalize(raw, plate_colour, force_white):
         "width": f"{plate_w:g}", "height": f"{plate_h:g}",
         "rx": f"{plate_h * 0.10:g}", "ry": f"{plate_h * 0.10:g}",
         "fill": plate_colour,
-    })
+    }) if plate_colour else None
 
     group = ET.SubElement(new_root, f"{{{SVG_NS}}}g", {
         "transform": f"translate({pad - min_x:g},{pad - min_y:g})",
     })
+    for key, value in inherited_attributes(root).items():
+        group.set(key, value)
     if force_white:
         group.set("fill", "#FFFFFF")
 
