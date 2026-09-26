@@ -9,6 +9,8 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
+  ## v1.1.0.0
+  - Restore the Settings button on the plugin card
   ## v1.0.1.2
   - Fix configuration page routing in Jellyfin dashboard (remove space in page name)
   ## v1.0.1.1
