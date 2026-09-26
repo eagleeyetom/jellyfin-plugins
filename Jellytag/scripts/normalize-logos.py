@@ -9,7 +9,7 @@ badge-*.svg assets use, so they drop straight into the existing renderer.
 Always re-downloads, so it is safe to run repeatedly (wrapping is not additive).
 
 Licences (verified via the Commons API):
-  public domain : Dolby Vision, Dolby Atmos, Dolby TrueHD, HDR10, AV1, H.264, VP9
+  public domain : Dolby Vision, Dolby Atmos, Dolby TrueHD, HDR10, AV1, H.264, VP9, DTS-HD MA
   CC BY-SA 4.0  : HDR10+   -> requires attribution, see README
 """
 
@@ -33,9 +33,10 @@ SOURCES = {
     "logo-truehd.svg": (f"{COMMONS}/9/90/Dolby_TrueHD.svg", "#000000", True),
     "logo-hdr10.svg": (f"{COMMONS}/9/94/HDR_10_logo_%28black%29.svg", "#000000", True),
     "logo-vp9.svg": (f"{COMMONS}/c/c7/Vp9-logo-for-mediawiki.svg", "#000000", True),
-    # Full colour, so recolouring would destroy them. AV1 is vivid enough for a
-    # dark plate; HDR10+ and H.264 are near-black artwork and need a light one.
+    # Full colour, so recolouring would destroy them. AV1 and DTS-HD MA are vivid
+    # enough for a dark plate; HDR10+ and H.264 are near-black art and need a light one.
     "logo-av1.svg": (f"{COMMONS}/8/84/AV1_logo_2018.svg", "#000000", False),
+    "logo-dtshdma.svg": (f"{COMMONS}/b/bd/DTS-HD-MA.svg", "#000000", False),
     "logo-hdr10plus.svg": (f"{COMMONS}/7/7c/HDR10%2B_Logo.svg", "#FFFFFF", False),
     "logo-h264.svg": (f"{COMMONS}/c/cd/H.264%2C_MPEG-4_AVC_logo.svg", "#FFFFFF", False),
 }
