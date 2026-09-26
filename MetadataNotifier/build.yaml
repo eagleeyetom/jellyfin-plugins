@@ -9,6 +9,9 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
+  ## v1.0.1.1
+  - Add main menu sidebar integration under Extensions for easy configuration access
+  - Fix technical audio names (Atmos / DTS:X base codec details)
   ## v1.0.1.0
   - Rename plugin to Metadata Notifier (formerly Samsung Metadata Notifier)
   - Add SDR support detection
