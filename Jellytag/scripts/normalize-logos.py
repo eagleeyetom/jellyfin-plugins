@@ -10,7 +10,7 @@ Always re-downloads, so it is safe to run repeatedly (wrapping is not additive).
 
 Licences (verified via the Commons API):
   public domain : Dolby Vision, Dolby Atmos, Dolby TrueHD, HDR10, AV1, H.264, VP9, DTS-HD MA
-  CC BY-SA 4.0  : HDR10+   -> requires attribution, see README
+  CC BY-SA 4.0  : HDR10+, DTS:X   -> require attribution, see README
 """
 
 import copy
@@ -43,6 +43,12 @@ SOURCES = {
 
 BLACKS = {"#000", "#000000", "black", "#020202", "#010101", "#231f20", "#333", "#333333"}
 BLACK_STYLE = re.compile(r"fill\s*:\s*(#000000|#000|black|#231f20|#333333|#333)\b", re.I)
+
+# Only available as a bitmap. It is already black-on-white and fully opaque, so it
+# needs no plate and is shipped verbatim.
+RAW = {
+    "logo-dtsx.png": f"{COMMONS}/5/5e/DTS_X_B%26W.png",
+}
 
 
 def download(url):
@@ -130,6 +136,16 @@ def main():
 
         (ASSETS / name).write_bytes(svg)
         print(f"wrote   {name}  plate={plate_colour} white={force_white}")
+
+    for name, url in RAW.items():
+        time.sleep(1.5)
+        try:
+            (ASSETS / name).write_bytes(download(url))
+        except Exception as error:  # noqa: BLE001 - report and keep going
+            print(f"FAILED  {name}: {error}")
+            continue
+
+        print(f"wrote   {name}  (verbatim)")
 
 
 if __name__ == "__main__":

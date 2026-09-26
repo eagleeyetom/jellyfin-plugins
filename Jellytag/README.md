@@ -112,6 +112,8 @@ JellyTag intercepts Jellyfin image requests via HTTP middleware, detects media q
   - [HDR10+ Logo](https://commons.wikimedia.org/wiki/File:HDR10%2B_Logo.svg) — licensed
     [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); the version shipped here
     is a modified derivative (padded and placed on a background plate) and remains CC BY-SA 4.0.
+  - [DTS X B&W](https://commons.wikimedia.org/wiki/File:DTS_X_B%26W.png) — licensed
+    [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), shipped unmodified.
 
 ### Trademark notice
 
