@@ -53,7 +53,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         {
             new PluginPageInfo
             {
-                Name = Name,
+                Name = "MetadataNotifier",
                 EmbeddedResourcePath = GetType().Namespace + ".Configuration.configPage.html",
                 EnableInMainMenu = true,
                 MenuSection = "Extensions",

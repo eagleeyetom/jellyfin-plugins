@@ -9,6 +9,8 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
+  ## v1.0.1.2
+  - Fix configuration page routing in Jellyfin dashboard (remove space in page name)
   ## v1.0.1.1
   - Add main menu sidebar integration under Extensions for easy configuration access
   - Fix technical audio names (Atmos / DTS:X base codec details)
