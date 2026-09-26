@@ -592,6 +592,8 @@ public class QualityDetectionService : IQualityDetectionService
             badges.Add(new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "5.1", ResourceFileName = "badge-5_1.svg" });
         else if (bestChannels >= 2)
             badges.Add(new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "stereo", ResourceFileName = "badge-stereo.svg" });
+        else if (bestChannels == 1)
+            badges.Add(new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "mono", ResourceFileName = "badge-mono.svg" });
 
         return badges;
     }

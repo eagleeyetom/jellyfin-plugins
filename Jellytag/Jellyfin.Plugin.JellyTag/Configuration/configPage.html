@@ -166,6 +166,7 @@
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_7_1">7.1</label><input id="cbt_7_1" data-badge-key="7.1" type="text" placeholder="7.1" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_5_1">5.1</label><input id="cbt_5_1" data-badge-key="5.1" type="text" placeholder="5.1" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_stereo">Stereo</label><input id="cbt_stereo" data-badge-key="stereo" type="text" placeholder="STEREO" is="emby-input" /></div>
+                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_mono">Mono</label><input id="cbt_mono" data-badge-key="mono" type="text" placeholder="MONO" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_3d">3D</label><input id="cbt_3d" data-badge-key="3d" type="text" placeholder="3D" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_h264">H.264</label><input id="cbt_h264" data-badge-key="h264" type="text" placeholder="H.264" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hevc">HEVC</label><input id="cbt_hevc" data-badge-key="hevc" type="text" placeholder="HEVC" is="emby-input" /></div>
@@ -282,7 +283,7 @@
             },
             Audio: {
                 title: 'Audio Badges',
-                badges: [{id:'Atmos',key:'atmos',label:'Dolby Atmos'},{id:'DtsX',key:'dtsx',label:'DTS:X'},{id:'TrueHD',key:'truehd',label:'Dolby TrueHD'},{id:'DtsHdMa',key:'dtshdma',label:'DTS-HD MA'},{id:'Channel',key:'channel',label:'Channel Layout (7.1/5.1/Stereo)'}],
+                badges: [{id:'Atmos',key:'atmos',label:'Dolby Atmos'},{id:'DtsX',key:'dtsx',label:'DTS:X'},{id:'TrueHD',key:'truehd',label:'Dolby TrueHD'},{id:'DtsHdMa',key:'dtshdma',label:'DTS-HD MA'},{id:'Channel',key:'channel',label:'Channel Layout (7.1/5.1/Stereo/Mono)'}],
                 hasShowMode: true,
                 showModeOptions: [{v:'Highest',l:'Highest only'},{v:'All',l:'All'}]
             }
@@ -648,7 +649,7 @@
                     var el = q(k + b.id);
                     if (el) {
                         if (b.key === 'channel') {
-                            el.checked = en.indexOf('7.1') >= 0 || en.indexOf('5.1') >= 0 || en.indexOf('stereo') >= 0;
+                            el.checked = en.indexOf('7.1') >= 0 || en.indexOf('5.1') >= 0 || en.indexOf('stereo') >= 0 || en.indexOf('mono') >= 0;
                         } else {
                             el.checked = en.indexOf(b.key) >= 0;
                         }
@@ -846,7 +847,7 @@
                 var el = q(k + b.id);
                 if (el && el.checked) {
                     if (b.key === 'channel') {
-                        badges.push('7.1'); badges.push('5.1'); badges.push('stereo');
+                        badges.push('7.1'); badges.push('5.1'); badges.push('stereo'); badges.push('mono');
                     } else {
                         badges.push(b.key);
                     }
@@ -1018,7 +1019,7 @@
             {key:'4k',label:'4K'},{key:'1080p',label:'1080p'},{key:'720p',label:'720p'},{key:'sd',label:'SD'},
             {key:'hdr10',label:'HDR10'},{key:'hdr10plus',label:'HDR10+'},{key:'dv',label:'Dolby Vision'},{key:'hlg',label:'HLG'},
             {key:'atmos',label:'Atmos'},{key:'dtsx',label:'DTS:X'},{key:'truehd',label:'TrueHD'},{key:'dtshdma',label:'DTS-HD MA'},
-            {key:'5.1',label:'5.1'},{key:'7.1',label:'7.1'},{key:'stereo',label:'Stereo'},
+            {key:'5.1',label:'5.1'},{key:'7.1',label:'7.1'},{key:'stereo',label:'Stereo'},{key:'mono',label:'Mono'},
             {key:'h264',label:'H.264'},{key:'hevc',label:'HEVC'},{key:'av1',label:'AV1'},{key:'vp9',label:'VP9'}
         ];
 

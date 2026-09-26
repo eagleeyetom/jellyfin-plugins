@@ -263,7 +263,7 @@ public class PluginConfiguration : BasePluginConfiguration
         if (ShowDtsX == true) audioBadges.Add("dtsx");
         if (ShowTrueHD == true) audioBadges.Add("truehd");
         if (ShowDtsHdMa == true) audioBadges.Add("dtshdma");
-        if (ShowChannelBadge == true) { audioBadges.Add("7.1"); audioBadges.Add("5.1"); audioBadges.Add("stereo"); }
+        if (ShowChannelBadge == true) { audioBadges.Add("7.1"); audioBadges.Add("5.1"); audioBadges.Add("stereo"); audioBadges.Add("mono"); }
 
         var langMode = LanguageBadgeMode ?? Configuration.LanguageBadgeMode.All;
 
@@ -414,7 +414,7 @@ public class PluginConfiguration : BasePluginConfiguration
         {
             Enabled = true, Order = 3, Position = BadgePosition.TopLeft,
             Layout = BadgeLayout.Vertical, SizePercent = 15, MarginPercent = 2f, GapPercent = 10f,
-            EnabledBadges = new List<string> { "atmos", "dtsx", "truehd", "dtshdma", "7.1", "5.1", "stereo" }
+            EnabledBadges = new List<string> { "atmos", "dtsx", "truehd", "dtshdma", "7.1", "5.1", "stereo", "mono" }
         };
         config.LanguagePanel = new BadgePanelSettings
         {
@@ -460,7 +460,7 @@ public class PluginConfiguration : BasePluginConfiguration
         {
             Enabled = true, Order = 3, Position = BadgePosition.TopLeft,
             Layout = BadgeLayout.Vertical, SizePercent = 10, MarginPercent = 2.5f, GapPercent = 10f,
-            EnabledBadges = new List<string> { "atmos", "dtsx", "truehd", "dtshdma", "7.1", "5.1", "stereo" }
+            EnabledBadges = new List<string> { "atmos", "dtsx", "truehd", "dtshdma", "7.1", "5.1", "stereo", "mono" }
         };
         config.LanguagePanel = new BadgePanelSettings
         {
