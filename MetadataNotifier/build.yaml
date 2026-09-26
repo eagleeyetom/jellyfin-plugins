@@ -9,6 +9,8 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
+  ## v1.1.0.1
+  - Fix plugin discovery by excluding Jellyfin framework assemblies from the release package
   ## v1.1.0.0
   - Restore the Settings button on the plugin card
   ## v1.0.1.2
