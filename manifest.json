@@ -91,7 +91,7 @@
         "changelog": "Add a Brand Logo badge style with real logos for Dolby Vision, HDR10, HDR10+, Dolby Atmos, Dolby TrueHD, DTS:X, DTS-HD MA, H.264, VP9 and AV1. Make language flags configurable per language, honour region tags such as pt-BR, and normalise language codes so duplicates no longer appear. Add a mono audio badge. Fix custom badge previews failing to load, and make the badge gallery edit the asset that is actually rendered.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.4.0.0/jellytag-2.4.0.0.zip",
-        "checksum": "00000000000000000000000000000000",
+        "checksum": "ED1E4D72210CB842FA4A95A643AE0510",
         "timestamp": "2026-09-26T13:18:19Z"
       },
       {
