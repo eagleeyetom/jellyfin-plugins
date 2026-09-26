@@ -350,16 +350,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     continue;
                 }
 
-                // Try square asset variant if requested
-                string? targetResource = resourceFileName;
-                if (isSquareOrRound && resourceFileName.StartsWith("flag-", StringComparison.OrdinalIgnoreCase))
-                {
-                    var squareName = "flag-square-" + resourceFileName[5..];
-                    if (_svgCache.ContainsKey(squareName) || _rasterCache.ContainsKey(squareName))
-                    {
-                        targetResource = squareName;
-                    }
-                }
+                var targetResource = resourceFileName;
 
                 if (_svgCache.TryGetValue(targetResource, out var svgBytes))
                 {
