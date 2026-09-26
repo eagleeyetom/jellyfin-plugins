@@ -1071,7 +1071,16 @@
                         fallback.textContent = b.label;
                         img.replaceWith(fallback);
                     };
-                    img.src = previewUrl + '?t=' + Date.now() + (logo ? '&logo=true' : '') + (token ? '&api_key=' + token : '');
+                    // Jellyfin rejects ?api_key= on these requests, so the image has to be
+                    // fetched with an auth header and handed to the <img> as a blob.
+                    fetch(previewUrl + '?t=' + Date.now() + (logo ? '&logo=true' : ''), {headers:headers})
+                        .then(function(r) { if (!r.ok) throw new Error(r.status); return r.blob(); })
+                        .then(function(blob) {
+                            var objectUrl = URL.createObjectURL(blob);
+                            img.onload = function() { URL.revokeObjectURL(objectUrl); };
+                            img.src = objectUrl;
+                        })
+                        .catch(function() { if (img.onerror) img.onerror(); });
                     card.appendChild(img);
                     var lbl = document.createElement('div'); lbl.className = 'badge-label';
                     lbl.textContent = b.label + (isCustom ? ' (custom)' : (logo ? ' (logo)' : '')); card.appendChild(lbl);
