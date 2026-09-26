@@ -1,6 +1,6 @@
 name: "JellyTag"
 guid: "f4a2e8c1-9b3d-4f7a-b6c5-2d8e1a3f9b04"
-version: "2.2.0.0"
+version: "2.3.0.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "JellyTag"
@@ -19,6 +19,15 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.JellyTag.dll"
 changelog: |
+  ## v2.3.0.0 (2026-09-26)
+  - Language flags are now configurable: pick the flag used for each language in the new
+    Language Flags section, since most languages are spoken in several countries
+  - Files tagged with a region such as pt-BR now use that region's flag automatically
+  - Language codes are normalised, so a file carrying both "en" and "eng" audio no longer
+    shows the same flag twice, and the Text badge style shows "EN" instead of "ENG"
+  - Basque, Catalan and Galician now default to their own flags instead of the Spanish flag
+  - Fix: changing the Icon Style (Rectangular/Square/Round) now invalidates cached images
+  - Remove 17 duplicate PNG badge assets that were never used, shrinking the package by ~357 KB
   ## v2.2.0.0
   - Add option to hide HDR badges on Windows clients (SDR-only mode)
   - Windows client detection via User-Agent and X-Emby headers
