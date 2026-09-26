@@ -18,6 +18,8 @@ public class PluginConfiguration : BasePluginConfiguration
         ShowSdr = true;
         ShowAudio = true;
         ShowTranscoding = true;
+        ShowDirectPlay = true;
+        ShowBitrate = true;
         ShowHdr10Plus = true;
         ShowHdr10 = true;
         ShowDolbyVision = true;
@@ -54,6 +56,16 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets a value indicating whether to display transcoding info.
     /// </summary>
     public bool ShowTranscoding { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to display Direct Play info.
+    /// </summary>
+    public bool ShowDirectPlay { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to display bitrate info.
+    /// </summary>
+    public bool ShowBitrate { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether to show HDR10+.

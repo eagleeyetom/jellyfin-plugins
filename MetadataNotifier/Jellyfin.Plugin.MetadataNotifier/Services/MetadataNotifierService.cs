@@ -103,16 +103,31 @@ public class MetadataNotifierService : IHostedService
                 }
             }
 
-            if (config.ShowTranscoding)
+            if (config.ShowTranscoding || config.ShowDirectPlay)
             {
                 var transcodingInfo = GetTranscodingInfo(session);
                 if (!string.IsNullOrEmpty(transcodingInfo))
                 {
-                    parts.Add(transcodingInfo);
+                    if (config.ShowTranscoding)
+                    {
+                        parts.Add(transcodingInfo);
+                    }
                 }
                 else
                 {
-                    parts.Add("Direct Play");
+                    if (config.ShowDirectPlay)
+                    {
+                        parts.Add("Direct Play");
+                    }
+                }
+            }
+
+            if (config.ShowBitrate)
+            {
+                var bitrateInfo = GetBitrateInfo(item, session);
+                if (!string.IsNullOrEmpty(bitrateInfo))
+                {
+                    parts.Add(bitrateInfo);
                 }
             }
 
@@ -219,6 +234,46 @@ public class MetadataNotifierService : IHostedService
         }
 
         return string.Empty;
+    }
+
+    private static string GetBitrateInfo(BaseItem item, SessionInfo session)
+    {
+        // Check transcoding bitrate first if available
+        if (session.TranscodingInfo != null && session.TranscodingInfo.Bitrate > 0)
+        {
+            return FormatBitrate((long)session.TranscodingInfo.Bitrate);
+        }
+
+        var mediaStreams = item.GetMediaStreams();
+        var videoStream = mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+        if (videoStream?.BitRate is int videoBitrate && videoBitrate > 0)
+        {
+            var audioStream = mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Audio);
+            long totalBps = videoBitrate + (audioStream?.BitRate ?? 0);
+            return FormatBitrate(totalBps);
+        }
+
+        var audioStreamOnly = mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Audio);
+        if (audioStreamOnly?.BitRate is int audioBitrate && audioBitrate > 0)
+        {
+            return FormatBitrate(audioBitrate);
+        }
+
+        return string.Empty;
+    }
+
+    private static string FormatBitrate(long bitrateBps)
+    {
+        if (bitrateBps >= 1_000_000)
+        {
+            double mbps = (double)bitrateBps / 1_000_000;
+            return mbps >= 10 ? $"{Math.Round(mbps, 0)} Mbps" : $"{Math.Round(mbps, 1)} Mbps";
+        }
+        else if (bitrateBps >= 1_000)
+        {
+            return $"{Math.Round((double)bitrateBps / 1_000, 0)} kbps";
+        }
+        return $"{bitrateBps} bps";
     }
 
     private static bool IsDolbyVision(VideoRangeType rangeType, VideoRange range, string profile)

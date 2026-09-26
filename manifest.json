@@ -6,7 +6,7 @@
     "description": "Metadata Notifier sends on-screen toast notifications when playback starts on any client. Displays HDR metadata systems (HDR10+, Dolby Vision, HDR10, HLG, and SDR), audio codecs (TrueHD Atmos, DTS-HD MA), and transcoding status. Fully configurable per client type.",
     "owner": "eagleeyetom",
     "category": "General",
-    "imageUrl": "https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/main/MetadataNotifier/Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png",
+    "imageUrl": "https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/test/MetadataNotifier/Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png",
     "versions": [
       {
         "version": "1.0.1.0",
