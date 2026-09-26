@@ -227,6 +227,26 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool HideHdrOnWindowsClients { get; set; }
 
     /// <summary>
+    /// Adds badges introduced after a configuration was last saved. Without this, a new
+    /// badge type stays invisible on existing installs until the user re-saves the panel.
+    /// </summary>
+    public void BackfillNewBadges()
+    {
+        foreach (var imageConfig in new[] { PosterConfig, ThumbnailConfig })
+        {
+            var enabled = imageConfig?.AudioPanel?.EnabledBadges;
+            if (enabled == null) continue;
+
+            // Channel layout is a single toggle in the UI, so mono follows stereo.
+            if (enabled.Contains("stereo", StringComparer.OrdinalIgnoreCase)
+                && !enabled.Contains("mono", StringComparer.OrdinalIgnoreCase))
+            {
+                enabled.Add("mono");
+            }
+        }
+    }
+
+    /// <summary>
     /// Migrates legacy config format to the new per-panel format.
     /// Call this after deserialization when legacy properties are present.
     /// </summary>
