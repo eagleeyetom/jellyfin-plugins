@@ -42,6 +42,7 @@ SOURCES = {
     "logo-hdr10plus.svg": (f"{COMMONS}/7/7c/HDR10%2B_Logo.svg", "#FFFFFF", False),
     # Already carries its own dark rounded background, so it gets no plate.
     "logo-h264.svg": (f"{COMMONS}/c/cd/H.264%2C_MPEG-4_AVC_logo.svg", None, False),
+    "logo-opus.svg": (f"{COMMONS}/0/02/Opus_logo2.svg", "#000000", True),
 }
 
 BLACKS = {"#000", "#000000", "black", "#020202", "#010101", "#231f20", "#333", "#333333"}
@@ -95,18 +96,27 @@ def dimensions(root):
 
 
 def whiten(element):
+    # Remove gradient-based fills to force inheritance from parent group's fill="#FFFFFF"
+    if element.get("fill") and element.get("fill").startswith("url(#"):
+        del element.attrib["fill"]
+    
     if is_dark(element.get("fill")):
         element.set("fill", "#FFFFFF")
 
     style = element.get("style")
     if style:
+        # Remove gradient-based fills from style
+        style = re.sub(r"fill\s*:\s*url\([^)]+\);?", "", style)
         element.set("style", recolour_css(style))
 
     if element.tag == f"{{{SVG_NS}}}style" and element.text:
         element.text = recolour_css(element.text)
 
-    for child in element:
-        whiten(child)
+    for child in list(element):
+        if child.tag == f"{{{SVG_NS}}}defs":
+            element.remove(child)
+        else:
+            whiten(child)
 
 
 def recolour_css(text):

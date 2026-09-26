@@ -163,6 +163,8 @@
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dtsx">DTS:X</label><input id="cbt_dtsx" data-badge-key="dtsx" type="text" placeholder="DTS:X" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_truehd">TrueHD</label><input id="cbt_truehd" data-badge-key="truehd" type="text" placeholder="TrueHD" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dtshdma">DTS-HD MA</label><input id="cbt_dtshdma" data-badge-key="dtshdma" type="text" placeholder="DTS-HD MA" is="emby-input" /></div>
+                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_opus">Opus</label><input id="cbt_opus" data-badge-key="opus" type="text" placeholder="OPUS" is="emby-input" /></div>
+
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_7_1">7.1</label><input id="cbt_7_1" data-badge-key="7.1" type="text" placeholder="7.1" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_5_1">5.1</label><input id="cbt_5_1" data-badge-key="5.1" type="text" placeholder="5.1" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_stereo">Stereo</label><input id="cbt_stereo" data-badge-key="stereo" type="text" placeholder="STEREO" is="emby-input" /></div>
@@ -283,7 +285,7 @@
             },
             Audio: {
                 title: 'Audio Badges',
-                badges: [{id:'Atmos',key:'atmos',label:'Dolby Atmos'},{id:'DtsX',key:'dtsx',label:'DTS:X'},{id:'TrueHD',key:'truehd',label:'Dolby TrueHD'},{id:'DtsHdMa',key:'dtshdma',label:'DTS-HD MA'},{id:'Channel',key:'channel',label:'Channel Layout (7.1/5.1/Stereo/Mono)'}],
+                badges: [{id:'Atmos',key:'atmos',label:'Dolby Atmos'},{id:'DtsX',key:'dtsx',label:'DTS:X'},{id:'TrueHD',key:'truehd',label:'Dolby TrueHD'},{id:'DtsHdMa',key:'dtshdma',label:'DTS-HD MA'},{id:'Opus',key:'opus',label:'Opus'},{id:'Channel',key:'channel',label:'Channel Layout (7.1/5.1/Stereo/Mono)'}],
                 hasShowMode: true,
                 showModeOptions: [{v:'Highest',l:'Highest only'},{v:'All',l:'All'}]
             }
@@ -1022,8 +1024,8 @@
         var allBadgeKeys = [
             {key:'4k',label:'4K'},{key:'1080p',label:'1080p'},{key:'720p',label:'720p'},{key:'sd',label:'SD'},
             {key:'hdr10',label:'HDR10'},{key:'hdr10plus',label:'HDR10+'},{key:'dv',label:'Dolby Vision'},{key:'hlg',label:'HLG'},
-            {key:'atmos',label:'Atmos'},{key:'dtsx',label:'DTS:X'},{key:'truehd',label:'TrueHD'},{key:'dtshdma',label:'DTS-HD MA'},
-            {key:'5.1',label:'5.1'},{key:'7.1',label:'7.1'},{key:'stereo',label:'Stereo'},{key:'mono',label:'Mono'},
+            {key:'atmos',label:'Atmos'},{key:'dtsx',label:'DTS:X'},{key:'truehd',label:'TrueHD'},{key:'dtshdma',label:'DTS-HD MA'},{key:'opus',label:'Opus'},
+            {key:'7.1',label:'7.1'},{key:'5.1',label:'5.1'},{key:'stereo',label:'Stereo'},{key:'mono',label:'Mono'},
             {key:'h264',label:'H.264'},{key:'hevc',label:'HEVC'},{key:'av1',label:'AV1'},{key:'vp9',label:'VP9'}
         ];
 

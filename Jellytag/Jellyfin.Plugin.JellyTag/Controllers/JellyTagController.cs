@@ -143,6 +143,7 @@ public partial class JellyTagController : ControllerBase
             "dtsx" => "badge-dtsx.svg",
             "truehd" => "badge-truehd.svg",
             "dtshdma" => "badge-dtshdma.svg",
+            "opus" => "badge-opus.svg",
             "5.1" => "badge-5_1.svg",
             "7.1" => "badge-7_1.svg",
             "stereo" => "badge-stereo.svg",

@@ -28,7 +28,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
     {
         { "4k", "4K" }, { "1080p", "1080p" }, { "720p", "720p" }, { "sd", "SD" },
         { "hdr10", "HDR10" }, { "hdr10plus", "HDR10+" }, { "dv", "DV" }, { "hlg", "HLG" },
-        { "atmos", "ATMOS" }, { "dtsx", "DTS:X" }, { "truehd", "TrueHD" }, { "dtshdma", "DTS-HD MA" },
+        { "atmos", "ATMOS" }, { "dtsx", "DTS:X" }, { "truehd", "TrueHD" }, { "dtshdma", "DTS-HD MA" }, { "opus", "OPUS" },
         { "7.1", "7.1" }, { "5.1", "5.1" }, { "stereo", "STEREO" },
         { "hdr", "HDR" }, { "3d", "3D" },
         { "UHD4K", "4K" }, { "FHD1080p", "1080p" }, { "HD720p", "720p" },

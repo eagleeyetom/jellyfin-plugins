@@ -45,12 +45,16 @@ public class QualityDetectionService : IQualityDetectionService
 
     public static VideoQuality DetermineQuality(int width, int height)
     {
-        var maxDimension = Math.Max(width, height);
-
-        if (maxDimension >= 3800) return VideoQuality.UHD4K;
-        if (maxDimension >= 1900) return VideoQuality.FHD1080p;
-        if (maxDimension >= 1260) return VideoQuality.HD720p;
-        if (maxDimension > 0) return VideoQuality.SD;
+        // 4K: height >= 2000 OR width >= 3200
+        if (height >= 2000 || width >= 3200) return VideoQuality.UHD4K;
+        
+        // 1080p: height >= 1000 OR width >= 1800
+        if (height >= 1000 || width >= 1800) return VideoQuality.FHD1080p;
+        
+        // 720p: height >= 700 OR width >= 1200
+        if (height >= 700 || width >= 1200) return VideoQuality.HD720p;
+        
+        if (width > 0 && height > 0) return VideoQuality.SD;
         return VideoQuality.Unknown;
     }
 
@@ -565,6 +569,11 @@ public class QualityDetectionService : IQualityDetectionService
             {
                 priority = 6;
                 candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "truehd", ResourceFileName = "badge-truehd.svg" };
+            }
+            else if (codec == "OPUS" || codec.Contains("OPUS") || profile.Contains("OPUS"))
+            {
+                priority = 5;
+                candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "opus", ResourceFileName = "badge-opus.svg" };
             }
             else if (profile.Contains("DTS:X") || profile.Contains("DTS-X") || profile.Contains("DTSX"))
             {

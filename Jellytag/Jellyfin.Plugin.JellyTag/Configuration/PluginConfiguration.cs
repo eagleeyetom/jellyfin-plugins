@@ -221,6 +221,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool? ShowDtsX { get; set; }
     public bool? ShowTrueHD { get; set; }
     public bool? ShowDtsHdMa { get; set; }
+    public bool? ShowOpus { get; set; }
     public bool? ShowChannelBadge { get; set; }
     public LanguageBadgeMode? LanguageBadgeMode { get; set; }
     public bool? ShowSubtitleIndicator { get; set; }
@@ -237,7 +238,11 @@ public class PluginConfiguration : BasePluginConfiguration
             var enabled = imageConfig?.AudioPanel?.EnabledBadges;
             if (enabled == null) continue;
 
-            // Channel layout is a single toggle in the UI, so mono follows stereo.
+            if (enabled.Contains("truehd", StringComparer.OrdinalIgnoreCase)
+                && !enabled.Contains("opus", StringComparer.OrdinalIgnoreCase))
+            {
+                enabled.Add("opus");
+            }
             if (enabled.Contains("stereo", StringComparer.OrdinalIgnoreCase)
                 && !enabled.Contains("mono", StringComparer.OrdinalIgnoreCase))
             {
