@@ -55,6 +55,24 @@ Adds quality badges for resolution, HDR, video codec, audio, languages, and subt
 
 ---
 
+### Samsung Metadata Notifier
+
+<p align="center">
+    <img src="SamsungMetadataNotifier/Jellyfin.Plugin.SamsungMetadataNotifier/SamsungMetadataNotifier.png" width="200" />
+</p>
+
+Sends on-screen toast notifications when playback starts on Samsung TVs and other clients, displaying HDR metadata systems (HDR10+, Dolby Vision, HDR10, HLG, SDR), audio codecs (TrueHD Atmos, DTS-HD MA), and transcoding status.
+
+**Features:**
+- Samsung TV optimization for missing native metadata indicators
+- HDR, audio codec, and channel detection
+- Transcoding status reporting
+- Fully configurable display options and duration
+
+[More details](SamsungMetadataNotifier/README.md)
+
+---
+
 ### Requirements
 
 - Jellyfin 10.11.0 or higher
