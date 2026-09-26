@@ -53,9 +53,14 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool ShowAudio { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether to use detailed/technical names.
+    /// Gets or sets a value indicating whether to use detailed/technical video names.
     /// </summary>
-    public bool UseDetailedNames { get; set; } = false;
+    public bool UseDetailedVideoNames { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to use detailed/technical audio names.
+    /// </summary>
+    public bool UseDetailedAudioNames { get; set; } = false;
 
     /// <summary>
     /// Gets or sets a value indicating whether to display transcoding info.

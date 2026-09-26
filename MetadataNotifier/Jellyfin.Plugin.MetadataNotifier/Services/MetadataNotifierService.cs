@@ -198,24 +198,24 @@ public class MetadataNotifierService : IHostedService
             {
                 if (IsHdr10Plus(rangeType, profile) || displayTitle.Contains("HDR10+", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (config.ShowHdr10Plus) return "HDR10+";
+                    if (config.ShowHdr10Plus) return config.UseDetailedVideoNames ? GetDetailedHdr10PlusInfo(profile, displayTitle) : "HDR10+";
                 }
                 else if (rangeType == VideoRangeType.HDR10 || range == VideoRange.HDR || displayTitle.Contains("HDR10", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (config.ShowHdr10) return "HDR10";
+                    if (config.ShowHdr10) return config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10";
                 }
                 return string.Empty;
             }
 
             if (config.ShowDolbyVision)
             {
-                return config.UseDetailedNames ? GetDetailedDolbyVisionInfo(profile, displayTitle) : "Dolby Vision";
+                return config.UseDetailedVideoNames ? GetDetailedDolbyVisionInfo(profile, displayTitle) : "Dolby Vision";
             }
         }
 
         if (IsHdr10Plus(rangeType, profile) || displayTitle.Contains("HDR10+", StringComparison.OrdinalIgnoreCase))
         {
-            if (config.ShowHdr10Plus) return "HDR10+";
+            if (config.ShowHdr10Plus) return config.UseDetailedVideoNames ? GetDetailedHdr10PlusInfo(profile, displayTitle) : "HDR10+";
         }
 
         if (rangeType == VideoRangeType.HLG || displayTitle.Contains("HLG", StringComparison.OrdinalIgnoreCase))
@@ -225,7 +225,7 @@ public class MetadataNotifierService : IHostedService
 
         if (rangeType == VideoRangeType.HDR10 || range == VideoRange.HDR || displayTitle.Contains("HDR10", StringComparison.OrdinalIgnoreCase))
         {
-            if (config.ShowHdr10) return "HDR10";
+            if (config.ShowHdr10) return config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10";
         }
 
         if (config.ShowSdr)
@@ -235,22 +235,43 @@ public class MetadataNotifierService : IHostedService
 
         return string.Empty;
     }
+
     private static string GetDetailedDolbyVisionInfo(string profile, string displayTitle)
     {
-        if (profile.Contains("dvhe.08", StringComparison.OrdinalIgnoreCase) || profile.Contains("dvhe 08", StringComparison.OrdinalIgnoreCase))
+        var combined = $"{profile} {displayTitle}";
+        if (combined.Contains("dvhe.08", StringComparison.OrdinalIgnoreCase) || combined.Contains("dvhe 08", StringComparison.OrdinalIgnoreCase) || combined.Contains("Profile 8", StringComparison.OrdinalIgnoreCase))
         {
-            if (profile.Contains("09", StringComparison.OrdinalIgnoreCase)) return "DV Profile 8.1";
+            if (combined.Contains("09", StringComparison.OrdinalIgnoreCase) || combined.Contains("8.1", StringComparison.OrdinalIgnoreCase)) return "DV Profile 8.1";
             return "DV Profile 8";
         }
-        if (profile.Contains("dvhe.07", StringComparison.OrdinalIgnoreCase) || profile.Contains("dvhe 07", StringComparison.OrdinalIgnoreCase)) return "DV Profile 7";
-        if (profile.Contains("dvhe.05", StringComparison.OrdinalIgnoreCase) || profile.Contains("dvhe 05", StringComparison.OrdinalIgnoreCase)) return "DV Profile 5";
-        if (profile.Contains("dvh1", StringComparison.OrdinalIgnoreCase)) return "DV Profile 5";
+        if (combined.Contains("dvhe.07", StringComparison.OrdinalIgnoreCase) || combined.Contains("dvhe 07", StringComparison.OrdinalIgnoreCase) || combined.Contains("Profile 7", StringComparison.OrdinalIgnoreCase)) return "DV Profile 7";
+        if (combined.Contains("dvhe.05", StringComparison.OrdinalIgnoreCase) || combined.Contains("dvhe 05", StringComparison.OrdinalIgnoreCase) || combined.Contains("Profile 5", StringComparison.OrdinalIgnoreCase)) return "DV Profile 5";
+        if (combined.Contains("dvh1", StringComparison.OrdinalIgnoreCase)) return "DV Profile 5";
 
-        if (!string.IsNullOrEmpty(profile) && (profile.Contains("dv") || profile.Contains("dovi")))
+        if (combined.Contains("7.6", StringComparison.OrdinalIgnoreCase)) return "DV Profile 7.6";
+        if (combined.Contains("8.1", StringComparison.OrdinalIgnoreCase)) return "DV Profile 8.1";
+        if (combined.Contains("8.4", StringComparison.OrdinalIgnoreCase)) return "DV Profile 8.4";
+
+        if (!string.IsNullOrEmpty(profile) && !profile.Equals("DOVI", StringComparison.OrdinalIgnoreCase))
         {
             return $"Dolby Vision ({profile})";
         }
         return "Dolby Vision";
+    }
+
+    private static string GetDetailedHdr10PlusInfo(string profile, string displayTitle)
+    {
+        var combined = $"{profile} {displayTitle}";
+        if (combined.Contains("Profile", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"HDR10+ ({displayTitle})";
+        }
+        return "HDR10+ (SMPTE ST 2094-40)";
+    }
+
+    private static string GetDetailedHdr10Info(string profile, string displayTitle)
+    {
+        return "HDR10 (SMPTE ST 2084)";
     }
 
 
@@ -359,7 +380,7 @@ public class MetadataNotifierService : IHostedService
         }
         else
         {
-            if (config.UseDetailedNames)
+            if (config.UseDetailedAudioNames)
             {
                 displayCodec = codec switch
                 {
