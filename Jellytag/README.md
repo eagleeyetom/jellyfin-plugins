@@ -24,6 +24,9 @@ The fork contains practical fixes and maintenance changes for a personal Jellyfi
 - **Per-image-type configuration**: Independent settings for posters and thumbnails (position, size, layout, style)
 - **Per-panel customization**: Each badge category has its own panel with position, layout, ordering, colors, and display mode (highest only or all)
 - **SVG & text badge styles**: Choose between SVG image badges or text-based badges with customizable colors, opacity, and corner radius
+- **Brand Logo style**: Opt-in per panel, showing the real logo for Dolby Vision, HDR10, HDR10+,
+  Dolby Atmos, Dolby TrueHD, DTS:X, DTS-HD MA, H.264, VP9 and AV1. Badges with no logo behind them
+  (HLG, HEVC, resolutions, channel counts, 3D) keep the generated text art.
 - **Custom badges**: Replace any default badge with your own SVG/PNG/JPEG, or customize text labels — via the config UI or API
 - **Live preview**: See badge changes in real-time directly in the configuration page
 - **Library filtering**: Exclude specific libraries from badge generation
