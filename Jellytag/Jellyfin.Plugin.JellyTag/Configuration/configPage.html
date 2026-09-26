@@ -526,7 +526,11 @@
             var textDiv = document.querySelector('#' + key + 'TextSettings');
             if (!styleEl || !textDiv) return;
             function toggle() { styleEl.value === 'Text' ? textDiv.classList.remove('hidden') : textDiv.classList.add('hidden'); }
-            styleEl.addEventListener('change', toggle);
+            styleEl.addEventListener('change', function() {
+                toggle();
+                // Switching to or from Brand Logo changes which asset the gallery edits.
+                if (document.getElementById('BadgeGallery')) loadBadgeGallery();
+            });
             toggle();
         }
 
@@ -1024,13 +1028,38 @@
         ];
 
         function loadBadgeGallery() {
+            // The gallery must edit whatever the renderer uses, so a badge whose panel is in
+            // Brand Logo style points at the logo asset instead of the generated one.
+            var panelOfBadge = {};
+            ['Res','Hdr','Codec','Audio'].forEach(function(pid) {
+                (PANEL_DEFS[pid].badges || []).forEach(function(b) {
+                    if (b.key === 'channel') {
+                        ['7.1','5.1','stereo','mono'].forEach(function(k) { panelOfBadge[k] = pid; });
+                    } else {
+                        panelOfBadge[b.key] = pid;
+                    }
+                });
+            });
+            function usesLogo(key) {
+                var pid = panelOfBadge[key];
+                if (!pid) return false;
+                var el = q('Poster' + pid + 'Style');
+                return !!el && el.value === 'Logo';
+            }
+
             var url = ApiClient.getUrl('JellyTag/CustomBadges');
             var token = ApiClient.accessToken();
             var headers = {}; if (token) headers['Authorization'] = 'MediaBrowser Token="' + token + '"';
-            fetch(url, {headers:headers}).then(function(r){return r.json();}).then(function(customList) {
+            Promise.all([
+                fetch(url, {headers:headers}).then(function(r){return r.json();}),
+                fetch(url + '?logo=true', {headers:headers}).then(function(r){return r.json();})
+            ]).then(function(lists) {
+                var customBadges = lists[0] || [], customLogos = lists[1] || [];
                 var gallery = document.querySelector('#BadgeGallery'); gallery.innerHTML = '';
                 allBadgeKeys.forEach(function(b) {
-                    var isCustom = customList.indexOf(b.key) >= 0;
+                    var logo = usesLogo(b.key);
+                    var suffix = logo ? '?logo=true' : '';
+                    var isCustom = (logo ? customLogos : customBadges).indexOf(b.key) >= 0;
                     var card = document.createElement('div'); card.className = 'badge-card' + (isCustom ? ' custom' : '');
                     card.setAttribute('data-badge-key', b.key);
                     var img = document.createElement('img');
@@ -1042,22 +1071,25 @@
                         fallback.textContent = b.label;
                         img.replaceWith(fallback);
                     };
-                    img.src = previewUrl + '?t=' + Date.now() + (token ? '&api_key=' + token : '');
+                    img.src = previewUrl + '?t=' + Date.now() + (logo ? '&logo=true' : '') + (token ? '&api_key=' + token : '');
                     card.appendChild(img);
                     var lbl = document.createElement('div'); lbl.className = 'badge-label';
-                    lbl.textContent = b.label + (isCustom ? ' (custom)' : ''); card.appendChild(lbl);
+                    lbl.textContent = b.label + (isCustom ? ' (custom)' : (logo ? ' (logo)' : '')); card.appendChild(lbl);
                     if (isCustom) {
                         var resetBtn = document.createElement('button'); resetBtn.className = 'badge-reset';
                         resetBtn.textContent = '\u00D7'; resetBtn.title = 'Reset to default';
                         resetBtn.addEventListener('click', function(ev) { ev.stopPropagation();
                             if (confirm('Reset "' + b.label + '" badge to default?')) {
                                 Dashboard.showLoadingMsg();
-                                ApiClient.ajax({type:'DELETE',url:ApiClient.getUrl('JellyTag/CustomBadge/'+b.key)}).then(function(){Dashboard.hideLoadingMsg();loadBadgeGallery();});
+                                ApiClient.ajax({type:'DELETE',url:ApiClient.getUrl('JellyTag/CustomBadge/'+b.key) + suffix}).then(function(){Dashboard.hideLoadingMsg();loadBadgeGallery();});
                             }
                         }); card.appendChild(resetBtn);
                     }
                     card.addEventListener('click', function() {
-                        var fi = document.querySelector('#CustomBadgeFile'); fi.setAttribute('data-target-key', b.key); fi.click();
+                        var fi = document.querySelector('#CustomBadgeFile');
+                        fi.setAttribute('data-target-key', b.key);
+                        fi.setAttribute('data-target-logo', logo ? 'true' : 'false');
+                        fi.click();
                     });
                     gallery.appendChild(card);
                 });
@@ -1181,10 +1213,11 @@
         document.querySelector('#CustomBadgeFile').addEventListener('change', function() {
             var fi = this; var bk = fi.getAttribute('data-target-key');
             if (!bk || !fi.files || fi.files.length === 0) return;
+            var isLogo = fi.getAttribute('data-target-logo') === 'true';
             var fd = new FormData(); fd.append('file', fi.files[0]);
             Dashboard.showLoadingMsg();
             var xhr = new XMLHttpRequest();
-            xhr.open('POST', ApiClient.getUrl('JellyTag/CustomBadge/' + bk), true);
+            xhr.open('POST', ApiClient.getUrl('JellyTag/CustomBadge/' + bk) + (isLogo ? '?logo=true' : ''), true);
             var token = ApiClient.accessToken();
             if (token) xhr.setRequestHeader('Authorization', 'MediaBrowser Token="' + token + '"');
             xhr.onload = function(){Dashboard.hideLoadingMsg();fi.value='';if(xhr.status===204){Dashboard.alert('Badge uploaded.');loadBadgeGallery();}else{Dashboard.alert('Upload failed.');}};
