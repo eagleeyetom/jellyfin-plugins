@@ -20,6 +20,8 @@ artifacts:
   - "Jellyfin.Plugin.JellyTag.dll"
 changelog: |
   ## v2.3.0.0 (2026-09-26)
+  - New "Brand Logo" badge style using real logos for Dolby Vision, Dolby Atmos, Dolby TrueHD,
+    HDR10, HDR10+, AV1, H.264 and VP9; badges without a logo keep the generated text art
   - Language flags are now configurable: pick the flag used for each language in the new
     Language Flags section, since most languages are spoken in several countries
   - Files tagged with a region such as pt-BR now use that region's flag automatically

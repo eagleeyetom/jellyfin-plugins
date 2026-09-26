@@ -331,6 +331,16 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
                 var targetResource = resourceFileName;
 
+                // Brand logos only exist for some badges; the rest keep the generated art.
+                if (panel.Style == BadgeStyle.Logo && resourceFileName.StartsWith("badge-", StringComparison.OrdinalIgnoreCase))
+                {
+                    var logoName = "logo-" + resourceFileName[6..];
+                    if (_svgCache.ContainsKey(logoName) || _rasterCache.ContainsKey(logoName))
+                    {
+                        targetResource = logoName;
+                    }
+                }
+
                 if (_svgCache.TryGetValue(targetResource, out var svgBytes))
                 {
                     var ratio = GetSvgAspectRatio(svgBytes);

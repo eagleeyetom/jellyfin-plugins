@@ -19,7 +19,8 @@ public enum BadgePosition
 public enum BadgeStyle
 {
     Image,
-    Text
+    Text,
+    Logo
 }
 
 /// <summary>

@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ns1="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:ns2="http://www.inkscape.org/namespaces/inkscape" xmlns:ns4="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" viewBox="0 0 368.84 195.84" width="368.84" height="195.84" version="1.1"><rect x="0" y="0" width="368.84" height="195.84" rx="19.584" ry="19.584" fill="#000000" /><g transform="translate(25.92,25.92)" fill="#FFFFFF"><ns1:namedview pagecolor="#ffffff" bordercolor="#666666" borderopacity="1" objecttolerance="10" gridtolerance="10" guidetolerance="10" ns2:pageopacity="0" ns2:pageshadow="2" ns2:window-width="958" ns2:window-height="1010" id="namedview25" showgrid="false" ns2:zoom="8" ns2:cx="248.43982" ns2:cy="31.478291" ns2:window-x="-5" ns2:window-y="0" ns2:window-maximized="0" ns2:current-layer="g21" ns2:document-rotation="0" />
+  <defs id="defs7">
+    <linearGradient id="cvfa" x1="657" x2="721" y1="-94.2" y2="3.81" gradientTransform="translate(-203 593)" gradientUnits="userSpaceOnUse" ns2:collect="always">
+      <stop style="stop-color:#8ae234" offset="0" id="stop2" />
+      <stop style="stop-color:#4e9a06" offset="1" id="stop4" />
+    </linearGradient>
+  </defs>
+  <metadata id="metadata9">
+    <rdf:RDF>
+      <ns4:Work rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title />
+      </ns4:Work>
+    </rdf:RDF>
+  </metadata>
+  <g transform="translate(-227 -489)" ns2:groupmode="layer" ns2:label="Layer 1" id="g21">
+    <g style="color:#000000;fill:#FFFFFF;stroke-width:2.24;stroke:#292929;text-decoration-line:none;text-indent:0;text-transform:none" id="g15">
+      <path d="m288 572 3.26 21.6h0.906l3.62-21.7 24.3-74.3h26.1l-47.1 128h-17.8l-47.5-128h28.8z" id="path11" />
+      <path d="m 355,499 c 5.07,-0.966 10.6,-1.69 16.7,-2.17 6.16,-0.604 12.3,-0.906 18.3,-0.906 6.28,1.3e-4 12.6,0.544 18.8,1.63 6.4,0.967 12.1,3.02 17.2,6.16 5.07,3.02 9.18,7.31 12.3,12.9 3.26,5.44 4.89,12.6 4.89,21.4 -10e-5,7.97 -1.39,14.7 -4.17,20.3 -2.78,5.44 -6.46,9.91 -11.1,13.4 -4.59,3.5 -9.85,6.04 -15.8,7.61 -5.8,1.57 -11.8,2.36 -18.1,2.36 -0.604,4e-5 -1.57,4e-5 -2.9,0 -1.33,4e-5 -2.72,4e-5 -4.17,0 -1.45,-0.121 -2.9,-0.242 -4.35,-0.362 -1.33,-0.121 -2.3,-0.242 -2.9,-0.362 v 43.7 h -24.8 z m 30.11,18.662 c -2.17,0.121 -3.93,0.302 -5.25,0.544 v 41.1 c 0.483,0.121 1.21,0.242 2.17,0.362 0.966,0.121 1.99,0.242 3.08,0.362 1.09,7e-5 2.11,7e-5 3.08,0 1.09,7e-5 1.87,7e-5 2.36,0 3.26,7e-5 6.46,-0.302 9.6,-0.906 3.26,-0.604 6.16,-1.69 8.7,-3.26 2.54,-1.69 4.53,-3.99 5.98,-6.89 1.57,-2.9 2.36,-6.7 2.36,-11.4 -7e-5,-3.99 -0.725,-7.25 -2.17,-9.78 -1.45,-2.66 -3.38,-4.77 -5.8,-6.34 -2.3,-1.57 -4.95,-2.66 -7.97,-3.26 -3.02,-0.604 -6.11,-0.894 -9.25,-0.894 -2.42,1e-4 -4.71,0.121 -6.89,0.362 z" id="path13" ns1:nodetypes="cccccccccccccccccccccccccccccccccc" />
+    </g>
+    <g style="color:#000000;fill:url(#cvfa);stroke-linejoin:round;stroke-width:2.01;stroke:#366a04;text-decoration-line:none;text-indent:0;text-transform:none" id="g19">
+      <path d="m 455.72,520 c 1.93,-5.19 4.65,-9.6 8.15,-13.2 3.62,-3.74 7.97,-6.64 13,-8.7 5.19,-2.17 11.1,-3.26 17.8,-3.26 13.7,1.3e-4 24.3,4.11 32.1,12.3 7.85,8.09 11.8,19.9 11.8,35.5 -9e-5,14 -1.81,26.2 -5.44,36.4 -3.5,10.1 -8.27,18.7 -14.3,25.5 -5.92,6.76 -12.8,12 -20.7,15.6 -7.85,3.62 -16.1,5.8 -24.8,6.52 l -5.07,-18.5 c 6.64,-0.846 12.6,-2.48 17.8,-4.89 5.19,-2.42 9.66,-5.38 13.4,-8.88 3.74,-3.62 6.76,-7.67 9.06,-12.1 2.42,-4.59 4.11,-9.48 5.07,-14.7 -2.9,3.14 -6.04,5.32 -9.42,6.52 -3.26,1.21 -7.67,1.81 -13.2,1.81 -4.59,5e-5 -9.18,-0.785 -13.8,-2.36 -4.47,-1.57 -8.52,-3.93 -12.1,-7.07 -3.5,-3.26 -6.51,-7.3 -8.81,-12.09 -2.17,-4.95 -3.26,-10.8 -3.26,-17.4 -10e-6,-6.16 0.906,-11.8 2.72,-17 z m 25.99,31.32 c 3.87,3.5 8.7,5.25 14.5,5.25 4.95,7e-5 9,-0.785 12.1,-2.36 3.14,-1.57 5.56,-3.5 7.25,-5.8 0.362,-2.54 0.544,-4.95 0.544,-7.25 -7e-5,-3.38 -0.423,-6.7 -1.27,-9.97 -0.846,-3.26 -2.17,-6.16 -3.99,-8.7 -1.69,-2.54 -3.93,-4.53 -6.7,-5.98 -2.66,-1.57 -5.86,-2.36 -9.6,-2.36 -5.92,1.1e-4 -10.5,1.93 -13.8,5.8 -3.26,3.74 -4.89,9 -4.89,15.8 -3e-5,6.89 1.986,12.07 5.856,15.57 z" id="path17" ns1:nodetypes="ccccccccccccccccscccccsccccccccccs" />
+    </g>
+  </g>
+</g></svg>
