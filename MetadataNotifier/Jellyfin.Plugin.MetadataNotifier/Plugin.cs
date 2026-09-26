@@ -1,15 +1,15 @@
 using System;
 using System.Collections.Generic;
-using Jellyfin.Plugin.SamsungMetadataNotifier.Configuration;
+using Jellyfin.Plugin.MetadataNotifier.Configuration;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 
-namespace Jellyfin.Plugin.SamsungMetadataNotifier;
+namespace Jellyfin.Plugin.MetadataNotifier;
 
 /// <summary>
-/// Main plugin class for Samsung Metadata Notifier.
+/// Main plugin class for Metadata Notifier.
 /// </summary>
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
@@ -35,7 +35,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     }
 
     /// <inheritdoc />
-    public override string Name => "Samsung Metadata Notifier";
+    public override string Name => "Metadata Notifier";
 
     /// <inheritdoc />
     public override string Description => "Displays on-screen toast notifications with HDR metadata, audio codec, and transcoding info for Samsung TVs and other clients.";

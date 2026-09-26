@@ -13,26 +13,26 @@ using Jellyfin.Data.Enums;
 using VideoRange = Jellyfin.Data.Enums.VideoRange;
 using VideoRangeType = Jellyfin.Data.Enums.VideoRangeType;
 
-using Jellyfin.Plugin.SamsungMetadataNotifier.Configuration;
+using Jellyfin.Plugin.MetadataNotifier.Configuration;
 
-namespace Jellyfin.Plugin.SamsungMetadataNotifier.Services;
+namespace Jellyfin.Plugin.MetadataNotifier.Services;
 
 /// <summary>
 /// Background service that listens for playback start events and sends media info toast notifications.
 /// </summary>
-public class SamsungNotifierService : IHostedService
+public class MetadataNotifierService : IHostedService
 {
     private readonly ISessionManager _sessionManager;
-    private readonly ILogger<SamsungNotifierService> _logger;
+    private readonly ILogger<MetadataNotifierService> _logger;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="SamsungNotifierService"/> class.
+    /// Initializes a new instance of the <see cref="MetadataNotifierService"/> class.
     /// </summary>
     /// <param name="sessionManager">Session manager.</param>
     /// <param name="logger">Logger.</param>
-    public SamsungNotifierService(
+    public MetadataNotifierService(
         ISessionManager sessionManager,
-        ILogger<SamsungNotifierService> logger)
+        ILogger<MetadataNotifierService> logger)
     {
         _sessionManager = sessionManager;
         _logger = logger;
@@ -42,7 +42,7 @@ public class SamsungNotifierService : IHostedService
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _sessionManager.PlaybackStart += OnPlaybackStart;
-        _logger.LogInformation("Samsung Metadata Notifier service started.");
+        _logger.LogInformation("Metadata Notifier service started.");
         return Task.CompletedTask;
     }
 
@@ -50,7 +50,7 @@ public class SamsungNotifierService : IHostedService
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _sessionManager.PlaybackStart -= OnPlaybackStart;
-        _logger.LogInformation("Samsung Metadata Notifier service stopped.");
+        _logger.LogInformation("Metadata Notifier service stopped.");
         return Task.CompletedTask;
     }
 

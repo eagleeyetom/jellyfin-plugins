@@ -1,9 +1,9 @@
 using MediaBrowser.Model.Plugins;
 
-namespace Jellyfin.Plugin.SamsungMetadataNotifier.Configuration;
+namespace Jellyfin.Plugin.MetadataNotifier.Configuration;
 
 /// <summary>
-/// Configuration for the SamsungMetadataNotifier plugin.
+/// Configuration for the MetadataNotifier plugin.
 /// </summary>
 public class PluginConfiguration : BasePluginConfiguration
 {

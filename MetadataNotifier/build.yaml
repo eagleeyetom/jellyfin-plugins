@@ -1,0 +1,19 @@
+name: Metadata Notifier
+assemblyName: Jellyfin.Plugin.MetadataNotifier
+targetAbi: 10.11.0.0
+owner: eagleeyetom
+category: General
+artifacts:
+  - path: Jellyfin.Plugin.MetadataNotifier/bin/Release/net9.0/Jellyfin.Plugin.MetadataNotifier.dll
+    type: Assembly
+  - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
+    type: Icon
+changelog: |
+  ## v1.0.1.0
+  - Rename plugin to Metadata Notifier (formerly Samsung Metadata Notifier)
+  - Add SDR support detection
+  - Add option to select toast notification duration
+  - Cleanup and optimize configuration UI
+  ## v1.0.0.0
+  - Initial release: Send on-screen toast notifications with HDR metadata (HDR10+, Dolby Vision, HDR10), audio codecs, and transcoding status for Samsung TVs (Tizen) and other clients.
+
