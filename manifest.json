@@ -1,5 +1,24 @@
 [
   {
+    "guid": "b7c3e2f1-4a5d-6e7f-8b9c-1a2b3c4d5e6f",
+    "name": "Samsung Metadata Notifier",
+    "overview": "Sends on-screen toast notifications with HDR metadata, audio codec, and transcoding info for Samsung TVs",
+    "description": "Samsung Metadata Notifier sends on-screen toast notifications when playback starts on Samsung TVs and other clients. Displays HDR metadata systems (HDR10+, Dolby Vision, HDR10), audio codecs (TrueHD Atmos, DTS-HD MA), and transcoding status.",
+    "owner": "eagleeyetom",
+    "category": "General",
+    "imageUrl": "https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/main/SamsungMetadataNotifier/Jellyfin.Plugin.SamsungMetadataNotifier/SamsungMetadataNotifier.png",
+    "versions": [
+      {
+        "version": "1.0.0.0",
+        "changelog": "Initial release: Send on-screen toast notifications with HDR metadata, audio codecs, and transcoding status for Samsung TVs.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/samsungmetadata-1.0.0.0/samsungmetadata-1.0.0.0.zip",
+        "checksum": "00000000000000000000000000000000",
+        "timestamp": "2026-09-26T00:00:00Z"
+      }
+    ]
+  },
+  {
     "guid": "aa4fe598-07fd-41b5-bf1d-65abab9980db",
     "name": "WatchSync",
     "overview": "Sync watch history between libraries of different qualities (4K/HD)",

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Samsung Metadata Notifier</title>
+</head>
+<body>
+    <div id="SamsungMetadataNotifierConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+        data-require="emby-input,emby-button,emby-checkbox">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="SamsungMetadataNotifierConfigForm">
+                    <div class="sectionTitleContainer flex align-items-center">
+                        <h2 class="sectionTitle">Samsung Metadata Notifier</h2>
+                    </div>
+                    <div class="verticalSection">
+                        <p class="description">
+                            Sends on-screen toast notifications when playback starts on Samsung TVs (and other clients),
+                            displaying HDR metadata systems (HDR10+, Dolby Vision, HDR10), audio codecs, and transcoding status.
+                        </p>
+                    </div>
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">General</h3>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input type="checkbox" id="IsEnabled" is="emby-checkbox" />
+                                <span>Enable notification plugin</span>
+                            </label>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input type="checkbox" id="TargetSamsungOnly" is="emby-checkbox" />
+                                <span>Target Samsung / Tizen TVs only</span>
+                            </label>
+                        </div>
+                        <div class="inputContainer" style="margin-top: 1em;">
+                            <label class="inputLabel" for="NotificationDurationMs">Notification Duration (ms)</label>
+                            <input type="number" id="NotificationDurationMs" min="1000" max="30000" step="500" is="emby-input" />
+                        </div>
+                    </div>
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">Information to Display</h3>
+                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowAudio" is="emby-checkbox" /><span>Show Audio</span></label></div>
+                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowTranscoding" is="emby-checkbox" /><span>Show Transcoding</span></label></div>
+                    </div>
+                    <div class="verticalSection">
+                        <h3 class="sectionTitle">HDR Formatting</h3>
+                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowHdr10Plus" is="emby-checkbox" /><span>Show HDR10+</span></label></div>
+                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowHdr10" is="emby-checkbox" /><span>Show HDR10</span></label></div>
+                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowDolbyVision" is="emby-checkbox" /><span>Show Dolby Vision</span></label></div>
+                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowHlg" is="emby-checkbox" /><span>Show HLG</span></label></div>
+                        <div class="checkboxContainer"><label><input type="checkbox" id="SuppressDvOnSamsung" is="emby-checkbox" /><span>Suppress Dolby Vision on Samsung</span></label></div>
+                    </div>
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <script type="text/javascript">
+            const pluginId = 'b7c3e2f1-4a5d-6e7f-8b9c-1a2b3c4d5e6f';
+            document.querySelector('#SamsungMetadataNotifierConfigPage').addEventListener('pageshow', function () {
+                Dashboard.showLoadingMsg();
+                loadConfiguration();
+            });
+            document.querySelector('#SamsungMetadataNotifierConfigForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                saveConfiguration();
+                return false;
+            });
+            async function loadConfiguration() {
+                try {
+                    const config = await ApiClient.getPluginConfiguration(pluginId);
+                    document.querySelector('#IsEnabled').checked = config.IsEnabled ?? true;
+                    document.querySelector('#TargetSamsungOnly').checked = config.TargetSamsungOnly ?? true;
+                    document.querySelector('#NotificationDurationMs').value = config.NotificationDurationMs ?? 5000;
+                    document.querySelector('#ShowAudio').checked = config.ShowAudio ?? true;
+                    document.querySelector('#ShowTranscoding').checked = config.ShowTranscoding ?? true;
+                    document.querySelector('#ShowHdr10Plus').checked = config.ShowHdr10Plus ?? true;
+                    document.querySelector('#ShowHdr10').checked = config.ShowHdr10 ?? true;
+                    document.querySelector('#ShowDolbyVision').checked = config.ShowDolbyVision ?? true;
+                    document.querySelector('#ShowHlg').checked = config.ShowHlg ?? true;
+                    document.querySelector('#SuppressDvOnSamsung').checked = config.SuppressDvOnSamsung ?? true;
+                    Dashboard.hideLoadingMsg();
+                } catch (error) {
+                    console.error('Error loading configuration:', error);
+                    Dashboard.hideLoadingMsg();
+                }
+            }
+            async function saveConfiguration() {
+                try {
+                    Dashboard.showLoadingMsg();
+                    const config = await ApiClient.getPluginConfiguration(pluginId);
+                    config.IsEnabled = document.querySelector('#IsEnabled').checked;
+                    config.TargetSamsungOnly = document.querySelector('#TargetSamsungOnly').checked;
+                    config.NotificationDurationMs = parseInt(document.querySelector('#NotificationDurationMs').value, 10) || 5000;
+                    config.ShowAudio = document.querySelector('#ShowAudio').checked;
+                    config.ShowTranscoding = document.querySelector('#ShowTranscoding').checked;
+                    config.ShowHdr10Plus = document.querySelector('#ShowHdr10Plus').checked;
+                    config.ShowHdr10 = document.querySelector('#ShowHdr10').checked;
+                    config.ShowDolbyVision = document.querySelector('#ShowDolbyVision').checked;
+                    config.ShowHlg = document.querySelector('#ShowHlg').checked;
+                    config.SuppressDvOnSamsung = document.querySelector('#SuppressDvOnSamsung').checked;
+                    const result = await ApiClient.updatePluginConfiguration(pluginId, config);
+                    Dashboard.processPluginConfigurationUpdateResult(result);
+                } catch (error) {
+                    console.error('Error saving configuration:', error);
+                    Dashboard.hideLoadingMsg();
+                }
+            }
+        </script>
+    </div>
+</body>
+</html>
