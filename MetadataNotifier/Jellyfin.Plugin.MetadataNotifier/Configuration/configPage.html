@@ -48,6 +48,7 @@
                         <div class="checkboxContainer"><label><input type="checkbox" id="ShowTranscoding" is="emby-checkbox" /><span>Show Transcoding</span></label></div>
                         <div class="checkboxContainer"><label><input type="checkbox" id="ShowDirectPlay" is="emby-checkbox" /><span>Show Direct Play</span></label></div>
                         <div class="checkboxContainer"><label><input type="checkbox" id="ShowBitrate" is="emby-checkbox" /><span>Show Bitrate</span></label></div>
+                        <div class="checkboxContainer"><label><input type="checkbox" id="UseDetailedNames" is="emby-checkbox" /><span>Use Technical / Detailed Names (e.g. E-AC-3, DV Profile)</span></label></div>
                         <div class="checkboxContainer"><label><input type="checkbox" id="SuppressDvOnSamsung" is="emby-checkbox" /><span>Suppress Dolby Vision on Samsung</span></label></div>
                     </div>
                     <div>
@@ -78,6 +79,7 @@
                     document.querySelector('#ShowTranscoding').checked = config.ShowTranscoding ?? true;
                     document.querySelector('#ShowDirectPlay').checked = config.ShowDirectPlay ?? true;
                     document.querySelector('#ShowBitrate').checked = config.ShowBitrate ?? true;
+                    document.querySelector('#UseDetailedNames').checked = config.UseDetailedNames ?? false;
                     document.querySelector('#ShowHdr10Plus').checked = config.ShowHdr10Plus ?? true;
                     document.querySelector('#ShowHdr10').checked = config.ShowHdr10 ?? true;
                     document.querySelector('#ShowDolbyVision').checked = config.ShowDolbyVision ?? true;
@@ -101,6 +103,7 @@
                     config.ShowTranscoding = document.querySelector('#ShowTranscoding').checked;
                     config.ShowDirectPlay = document.querySelector('#ShowDirectPlay').checked;
                     config.ShowBitrate = document.querySelector('#ShowBitrate').checked;
+                    config.UseDetailedNames = document.querySelector('#UseDetailedNames').checked;
                     config.ShowHdr10Plus = document.querySelector('#ShowHdr10Plus').checked;
                     config.ShowHdr10 = document.querySelector('#ShowHdr10').checked;
                     config.ShowDolbyVision = document.querySelector('#ShowDolbyVision').checked;

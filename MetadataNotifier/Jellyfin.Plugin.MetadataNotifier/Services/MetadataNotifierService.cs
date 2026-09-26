@@ -96,7 +96,7 @@ public class MetadataNotifierService : IHostedService
 
             if (config.ShowAudio)
             {
-                var audioInfo = GetAudioInfo(item, session);
+                var audioInfo = GetAudioInfo(item, session, config);
                 if (!string.IsNullOrEmpty(audioInfo))
                 {
                     parts.Add(audioInfo);
@@ -209,7 +209,7 @@ public class MetadataNotifierService : IHostedService
 
             if (config.ShowDolbyVision)
             {
-                return "Dolby Vision";
+                return config.UseDetailedNames ? GetDetailedDolbyVisionInfo(profile, displayTitle) : "Dolby Vision";
             }
         }
 
@@ -235,6 +235,25 @@ public class MetadataNotifierService : IHostedService
 
         return string.Empty;
     }
+    private static string GetDetailedDolbyVisionInfo(string profile, string displayTitle)
+    {
+        if (profile.Contains("dvhe.08", StringComparison.OrdinalIgnoreCase) || profile.Contains("dvhe 08", StringComparison.OrdinalIgnoreCase))
+        {
+            if (profile.Contains("09", StringComparison.OrdinalIgnoreCase)) return "DV Profile 8.1";
+            return "DV Profile 8";
+        }
+        if (profile.Contains("dvhe.07", StringComparison.OrdinalIgnoreCase) || profile.Contains("dvhe 07", StringComparison.OrdinalIgnoreCase)) return "DV Profile 7";
+        if (profile.Contains("dvhe.05", StringComparison.OrdinalIgnoreCase) || profile.Contains("dvhe 05", StringComparison.OrdinalIgnoreCase)) return "DV Profile 5";
+        if (profile.Contains("dvh1", StringComparison.OrdinalIgnoreCase)) return "DV Profile 5";
+
+        if (!string.IsNullOrEmpty(profile) && (profile.Contains("dv") || profile.Contains("dovi")))
+        {
+            return $"Dolby Vision ({profile})";
+        }
+        return "Dolby Vision";
+    }
+
+
 
     private static string GetBitrateInfo(BaseItem item, SessionInfo session)
     {
@@ -299,7 +318,7 @@ public class MetadataNotifierService : IHostedService
             || profile.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string GetAudioInfo(BaseItem item, SessionInfo session)
+    private static string GetAudioInfo(BaseItem item, SessionInfo session, PluginConfiguration config)
     {
         var mediaStreams = item.GetMediaStreams();
         var audioStream = mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Audio);
@@ -310,44 +329,70 @@ public class MetadataNotifierService : IHostedService
 
         var codec = audioStream.Codec?.ToUpperInvariant() ?? string.Empty;
         var profile = audioStream.Profile ?? string.Empty;
+        var title = audioStream.Title ?? string.Empty;
         var channels = audioStream.Channels;
 
-        if (codec == "TRUEHD" || codec == "TRUHD")
-        {
-            codec = "TrueHD";
-        }
-        else if (codec == "DCA")
-        {
-            codec = "DTS";
-        }
-        else if (codec == "AC3")
-        {
-            codec = "AC3";
-        }
-        else if (codec == "EAC3")
-        {
-            codec = "E-AC3";
-        }
-        else if (codec == "AAC")
-        {
-            codec = "AAC";
-        }
-        else if (codec == "FLAC")
-        {
-            codec = "FLAC";
-        }
+        string displayCodec;
 
-        if (profile.Contains("Atmos", StringComparison.OrdinalIgnoreCase))
+        // Detect Atmos/DTS:X first (high priority)
+        if (profile.Contains("Atmos", StringComparison.OrdinalIgnoreCase) ||
+            title.Contains("Atmos", StringComparison.OrdinalIgnoreCase))
         {
-            codec += " Atmos";
+            displayCodec = "Dolby Atmos";
         }
-        else if (profile.Contains("DTS-HD MA", StringComparison.OrdinalIgnoreCase) || profile.Contains("DTS-HD", StringComparison.OrdinalIgnoreCase))
+        else if (profile.Contains("DTS:X", StringComparison.OrdinalIgnoreCase) ||
+                 profile.Contains("DTS-X", StringComparison.OrdinalIgnoreCase) ||
+                 title.Contains("DTS:X", StringComparison.OrdinalIgnoreCase))
         {
-            codec = "DTS-HD MA";
+            displayCodec = "DTS:X";
         }
-        else if (profile.Contains("DTS:X", StringComparison.OrdinalIgnoreCase))
+        else if (profile.Contains("DTS-HD MA", StringComparison.OrdinalIgnoreCase) ||
+                 profile.Contains("DTS-HD MASTER", StringComparison.OrdinalIgnoreCase) ||
+                 title.Contains("DTS-HD MA", StringComparison.OrdinalIgnoreCase))
         {
-            codec = "DTS:X";
+            displayCodec = "DTS-HD MA";
+        }
+        else if (profile.Contains("DTS-HD", StringComparison.OrdinalIgnoreCase) ||
+                 title.Contains("DTS-HD", StringComparison.OrdinalIgnoreCase))
+        {
+            displayCodec = "DTS-HD";
+        }
+        else
+        {
+            if (config.UseDetailedNames)
+            {
+                displayCodec = codec switch
+                {
+                    "TRUEHD" or "TRUHD" => "TRUEHD",
+                    "EAC3" => "E-AC-3",
+                    "AC3" => "AC3",
+                    "DCA" or "DTS" => "DTS",
+                    "AAC" => "AAC",
+                    "FLAC" => "FLAC",
+                    "OPUS" => "OPUS",
+                    "VORBIS" => "VORBIS",
+                    "MP3" => "MP3",
+                    "PCM" or "LPCM" => "PCM",
+                    _ => codec
+                };
+            }
+            else
+            {
+                displayCodec = codec switch
+                {
+                    "TRUEHD" or "TRUHD" => "Dolby TrueHD",
+                    "EAC3" => "Dolby Digital+",
+                    "AC3" => "Dolby Digital",
+                    "DCA" or "DTS" => "DTS",
+                    "AAC" => "AAC",
+                    "FLAC" => "FLAC",
+                    "OPUS" => "Opus",
+                    "VORBIS" => "Vorbis",
+                    "MP3" => "MP3",
+                    "PCM" or "LPCM" => "PCM",
+                    _ => codec
+                };
+            }
         }
 
         string channelStr = channels switch
@@ -358,7 +403,7 @@ public class MetadataNotifierService : IHostedService
             _ => channels > 0 ? $"{channels}ch" : string.Empty
         };
 
-        return !string.IsNullOrEmpty(channelStr) ? $"{codec} {channelStr}" : codec;
+        return !string.IsNullOrEmpty(channelStr) ? $"{displayCodec} {channelStr}" : displayCodec;
     }
 
     private static string? GetTranscodingInfo(SessionInfo session)
