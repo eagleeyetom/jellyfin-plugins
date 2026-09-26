@@ -84,8 +84,16 @@
     "description": "JellyTag automatically overlays quality badges on your media posters and thumbnails. Supports resolution, HDR, video codec, audio, language flags, and VOST indicator. Badges are rendered server-side and visible on all Jellyfin clients. Features per-panel configuration, SVG and text badge styles, custom badge upload, live preview, and library filtering.",
     "owner": "eagleeyetom",
     "category": "General",
-    "imageUrl": "https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/samsung-client-filter-test/Jellytag/Jellyfin.Plugin.JellyTag/JellyTag.png",
+    "imageUrl": "https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/main/Jellytag/Jellyfin.Plugin.JellyTag/JellyTag.png",
     "versions": [
+      {
+        "version": "2.4.0.0",
+        "changelog": "Add a Brand Logo badge style with real logos for Dolby Vision, HDR10, HDR10+, Dolby Atmos, Dolby TrueHD, DTS:X, DTS-HD MA, H.264, VP9 and AV1. Make language flags configurable per language, honour region tags such as pt-BR, and normalise language codes so duplicates no longer appear. Add a mono audio badge. Fix custom badge previews failing to load, and make the badge gallery edit the asset that is actually rendered.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.4.0.0/jellytag-2.4.0.0.zip",
+        "checksum": "00000000000000000000000000000000",
+        "timestamp": "2026-09-26T13:18:19Z"
+      },
       {
         "version": "2.2.0.0",
         "changelog": "Add option to hide HDR badges on Windows clients (SDR-only mode). Windows client detection via User-Agent and X-Emby headers, with separate image caching for Windows SDR variants.",

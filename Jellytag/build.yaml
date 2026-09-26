@@ -1,6 +1,6 @@
 name: "JellyTag"
 guid: "f4a2e8c1-9b3d-4f7a-b6c5-2d8e1a3f9b04"
-version: "2.3.0.0"
+version: "2.4.0.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "JellyTag"
@@ -19,7 +19,7 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.JellyTag.dll"
 changelog: |
-  ## v2.3.0.0 (2026-09-26)
+  ## v2.4.0.0 (2026-09-26)
   - New "Brand Logo" badge style using real logos for Dolby Vision, Dolby Atmos, Dolby TrueHD,
     HDR10, HDR10+, DTS:X, DTS-HD MA, AV1, H.264 and VP9; badges without a logo keep the generated text art
   - Language flags are now configurable: pick the flag used for each language in the new
