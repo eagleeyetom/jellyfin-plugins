@@ -126,8 +126,8 @@
                                 <div class="selectContainer" style="margin-bottom: 1em;">
                                     <label class="selectLabel" for="CssToastPosition">Toast Position</label>
                                     <select id="CssToastPosition" is="emby-select" class="emby-select">
-                                        <option value="bottom-right" selected>Bottom Right</option>
-                                        <option value="bottom-left">Bottom Left</option>
+                                        <option value="bottom-right">Bottom Right</option>
+                                        <option value="bottom-left" selected>Bottom Left</option>
                                         <option value="top-right">Top Right</option>
                                         <option value="top-left">Top Left</option>
                                         <option value="bottom-center">Bottom Center</option>
@@ -243,8 +243,8 @@
                 const pos = document.querySelector('#CssToastPosition').value;
                 let cssProps = '';
                 switch (pos) {
-                    case 'bottom-left':
-                        cssProps = 'bottom: 20px !important;\n    left: 20px !important;\n    right: auto !important;\n    top: auto !important;\n    transform: none !important;';
+                    case 'bottom-right':
+                        cssProps = 'bottom: 20px !important;\n    right: 20px !important;\n    left: auto !important;\n    top: auto !important;\n    transform: none !important;';
                         break;
                     case 'top-right':
                         cssProps = 'top: 20px !important;\n    right: 20px !important;\n    left: auto !important;\n    bottom: auto !important;\n    transform: none !important;';
@@ -258,9 +258,9 @@
                     case 'top-center':
                         cssProps = 'top: 20px !important;\n    left: 50% !important;\n    transform: translateX(-50%) !important;\n    right: auto !important;\n    bottom: auto !important;';
                         break;
-                    case 'bottom-right':
+                    case 'bottom-left':
                     default:
-                        cssProps = 'bottom: 20px !important;\n    right: 20px !important;\n    left: auto !important;\n    top: auto !important;\n    transform: none !important;';
+                        cssProps = 'bottom: 20px !important;\n    left: 20px !important;\n    right: auto !important;\n    top: auto !important;\n    transform: none !important;';
                         break;
                 }
 
