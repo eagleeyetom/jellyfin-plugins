@@ -13,7 +13,6 @@ public class PluginConfiguration : BasePluginConfiguration
     public PluginConfiguration()
     {
         IsEnabled = true;
-        TargetSamsungOnly = true;
         NotificationDurationMs = 5000;
         ShowSdr = true;
         ShowAudio = true;
@@ -25,6 +24,7 @@ public class PluginConfiguration : BasePluginConfiguration
         ShowDolbyVision = true;
         ShowHlg = true;
         SuppressDvOnSamsung = true;
+        SuppressHdr10PlusOnLg = true;
         ShowTranscodeReasons = true;
         ShowAudioConversion = true;
         NotifyOnAudioTrackChange = true;
@@ -38,11 +38,6 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets a value indicating whether the plugin is globally enabled.
     /// </summary>
     public bool IsEnabled { get; set; }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether to target only Samsung / Tizen clients.
-    /// </summary>
-    public bool TargetSamsungOnly { get; set; }
 
     /// <summary>
     /// Gets or sets the notification duration in milliseconds.
@@ -108,6 +103,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets a value indicating whether to suppress Dolby Vision on Samsung devices.
     /// </summary>
     public bool SuppressDvOnSamsung { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to suppress HDR10+ on non-supporting clients (e.g. LG, Sony).
+    /// </summary>
+    public bool SuppressHdr10PlusOnLg { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether to show transcode reasons when transcoding occurs.

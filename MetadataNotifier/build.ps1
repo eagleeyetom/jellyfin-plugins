@@ -13,24 +13,20 @@ if (Test-Path $PublishOut) { Remove-Item -Recurse -Force $PublishOut }
 Write-Host "Compiling plugin..." -ForegroundColor Yellow
 dotnet publish (Join-Path $PluginDir "Jellyfin.Plugin.MetadataNotifier.csproj") -c Release -o $PublishOut
 
-Write-Host "Copying files and creating ZIP..." -ForegroundColor Yellow
-$PkgDir = Join-Path $ScriptDir "pkg"
-if (Test-Path $PkgDir) { Remove-Item -Recurse -Force $PkgDir }
-New-Item -ItemType Directory -Force -Path $PkgDir | Out-Null
-
-Copy-Item (Join-Path $PublishOut "Jellyfin.Plugin.MetadataNotifier.dll") $PkgDir
+Write-Host "Copying files and creating ZIP package..." -ForegroundColor Yellow
+$DllPath = Join-Path $PublishOut "Jellyfin.Plugin.MetadataNotifier.dll"
+Copy-Item $DllPath $OutputDir
 $PngPath = Join-Path $PluginDir "MetadataNotifier.png"
-if (Test-Path $PngPath) { Copy-Item $PngPath $PkgDir }
+if (Test-Path $PngPath) { Copy-Item $PngPath $OutputDir }
 
 $Version = (dotnet msbuild (Join-Path $PluginDir "Jellyfin.Plugin.MetadataNotifier.csproj") -getProperty:Version).Trim()
 if (-not $Version) { $Version = "1.2.1.0" }
 
 $zipPath = Join-Path $OutputDir "metadatanotifier-$Version.zip"
 if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
-Compress-Archive -Path (Get-ChildItem $PkgDir | ForEach-Object { $_.FullName }) -DestinationPath $zipPath
+Compress-Archive -Path (Get-ChildItem $OutputDir | Where-Object { $_.PSIsContainer -eq $false } | ForEach-Object { $_.FullName }) -DestinationPath $zipPath
 
 Remove-Item -Recurse -Force $PublishOut
-Remove-Item -Recurse -Force $PkgDir
 
 Write-Host ""
 Write-Host "=== Build complete ===" -ForegroundColor Green

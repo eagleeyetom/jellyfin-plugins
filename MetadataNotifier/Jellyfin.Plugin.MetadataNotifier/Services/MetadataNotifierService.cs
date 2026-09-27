@@ -95,11 +95,6 @@ public class MetadataNotifierService : IHostedService
                 return;
             }
 
-            if (config.TargetSamsungOnly && !IsSamsungClient(session))
-            {
-                return;
-            }
-
             if (IsUserExcluded(session, config))
             {
                 return;
@@ -186,7 +181,7 @@ public class MetadataNotifierService : IHostedService
 
             var messageCommand = new MessageCommand
             {
-                Header = header,
+                Header = string.Empty,
                 Text = messageText,
                 TimeoutMs = config.NotificationDurationMs
             };
@@ -215,11 +210,6 @@ public class MetadataNotifierService : IHostedService
 
             var session = e.Session;
             if (session == null || !session.IsActive)
-            {
-                return;
-            }
-
-            if (config.TargetSamsungOnly && !IsSamsungClient(session))
             {
                 return;
             }
@@ -263,7 +253,7 @@ public class MetadataNotifierService : IHostedService
 
                 var messageCommand = new MessageCommand
                 {
-                    Header = header,
+                    Header = string.Empty,
                     Text = toastText,
                     TimeoutMs = config.NotificationDurationMs
                 };
@@ -422,6 +412,50 @@ public class MetadataNotifierService : IHostedService
         return false;
     }
 
+    private static bool IsNonHdr10PlusClient(SessionInfo session)
+    {
+        var client = session.Client ?? string.Empty;
+        var deviceName = session.DeviceName ?? string.Empty;
+
+        return client.Contains("webOS", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("LG", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Sony", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Bravia", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Fire", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("AFT", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Roku", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("webOS", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("LG", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Sony", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Bravia", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Fire", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("AFT", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Roku", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsNonDolbyVisionClient(SessionInfo session)
+    {
+        var client = session.Client ?? string.Empty;
+        var deviceName = session.DeviceName ?? string.Empty;
+
+        if (IsSamsungClient(session))
+        {
+            return true;
+        }
+
+        // Standard Android mobile or non-Shield Android clients
+        if ((client.Contains("Android", StringComparison.OrdinalIgnoreCase) || deviceName.Contains("Android", StringComparison.OrdinalIgnoreCase))
+            && !deviceName.Contains("Shield", StringComparison.OrdinalIgnoreCase)
+            && !client.Contains("AndroidTV", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     private static string GetHdrInfo(BaseItem item, SessionInfo session, PluginConfiguration config)
     {
         var mediaStreams = item.GetMediaStreams();
@@ -439,7 +473,8 @@ public class MetadataNotifierService : IHostedService
         var itemPath = item.Path ?? string.Empty;
         var itemName = item.Name ?? string.Empty;
 
-        bool isSamsung = IsSamsungClient(session);
+        bool isNonDvClient = IsNonDolbyVisionClient(session);
+        bool isNonHdr10Plus = IsNonHdr10PlusClient(session);
 
         // Detect HDR10+ via multilayer check: VideoRangeType, stream metadata, or filename
         bool hasHdr10Plus = IsHdr10Plus(rangeType, profile, displayTitle, comment, itemPath, itemName);
@@ -447,10 +482,36 @@ public class MetadataNotifierService : IHostedService
         // Detect Dolby Vision via VideoRangeType, stream metadata, or filename
         bool hasDolbyVision = IsDolbyVision(rangeType, range, profile, displayTitle, itemPath);
 
-        // Samsung TVs do not support Dolby Vision hardware decoding
+        // Non-supporting TVs/clients (e.g. LG, Sony, Amazon, Roku) do not support HDR10+ hardware decoding
+        if (hasHdr10Plus && isNonHdr10Plus && config.SuppressHdr10PlusOnLg)
+        {
+            if (hasDolbyVision && config.ShowDolbyVision)
+            {
+                return config.UseDetailedVideoNames ? GetDetailedDolbyVisionInfo(profile, displayTitle) : "Dolby Vision";
+            }
+
+            if (HasHdr10BaseLayer(rangeType, range, profile, displayTitle) && config.ShowHdr10)
+            {
+                return config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10";
+            }
+
+            if ((rangeType == VideoRangeType.DOVIWithHLG || rangeType == VideoRangeType.HLG || displayTitle.Contains("HLG", StringComparison.OrdinalIgnoreCase)) && config.ShowHlg)
+            {
+                return "HLG";
+            }
+
+            if (config.ShowSdr)
+            {
+                return "SDR";
+            }
+
+            return string.Empty;
+        }
+
+        // Samsung and non-DV Android clients do not support Dolby Vision hardware decoding
         if (hasDolbyVision)
         {
-            if (isSamsung && config.SuppressDvOnSamsung)
+            if (isNonDvClient && config.SuppressDvOnSamsung)
             {
                 // Fall back to HDR10+ if the media contains HDR10+ metadata
                 if (hasHdr10Plus && config.ShowHdr10Plus)
