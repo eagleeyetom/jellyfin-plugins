@@ -9,6 +9,17 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
+  ## v1.2.0.0
+  - Add transcode reasons display (e.g. Audio codec or subtitles incompatible)
+  - Add live toast notification when viewer switches audio track mid-playback
+  - Add audio conversion visualization (Source ➔ Target codec and channels)
+  - Add multilayer HDR10+ detection (Jellyfin probe, stream tags, filename)
+  - Fix Dolby Vision fallback on Samsung TVs (Profile 7/8 automatically maps to HDR10/HDR10+)
+  - Add custom notification format template option
+  - Add library and user exclusion lists
+  - Add option to ignore music and audio-only playback
+  - Fix active audio stream selection for multi-audio media
+  - Improve container bitrate calculation accuracy
   ## v1.1.0.1
   - Fix plugin discovery by excluding Jellyfin framework assemblies from the release package
   ## v1.1.0.0
