@@ -95,6 +95,14 @@
     "imageUrl": "https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/main/Jellytag/Jellyfin.Plugin.JellyTag/JellyTag.png",
     "versions": [
       {
+        "version": "2.4.2.0",
+        "changelog": "Upgrade plugin target framework to .NET 10 and Jellyfin 12 packages",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.4.2.0/jellytag-2.4.2.0.zip",
+        "checksum": "5F320C6307ACF4B15B30F2D4DEB8276D",
+        "timestamp": "2026-09-27T21:18:00Z"
+      },
+      {
         "version": "2.4.1.0",
         "changelog": "Fix 401 error on settings export by using fetch with Authorization header and blob download. Fix series and season quality aggregation to select highest quality HDR and audio tracks, increase series episode query limit to 50, improve Atmos, DTS:X, and HDR10+ detection, adjust audio codec priorities, respect channel layouts, fix excluded libraries GUID comparison, include HideHdrOnWindowsClients in image cache fingerprint, and improve brand logo generation for black backgrounds.",
         "targetAbi": "10.11.0.0",

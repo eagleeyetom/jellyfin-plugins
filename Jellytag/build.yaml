@@ -19,6 +19,8 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.JellyTag.dll"
 changelog: |
+  ## v2.4.2.0 (2026-09-27)
+  - Upgrade plugin target framework to .NET 10 and Jellyfin 12 packages
   ## v2.4.1.0 (2026-09-27)
   - Fix 401 error on settings export by using fetch with Authorization header and blob download
   - Fix series and season quality aggregation to select highest quality HDR and Audio tracks instead of first episode's badges
