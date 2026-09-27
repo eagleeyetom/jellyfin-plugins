@@ -9,6 +9,8 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
+  ## v1.2.1.0
+  - Upgrade plugin target framework to .NET 10 and Jellyfin 12 packages
   ## v1.2.0.0
   - Add transcode reasons display (e.g. Audio codec or subtitles incompatible)
   - Add live toast notification when viewer switches audio track mid-playback
