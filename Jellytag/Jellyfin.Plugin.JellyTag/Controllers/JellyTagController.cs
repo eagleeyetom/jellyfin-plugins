@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Jellyfin.Plugin.JellyTag.Configuration;
 using Jellyfin.Plugin.JellyTag.Services;
@@ -21,6 +22,13 @@ public partial class JellyTagController : ControllerBase
     private readonly IQualityDetectionService _qualityService;
 
     private static readonly string[] SupportedBadgeExtensions = { ".svg", ".png", ".jpg", ".jpeg" };
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() }
+    };
 
     [GeneratedRegex(@"^[a-zA-Z0-9._-]+$")]
     private static partial Regex SafeBadgeKeyRegex();
@@ -147,6 +155,13 @@ public partial class JellyTagController : ControllerBase
             "5.1" => "badge-5_1.svg",
             "7.1" => "badge-7_1.svg",
             "stereo" => "badge-stereo.svg",
+            "mono" => "badge-mono.svg",
+            "3d" => "badge-3d.svg",
+            "hdr" => "badge-hdr.svg",
+            "h264" => "badge-h264.svg",
+            "hevc" => "badge-hevc.svg",
+            "av1" => "badge-av1.svg",
+            "vp9" => "badge-vp9.svg",
             _ => null
         };
 
@@ -421,7 +436,7 @@ public partial class JellyTagController : ControllerBase
             return BadRequest("Plugin not loaded");
         }
 
-        var json = JsonSerializer.SerializeToUtf8Bytes(plugin.Configuration, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.SerializeToUtf8Bytes(plugin.Configuration, JsonOptions);
         return File(json, "application/json", "jellytag-config.json");
     }
 
@@ -454,7 +469,7 @@ public partial class JellyTagController : ControllerBase
         try
         {
             using var stream = file.OpenReadStream();
-            var imported = await JsonSerializer.DeserializeAsync<PluginConfiguration>(stream).ConfigureAwait(false);
+            var imported = await JsonSerializer.DeserializeAsync<PluginConfiguration>(stream, JsonOptions).ConfigureAwait(false);
             if (imported == null)
             {
                 return BadRequest("Invalid configuration file");

@@ -81,7 +81,13 @@ public partial class ImageOverlayMiddleware
         if (config.ExcludedLibraryIds.Count > 0)
         {
             var collectionFolders = libraryManager.GetCollectionFolders(item);
-            if (collectionFolders.Any(f => config.ExcludedLibraryIds.Contains(f.Id.ToString("N"))))
+            var isExcluded = collectionFolders.Any(f =>
+                config.ExcludedLibraryIds.Any(ex =>
+                    string.Equals(ex, f.Id.ToString("N"), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(ex, f.Id.ToString("D"), StringComparison.OrdinalIgnoreCase) ||
+                    (Guid.TryParse(ex, out var exGuid) && exGuid == f.Id)));
+
+            if (isExcluded)
             {
                 await _next(context).ConfigureAwait(false);
                 return;

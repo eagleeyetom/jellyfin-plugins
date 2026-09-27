@@ -446,6 +446,11 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.Transparent);
 
+        if (picture.CullRect.Width <= 0 || picture.CullRect.Height <= 0)
+        {
+            return null;
+        }
+
         var scaleX = targetWidth / picture.CullRect.Width;
         var scaleY = targetHeight / picture.CullRect.Height;
         canvas.Scale((float)scaleX, (float)scaleY);
@@ -504,7 +509,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         var assembly = Assembly.GetExecutingAssembly();
         var resourceNames = assembly.GetManifestResourceNames();
 
-        _logger.LogInformation("Loading badges. Available resources: {Resources}", string.Join(", ", resourceNames));
+        _logger.LogDebug("Loading badges. Available resources: {Resources}", string.Join(", ", resourceNames));
 
         var assetsMarker = ".Assets.";
         var badgeBaseNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -539,7 +544,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     {
                         var bytes = File.ReadAllBytes(customSvg);
                         _svgCache[svgFileName] = bytes;
-                        _logger.LogInformation("Loaded custom SVG badge: {FileName}", svgFileName);
+                        _logger.LogDebug("Loaded custom SVG badge: {FileName}", svgFileName);
                         continue;
                     }
                     catch (Exception ex)
@@ -558,7 +563,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                         {
                             customBadge = TrimTransparent(customBadge);
                             _rasterCache[svgFileName] = customBadge;
-                            _logger.LogInformation("Loaded custom PNG badge: {FileName}", pngFileName);
+                            _logger.LogDebug("Loaded custom PNG badge: {FileName}", pngFileName);
                             continue;
                         }
                     }
@@ -581,7 +586,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                             {
                                 customBadge = TrimTransparent(customBadge);
                                 _rasterCache[svgFileName] = customBadge;
-                                _logger.LogInformation("Loaded custom JPEG badge: {FileName}", baseName + ext);
+                                _logger.LogDebug("Loaded custom JPEG badge: {FileName}", baseName + ext);
                                 foundJpeg = true;
                                 break;
                             }
@@ -610,7 +615,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                         using var ms = new MemoryStream();
                         stream.CopyTo(ms);
                         _svgCache[svgFileName] = ms.ToArray();
-                        _logger.LogInformation("Loaded embedded SVG badge: {FileName}", svgFileName);
+                        _logger.LogDebug("Loaded embedded SVG badge: {FileName}", svgFileName);
                         continue;
                     }
                 }
@@ -636,7 +641,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                         {
                             badge = TrimTransparent(badge);
                             _rasterCache[svgFileName] = badge;
-                            _logger.LogInformation("Loaded embedded PNG fallback: {FileName}", pngFileName);
+                            _logger.LogDebug("Loaded embedded PNG fallback: {FileName}", pngFileName);
                         }
                     }
                 }

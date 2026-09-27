@@ -71,7 +71,7 @@ public class QualityDetectionService : IQualityDetectionService
             ParentId = item.Id,
             Recursive = true,
             IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
-            Limit = 10
+            Limit = 50
         };
         var children = _libraryManager.GetItemList(query);
         var bestQuality = VideoQuality.Unknown;
@@ -144,12 +144,16 @@ public class QualityDetectionService : IQualityDetectionService
                 ParentId = item.Id,
                 Recursive = true,
                 IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
-                Limit = 10
+                Limit = 50
             };
             var children = _libraryManager.GetItemList(query);
 
             var bestResolution = VideoQuality.Unknown;
-            Video? bestVideo = null;
+            var bestHdrBadges = new List<BadgeInfo>();
+            int bestHdrScore = -1;
+            var bestAudioBadges = new List<BadgeInfo>();
+            int bestAudioScore = -1;
+            var otherBadges = new List<BadgeInfo>();
 
             foreach (var child in children)
             {
@@ -159,10 +163,28 @@ public class QualityDetectionService : IQualityDetectionService
                     if (q != VideoQuality.Unknown && (bestResolution == VideoQuality.Unknown || q > bestResolution))
                     {
                         bestResolution = q;
-                        bestVideo = childVideo;
                     }
 
-                    bestVideo ??= childVideo;
+                    var childBadges = new List<BadgeInfo>();
+                    DetectBadgesFromVideo(childVideo, childBadges, includeResolution: false);
+
+                    var childHdr = childBadges.Where(b => b.Category == BadgeCategory.Hdr).ToList();
+                    var hdrScore = GetHdrQualityScore(childHdr);
+                    if (hdrScore > bestHdrScore)
+                    {
+                        bestHdrScore = hdrScore;
+                        bestHdrBadges = childHdr;
+                    }
+
+                    var childAudio = childBadges.Where(b => b.Category == BadgeCategory.Audio).ToList();
+                    var audioScore = GetAudioQualityScore(childAudio);
+                    if (audioScore > bestAudioScore)
+                    {
+                        bestAudioScore = audioScore;
+                        bestAudioBadges = childAudio;
+                    }
+
+                    otherBadges.AddRange(childBadges.Where(b => b.Category is not (BadgeCategory.Hdr or BadgeCategory.Audio)));
                 }
             }
 
@@ -171,15 +193,55 @@ public class QualityDetectionService : IQualityDetectionService
                 badges.Add(CreateResolutionBadge(bestResolution));
             }
 
-            foreach (var child in children.OfType<Video>())
-            {
-                DetectHdrAndAudioBadges(child, badges);
-            }
+            badges.AddRange(bestHdrBadges);
+            badges.AddRange(bestAudioBadges);
+            badges.AddRange(otherBadges);
 
             DeduplicateBadges(badges);
         }
 
         return badges;
+    }
+
+    private static int GetHdrQualityScore(List<BadgeInfo> hdrBadges)
+    {
+        int max = -1;
+        foreach (var b in hdrBadges)
+        {
+            int score = b.BadgeKey switch
+            {
+                "dv" => 4,
+                "hdr10plus" => 3,
+                "hdr10" => 2,
+                "hlg" => 1,
+                "hdr" => 0,
+                _ => -1
+            };
+            if (score > max) max = score;
+        }
+        return max;
+    }
+
+    private static int GetAudioQualityScore(List<BadgeInfo> audioBadges)
+    {
+        int score = 0;
+        foreach (var b in audioBadges)
+        {
+            score += b.BadgeKey switch
+            {
+                "atmos" => 70,
+                "dtsx" => 60,
+                "truehd" => 50,
+                "dtshdma" => 40,
+                "opus" => 20,
+                "7.1" => 8,
+                "5.1" => 6,
+                "stereo" => 2,
+                "mono" => 1,
+                _ => 0
+            };
+        }
+        return score;
     }
 
     private void DetectBadgesFromVideo(Video video, List<BadgeInfo> badges)
@@ -247,14 +309,12 @@ public class QualityDetectionService : IQualityDetectionService
                 });
             }
 
-            // Audio detection - prefer the default audio track
+            // Audio detection - analyze streams, ignoring commentary tracks when main tracks exist
             var allAudioStreams = mediaSource?.MediaStreams?.Where(s => s.Type == MediaStreamType.Audio).ToList();
             if (allAudioStreams != null && allAudioStreams.Count > 0)
             {
-                var defaultStream = allAudioStreams.FirstOrDefault(s => s.IsDefault);
-                var streamsToAnalyze = defaultStream != null
-                    ? new List<MediaStream> { defaultStream }
-                    : new List<MediaStream> { allAudioStreams[0] };
+                var candidateStreams = allAudioStreams.Where(s => !IsCommentaryStream(s)).ToList();
+                var streamsToAnalyze = candidateStreams.Count > 0 ? candidateStreams : allAudioStreams;
                 var audioBadges = DetectAudio(streamsToAnalyze);
                 badges.AddRange(audioBadges);
             }
@@ -293,6 +353,14 @@ public class QualityDetectionService : IQualityDetectionService
         {
             _logger.LogWarning(ex, "Failed to detect badges for video: {ItemName}", video.Name);
         }
+    }
+
+    private static bool IsCommentaryStream(MediaStream stream)
+    {
+        var combined = $"{stream.Title} {stream.DisplayTitle} {stream.Comment}";
+        return combined.Contains("commentary", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("komentarz", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("description", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -468,6 +536,9 @@ public class QualityDetectionService : IQualityDetectionService
         var rangeType = videoStream.VideoRangeType;
         var range = videoStream.VideoRange;
         var profile = videoStream.Profile ?? string.Empty;
+        var title = videoStream.Title ?? string.Empty;
+        var displayTitle = videoStream.DisplayTitle ?? string.Empty;
+        var comment = videoStream.Comment ?? string.Empty;
 
         void AddHdrBadge(string badgeKey, string resourceFileName)
         {
@@ -477,12 +548,12 @@ public class QualityDetectionService : IQualityDetectionService
             }
         }
 
-        if (IsDolbyVision(rangeType, range, profile))
+        if (IsDolbyVision(rangeType, range, profile, title, displayTitle))
         {
             AddHdrBadge("dv", "badge-dv.svg");
         }
 
-        if (IsHdr10Plus(rangeType, profile))
+        if (IsHdr10Plus(rangeType, profile, title, displayTitle, comment))
         {
             AddHdrBadge("hdr10plus", "badge-hdr10plus.svg");
         }
@@ -505,8 +576,9 @@ public class QualityDetectionService : IQualityDetectionService
         return badges;
     }
 
-    private static bool IsDolbyVision(VideoRangeType rangeType, VideoRange range, string profile)
+    private static bool IsDolbyVision(VideoRangeType rangeType, VideoRange range, string profile, string title, string displayTitle)
     {
+        var combined = $"{profile} {title} {displayTitle}";
         return rangeType is VideoRangeType.DOVI
                 or VideoRangeType.DOVIWithHDR10
                 or VideoRangeType.DOVIWithHLG
@@ -514,18 +586,26 @@ public class QualityDetectionService : IQualityDetectionService
                 or VideoRangeType.DOVIWithEL
                 or VideoRangeType.DOVIWithHDR10Plus
                 or VideoRangeType.DOVIWithELHDR10Plus
-            || profile.Contains("DOVI", StringComparison.OrdinalIgnoreCase)
-            || profile.Contains("DOLBY VISION", StringComparison.OrdinalIgnoreCase);
+            || combined.Contains("DOVI", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("DOLBY VISION", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("DV", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsHdr10Plus(VideoRangeType rangeType, string profile)
+    private static bool IsHdr10Plus(VideoRangeType rangeType, string profile, string title, string displayTitle, string comment)
     {
-        return rangeType is VideoRangeType.HDR10Plus
+        if (rangeType is VideoRangeType.HDR10Plus
                 or VideoRangeType.DOVIWithHDR10Plus
-                or VideoRangeType.DOVIWithELHDR10Plus
-            || profile.Contains("HDR10+", StringComparison.OrdinalIgnoreCase)
-            || profile.Contains("HDR10 PLUS", StringComparison.OrdinalIgnoreCase)
-            || profile.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase);
+                or VideoRangeType.DOVIWithELHDR10Plus)
+        {
+            return true;
+        }
+
+        var combined = $"{profile} {title} {displayTitle} {comment}";
+        return combined.Contains("HDR10+", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("HDR10 PLUS", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("ST 2094-40", StringComparison.OrdinalIgnoreCase)
+            || combined.Contains("SMPTE ST 2094", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void DeduplicateBadges(List<BadgeInfo> badges)
@@ -552,38 +632,47 @@ public class QualityDetectionService : IQualityDetectionService
         foreach (var stream in audioStreams)
         {
             var codec = stream.Codec?.ToUpperInvariant() ?? string.Empty;
-            var profile = stream.Profile?.ToUpperInvariant() ?? string.Empty;
+            var profile = stream.Profile ?? string.Empty;
+            var title = stream.Title ?? string.Empty;
+            var displayTitle = stream.DisplayTitle ?? string.Empty;
+            var combined = $"{profile} {title} {displayTitle}";
             var channels = stream.Channels ?? 0;
+            var layout = stream.ChannelLayout ?? string.Empty;
+
+            if (layout.StartsWith("7.1", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 8);
+            else if (layout.StartsWith("5.1", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 6);
+            else if (layout.Equals("stereo", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 2);
+            else if (layout.Equals("mono", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 1);
 
             if (channels > bestChannels) bestChannels = channels;
 
             int priority = -1;
             BadgeInfo? candidate = null;
 
-            if (profile.Contains("ATMOS"))
+            if (combined.Contains("ATMOS", StringComparison.OrdinalIgnoreCase))
             {
                 priority = 7;
                 candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "atmos", ResourceFileName = "badge-atmos.svg" };
             }
-            else if (codec == "TRUEHD")
+            else if (combined.Contains("DTS:X", StringComparison.OrdinalIgnoreCase) || combined.Contains("DTS-X", StringComparison.OrdinalIgnoreCase) || combined.Contains("DTSX", StringComparison.OrdinalIgnoreCase))
             {
                 priority = 6;
-                candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "truehd", ResourceFileName = "badge-truehd.svg" };
-            }
-            else if (codec == "OPUS" || codec.Contains("OPUS") || profile.Contains("OPUS"))
-            {
-                priority = 5;
-                candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "opus", ResourceFileName = "badge-opus.svg" };
-            }
-            else if (profile.Contains("DTS:X") || profile.Contains("DTS-X") || profile.Contains("DTSX"))
-            {
-                priority = 5;
                 candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "dtsx", ResourceFileName = "badge-dtsx.svg" };
             }
-            else if (profile.Contains("DTS-HD MA") || profile.Contains("DTS-HD MASTER") || (codec == "DTS" && profile.Contains("MA")))
+            else if (codec == "TRUEHD" || combined.Contains("TRUEHD", StringComparison.OrdinalIgnoreCase))
+            {
+                priority = 5;
+                candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "truehd", ResourceFileName = "badge-truehd.svg" };
+            }
+            else if (combined.Contains("DTS-HD MA", StringComparison.OrdinalIgnoreCase) || combined.Contains("DTS-HD MASTER", StringComparison.OrdinalIgnoreCase) || (codec == "DTS" && profile.Contains("MA", StringComparison.OrdinalIgnoreCase)))
             {
                 priority = 4;
                 candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "dtshdma", ResourceFileName = "badge-dtshdma.svg" };
+            }
+            else if (codec == "OPUS" || codec.Contains("OPUS") || combined.Contains("OPUS", StringComparison.OrdinalIgnoreCase))
+            {
+                priority = 2;
+                candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "opus", ResourceFileName = "badge-opus.svg" };
             }
 
             if (candidate != null && priority > codecPriority)

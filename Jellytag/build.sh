@@ -2,8 +2,9 @@
 # Build script for JellyTag Jellyfin plugin
 set -e
 
-PLUGIN_DIR="Jellyfin.Plugin.JellyTag"
-OUTPUT_DIR="output"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="$SCRIPT_DIR/Jellyfin.Plugin.JellyTag"
+OUTPUT_DIR="$SCRIPT_DIR/output"
 
 echo "=== Building JellyTag Plugin ==="
 
@@ -13,36 +14,36 @@ mkdir -p "$OUTPUT_DIR"
 
 # Build and publish plugin
 echo "Compiling plugin..."
-cd "$PLUGIN_DIR"
-DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ~/.dotnet/dotnet restore
-DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ~/.dotnet/dotnet publish -c Release -o publish_out
+dotnet publish "$PLUGIN_DIR/Jellyfin.Plugin.JellyTag.csproj" -c Release -o "$PLUGIN_DIR/publish_out"
 
-# Copy necessary files
+# Copy published files
 echo "Copying files..."
-cd ..
-cp "$PLUGIN_DIR/publish_out/Jellyfin.Plugin.JellyTag.dll" "$OUTPUT_DIR/"
-cp "$PLUGIN_DIR/publish_out/SixLabors.ImageSharp.dll" "$OUTPUT_DIR/"
+cp "$PLUGIN_DIR/publish_out"/*.dll "$OUTPUT_DIR/"
+
+VERSION="$(dotnet msbuild "$PLUGIN_DIR/Jellyfin.Plugin.JellyTag.csproj" -getProperty:Version | tr -d '\r\n')"
+if [ -z "$VERSION" ]; then
+    VERSION="2.4.0.0"
+fi
 
 # Create meta.json for the plugin
-cat > "$OUTPUT_DIR/meta.json" << 'EOF'
+cat > "$OUTPUT_DIR/meta.json" << EOF
 {
     "guid": "f4a2e8c1-9b3d-4f7a-b6c5-2d8e1a3f9b04",
     "name": "JellyTag",
     "overview": "Adds quality badges (4K, 1080p, etc.) to media posters and thumbnails.",
     "description": "JellyTag automatically adds quality resolution badges to your media posters and thumbnails. Badges are visible on all clients including web, mobile, TV, and Kodi.",
-    "owner": "Atilili",
+    "owner": "eagleeyetom",
     "category": "General",
-    "version": "1.0.0.0",
-    "targetAbi": "10.11.0.0",
-    "timestamp": "2025-01-29T00:00:00Z"
+    "version": "$VERSION",
+    "targetAbi": "10.11.0.0"
 }
 EOF
 
 # Create ZIP archive
 echo "Creating ZIP archive..."
 cd "$OUTPUT_DIR"
-zip -r "jellytag-1.0.0.0.zip" *.dll meta.json
-cd ..
+zip -r "jellytag-$VERSION.zip" *.dll meta.json
+cd "$SCRIPT_DIR"
 
 echo ""
 echo "=== Build complete ==="
