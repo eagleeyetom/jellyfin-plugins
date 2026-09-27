@@ -75,8 +75,8 @@ Sends on-screen toast notifications when playback starts on any client, displayi
 
 ### Requirements
 
-- Jellyfin 10.11.0 or higher
-- .NET 9 SDK (for building)
+- Jellyfin 12.0.0 or higher
+- .NET 10 SDK (for building)
 
 ## License
 
