@@ -454,21 +454,26 @@ public class MetadataNotifierService : IHostedService
         return false;
     }
 
-    private static bool IsWindowsClient(SessionInfo session)
+    private static bool IsDesktopClient(SessionInfo session)
     {
         var client = session.Client ?? string.Empty;
         var deviceName = session.DeviceName ?? string.Empty;
 
         return client.Contains("Windows", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Linux", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("MacOS", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Darwin", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Jellyfin Media Player", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Jellyfin Theater", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Windows", StringComparison.OrdinalIgnoreCase)
-            || (client.Contains("Jellyfin Web", StringComparison.OrdinalIgnoreCase) && deviceName.Contains("Windows", StringComparison.OrdinalIgnoreCase));
+            || deviceName.Contains("Linux", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Mac", StringComparison.OrdinalIgnoreCase)
+            || (client.Contains("Jellyfin Web", StringComparison.OrdinalIgnoreCase) && (deviceName.Contains("Windows", StringComparison.OrdinalIgnoreCase) || deviceName.Contains("Linux", StringComparison.OrdinalIgnoreCase) || deviceName.Contains("Mac", StringComparison.OrdinalIgnoreCase)));
     }
 
     private static string GetHdrInfo(BaseItem item, SessionInfo session, PluginConfiguration config)
     {
-        if (config.WindowsSdrMode && IsWindowsClient(session))
+        if (config.DesktopSdrMode && IsDesktopClient(session))
         {
             if (config.ShowSdr)
             {
