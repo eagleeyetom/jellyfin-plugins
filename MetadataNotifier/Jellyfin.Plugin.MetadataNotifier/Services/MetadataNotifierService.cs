@@ -109,14 +109,12 @@ public class MetadataNotifierService : IHostedService
             // Short delay to allow client player UI to stabilize and transcode jobs to register
             await Task.Delay(1500).ConfigureAwait(false);
 
-            // Re-fetch session from manager to ensure it is still playing and has updated transcoding info
+            // Re-fetch session from manager to ensure it has updated transcoding info
             var activeSession = _sessionManager.Sessions.FirstOrDefault(s => string.Equals(s.Id, session.Id, StringComparison.Ordinal));
-            if (activeSession == null || !activeSession.IsActive)
+            if (activeSession != null)
             {
-                return;
+                session = activeSession;
             }
-
-            session = activeSession;
 
             // Remember initial active audio track so progress event won't immediately trigger
             int? initialAudioIndex = session.PlayState?.AudioStreamIndex;
