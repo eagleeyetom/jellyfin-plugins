@@ -13,7 +13,7 @@
         "changelog": "Upgrade plugin target framework to .NET 10 and Jellyfin 12 packages",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/metadatanotifier-1.2.1.0/metadatanotifier-1.2.1.0.zip",
-        "checksum": "6D0612FCEAF770D9C5BEFF0C37768A97",
+        "checksum": "BC3A1E049D45A03DAA18ECB9465652FE",
         "timestamp": "2026-09-27T21:23:00Z"
       },
       {
