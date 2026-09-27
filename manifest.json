@@ -99,7 +99,7 @@
         "changelog": "Upgrade plugin target framework to .NET 10 and Jellyfin 12 packages",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.4.2.0/jellytag-2.4.2.0.zip",
-        "checksum": "5F320C6307ACF4B15B30F2D4DEB8276D",
+        "checksum": "DD2BEDC0A94ECE6E900AF10476332217",
         "timestamp": "2026-09-27T21:18:00Z"
       },
       {
