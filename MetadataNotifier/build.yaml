@@ -1,10 +1,10 @@
 name: Metadata Notifier
 assemblyName: Jellyfin.Plugin.MetadataNotifier
-targetAbi: 10.11.0.0
+targetAbi: 12.0.0.0
 owner: eagleeyetom
 category: General
 artifacts:
-  - path: Jellyfin.Plugin.MetadataNotifier/bin/Release/net9.0/Jellyfin.Plugin.MetadataNotifier.dll
+  - path: Jellyfin.Plugin.MetadataNotifier/bin/Release/net10.0/Jellyfin.Plugin.MetadataNotifier.dll
     type: Assembly
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
