@@ -1237,7 +1237,35 @@
         });
 
         document.querySelector('#ExportConfig').addEventListener('click', function() {
-            window.location = ApiClient.getUrl('JellyTag/ExportConfig') + '?api_key=' + ApiClient.accessToken();
+            var token = ApiClient.accessToken();
+            var headers = {};
+            if (token) headers['Authorization'] = 'MediaBrowser Token="' + token + '"';
+
+            Dashboard.showLoadingMsg();
+            fetch(ApiClient.getUrl('JellyTag/ExportConfig'), { headers: headers })
+                .then(function(response) {
+                    Dashboard.hideLoadingMsg();
+                    if (!response.ok) {
+                        return response.text().then(function(text) {
+                            throw new Error(text || ('Export failed with status ' + response.status));
+                        });
+                    }
+                    return response.blob();
+                })
+                .then(function(blob) {
+                    var url = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'jellytag-config.json';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                })
+                .catch(function(err) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Failed to export configuration: ' + (err.message || err));
+                });
         });
         document.querySelector('#ImportConfigBtn').addEventListener('click', function() { document.querySelector('#ImportConfigFile').click(); });
         document.querySelector('#ImportConfigFile').addEventListener('change', function() {
