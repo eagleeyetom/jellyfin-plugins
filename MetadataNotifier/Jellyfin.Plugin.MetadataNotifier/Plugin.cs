@@ -54,7 +54,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             new PluginPageInfo
             {
                 Name = "MetadataNotifier",
-                EmbeddedResourcePath = GetType().Namespace + ".Configuration.configPage.html"
+                DisplayName = "Metadata Notifier",
+                EmbeddedResourcePath = GetType().Namespace + ".Configuration.configPage.html",
+                EnableInMainMenu = true,
+                MenuSection = "Extensions",
+                MenuIcon = "notifications"
             }
         };
     }

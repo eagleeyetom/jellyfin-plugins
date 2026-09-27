@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <title>Metadata Notifier</title>
 </head>
+
 <body>
     <div id="MetadataNotifierConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
         data-require="emby-input,emby-button,emby-checkbox,emby-select">
@@ -15,7 +17,8 @@
                     <div class="verticalSection">
                         <p class="description">
                             Sends on-screen toast notifications when playback starts on any client,
-                            displaying HDR metadata systems (HDR10+, Dolby Vision, HDR10, HLG, and SDR), audio codecs, and transcoding status.
+                            displaying HDR metadata systems (HDR10+, Dolby Vision, HDR10, HLG, and SDR), audio codecs,
+                            and transcoding status.
                         </p>
                     </div>
                     <div class="verticalSection">
@@ -34,23 +37,49 @@
                         </div>
                         <div class="inputContainer" style="margin-top: 1em;">
                             <label class="inputLabel" for="NotificationDurationMs">Notification Duration (ms)</label>
-                            <input type="number" id="NotificationDurationMs" min="1000" max="30000" step="500" is="emby-input" />
+                            <input type="number" id="NotificationDurationMs" min="1000" max="30000" step="500"
+                                is="emby-input" />
                         </div>
                     </div>
                     <div class="verticalSection">
                         <h3 class="sectionTitle">Information to Display</h3>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowSdr" is="emby-checkbox" /><span>Show SDR</span></label></div>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowHdr10Plus" is="emby-checkbox" /><span>Show HDR10+</span></label></div>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowHdr10" is="emby-checkbox" /><span>Show HDR10</span></label></div>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowDolbyVision" is="emby-checkbox" /><span>Show Dolby Vision</span></label></div>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowHlg" is="emby-checkbox" /><span>Show HLG</span></label></div>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowAudio" is="emby-checkbox" /><span>Show Audio</span></label></div>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowTranscoding" is="emby-checkbox" /><span>Show Transcoding</span></label></div>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowDirectPlay" is="emby-checkbox" /><span>Show Direct Play</span></label></div>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="ShowBitrate" is="emby-checkbox" /><span>Show Bitrate</span></label></div>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="UseDetailedVideoNames" is="emby-checkbox" /><span>Use Technical Video Names</span></label></div>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="UseDetailedAudioNames" is="emby-checkbox" /><span>Use Technical Audio Names</span></label></div>
-                        <div class="checkboxContainer"><label><input type="checkbox" id="SuppressDvOnSamsung" is="emby-checkbox" /><span>Suppress Dolby Vision on Samsung</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription"><label
+                                class="emby-checkbox-label"><input type="checkbox" id="ShowSdr"
+                                    is="emby-checkbox" /><span>Show SDR</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription"><label
+                                class="emby-checkbox-label"><input type="checkbox" id="ShowHdr10Plus"
+                                    is="emby-checkbox" /><span>Show HDR10+</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription"><label
+                                class="emby-checkbox-label"><input type="checkbox" id="ShowHdr10"
+                                    is="emby-checkbox" /><span>Show HDR10</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription"><label
+                                class="emby-checkbox-label"><input type="checkbox" id="ShowDolbyVision"
+                                    is="emby-checkbox" /><span>Show Dolby Vision</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription"><label
+                                class="emby-checkbox-label"><input type="checkbox" id="ShowHlg"
+                                    is="emby-checkbox" /><span>Show HLG</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription"><label
+                                class="emby-checkbox-label"><input type="checkbox" id="ShowAudio"
+                                    is="emby-checkbox" /><span>Show Audio</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription"><label
+                                class="emby-checkbox-label"><input type="checkbox" id="ShowTranscoding"
+                                    is="emby-checkbox" /><span>Show Transcoding</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription"><label
+                                class="emby-checkbox-label"><input type="checkbox" id="ShowDirectPlay"
+                                    is="emby-checkbox" /><span>Show Direct Play</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription"><label
+                                class="emby-checkbox-label"><input type="checkbox" id="ShowBitrate"
+                                    is="emby-checkbox" /><span>Show Bitrate</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription"><label
+                                class="emby-checkbox-label"><input type="checkbox" id="UseDetailedVideoNames"
+                                    is="emby-checkbox" /><span>Use Technical Video Names</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription"><label
+                                class="emby-checkbox-label"><input type="checkbox" id="UseDetailedAudioNames"
+                                    is="emby-checkbox" /><span>Use Technical Audio Names</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription"><label
+                                class="emby-checkbox-label"><input type="checkbox" id="SuppressDvOnSamsung"
+                                    is="emby-checkbox" /><span>Suppress Dolby Vision on Samsung (Fallback to
+                                    HDR10/HDR10+)</span></label></div>
                     </div>
                     <div>
                         <button is="emby-button" type="submit" class="raised button-submit block">Save</button>
@@ -113,13 +142,16 @@
                     config.ShowHlg = document.querySelector('#ShowHlg').checked;
                     config.SuppressDvOnSamsung = document.querySelector('#SuppressDvOnSamsung').checked;
                     const result = await ApiClient.updatePluginConfiguration(pluginId, config);
+                    Dashboard.hideLoadingMsg();
                     Dashboard.processPluginConfigurationUpdateResult(result);
                 } catch (error) {
                     console.error('Error saving configuration:', error);
                     Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Error saving configuration');
                 }
             }
         </script>
     </div>
 </body>
+
 </html>
