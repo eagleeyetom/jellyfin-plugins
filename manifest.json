@@ -10,10 +10,10 @@
     "versions": [
       {
         "version": "1.2.0.0",
-        "changelog": "Add transcode reasons, live audio track change notifications, audio conversion details (Source ➔ Target), custom notification template, user and library exclusions, option to ignore music playback, improved multilayer HDR10+ detection, and accurate bitrate calculation.",
+        "changelog": "Add transcode reasons, live audio track change notifications, audio conversion details (Source \u2794 Target), custom notification template, user and library exclusions, option to ignore music playback, improved multilayer HDR10+ detection, and accurate bitrate calculation.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/metadatanotifier-1.2.0.0/metadatanotifier-1.2.0.0.zip",
-        "checksum": "00000000000000000000000000000000",
+        "checksum": "5DEEE1B6CC75F3E925BC4573E695ED77",
         "timestamp": "2026-09-27T13:00:00Z"
       },
       {
