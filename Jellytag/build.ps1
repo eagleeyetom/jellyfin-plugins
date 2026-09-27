@@ -28,7 +28,7 @@ $meta = @"
     "owner": "eagleeyetom",
     "category": "General",
     "version": "$Version",
-    "targetAbi": "10.11.0.0"
+    "targetAbi": "12.0.0.0"
 }
 "@
 Set-Content -Path (Join-Path $OutputDir "meta.json") -Value $meta -Encoding utf8
