@@ -1,6 +1,6 @@
 name: "JellyTag"
 guid: "f4a2e8c1-9b3d-4f7a-b6c5-2d8e1a3f9b04"
-version: "2.4.0.0"
+version: "2.4.1.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "JellyTag"
@@ -19,6 +19,17 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.JellyTag.dll"
 changelog: |
+  ## v2.4.1.0 (2026-09-27)
+  - Fix 401 error on settings export by using fetch with Authorization header and blob download
+  - Fix series and season quality aggregation to select highest quality HDR and Audio tracks instead of first episode's badges
+  - Increase item query limit for series to inspect up to 50 episodes
+  - Improve Atmos and DTS:X detection to include stream Title and DisplayTitle for Web-DL (EAC3) compatibility
+  - Support SMPTE ST 2094-40 metadata markers in video stream title/comment for HDR10+ detection
+  - Adjust audio codec priority hierarchy so lossless (TrueHD, DTS-HD MA) and immersive (Atmos, DTS:X) tracks take precedence over lossy Opus
+  - Respect ChannelLayout and exclude commentary/audio description tracks from primary badge selection
+  - Fix excluded libraries GUID comparison to support both formatted and unformatted GUID strings
+  - Include HideHdrOnWindowsClients in image cache fingerprint calculation
+  - Fix resolution detection, implement full Opus audio codec support, update UI configuration, and improve brand logo generation for black backgrounds
   ## v2.4.0.0 (2026-09-26)
   - New "Brand Logo" badge style using real logos for Dolby Vision, Dolby Atmos, Dolby TrueHD,
     HDR10, HDR10+, DTS:X, DTS-HD MA, AV1, H.264 and VP9; badges without a logo keep the generated text art
