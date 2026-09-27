@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
@@ -60,9 +60,9 @@ jobs:
           echo "manifest_branch=$manifest_branch" >> "$GITHUB_OUTPUT"
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
       - name: Publish plugin
         run: dotnet publish "$PROJECT" --configuration Release --output "$RUNNER_TEMP/metadatanotifier-publish"
