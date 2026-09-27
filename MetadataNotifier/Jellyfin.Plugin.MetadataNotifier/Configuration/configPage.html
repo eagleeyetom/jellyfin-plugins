@@ -77,6 +77,7 @@
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowHlg" is="emby-checkbox" /><span>Show HLG</span></label></div>
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressDvOnSamsung" is="emby-checkbox" /><span>Suppress Dolby Vision on Samsung & Android (Fallback to HDR10/HDR10+)</span></label></div>
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressHdr10PlusOnLg" is="emby-checkbox" /><span>Suppress HDR10+ on non-supporting clients (LG, Sony, Amazon, Roku - fallback to HDR10/Dolby Vision)</span></label></div>
+                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="WindowsSdrMode" is="emby-checkbox" /><span>Windows SDR Mode (Force SDR on Windows)</span></label></div>
                             </div>
                         </details>
                         <details class="meta-section">
@@ -224,6 +225,7 @@
                     document.querySelector('#UseDetailedAudioNames').checked = config.UseDetailedAudioNames ?? false;
                     document.querySelector('#SuppressDvOnSamsung').checked = config.SuppressDvOnSamsung ?? true;
                     document.querySelector('#SuppressHdr10PlusOnLg').checked = config.SuppressHdr10PlusOnLg ?? true;
+                    document.querySelector('#WindowsSdrMode').checked = config.WindowsSdrMode ?? false;
                     document.querySelector('#CustomTemplate').value = config.CustomTemplate ?? '';
 
                     await loadLibraries(config.ExcludedLibraryIds || []);
@@ -457,6 +459,7 @@
                     config.UseDetailedAudioNames = document.querySelector('#UseDetailedAudioNames').checked;
                     config.SuppressDvOnSamsung = document.querySelector('#SuppressDvOnSamsung').checked;
                     config.SuppressHdr10PlusOnLg = document.querySelector('#SuppressHdr10PlusOnLg').checked;
+                    config.WindowsSdrMode = document.querySelector('#WindowsSdrMode').checked;
                     config.CustomTemplate = document.querySelector('#CustomTemplate').value.trim();
 
                     // Collect excluded libraries (unchecked)

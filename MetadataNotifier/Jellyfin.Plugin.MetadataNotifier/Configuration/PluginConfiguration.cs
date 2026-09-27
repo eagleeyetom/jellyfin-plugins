@@ -130,6 +130,11 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool IgnoreAudioMedia { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether to force SDR-only mode on Windows clients.
+    /// </summary>
+    public bool WindowsSdrMode { get; set; } = false;
+
+    /// <summary>
     /// Gets or sets a custom notification template, e.g. "{hdr} • {audio} • {playback} • {bitrate}".
     /// If empty, default formatting is used.
     /// </summary>

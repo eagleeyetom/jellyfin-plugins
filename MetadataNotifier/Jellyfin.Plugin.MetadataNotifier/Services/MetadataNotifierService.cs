@@ -454,8 +454,29 @@ public class MetadataNotifierService : IHostedService
         return false;
     }
 
+    private static bool IsWindowsClient(SessionInfo session)
+    {
+        var client = session.Client ?? string.Empty;
+        var deviceName = session.DeviceName ?? string.Empty;
+
+        return client.Contains("Windows", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Jellyfin Media Player", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Jellyfin Theater", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Windows", StringComparison.OrdinalIgnoreCase)
+            || (client.Contains("Jellyfin Web", StringComparison.OrdinalIgnoreCase) && deviceName.Contains("Windows", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static string GetHdrInfo(BaseItem item, SessionInfo session, PluginConfiguration config)
     {
+        if (config.WindowsSdrMode && IsWindowsClient(session))
+        {
+            if (config.ShowSdr)
+            {
+                return "SDR";
+            }
+            return string.Empty;
+        }
+
         var mediaStreams = item.GetMediaStreams();
         var videoStream = mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
         if (videoStream == null)
