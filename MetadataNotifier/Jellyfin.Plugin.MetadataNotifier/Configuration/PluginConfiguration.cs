@@ -25,6 +25,13 @@ public class PluginConfiguration : BasePluginConfiguration
         ShowDolbyVision = true;
         ShowHlg = true;
         SuppressDvOnSamsung = true;
+        ShowTranscodeReasons = true;
+        ShowAudioConversion = true;
+        NotifyOnAudioTrackChange = true;
+        IgnoreAudioMedia = true;
+        CustomTemplate = string.Empty;
+        ExcludedLibraryIds = new List<string>();
+        ExcludedUserIds = new List<string>();
     }
 
     /// <summary>
@@ -101,4 +108,40 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets a value indicating whether to suppress Dolby Vision on Samsung devices.
     /// </summary>
     public bool SuppressDvOnSamsung { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to show transcode reasons when transcoding occurs.
+    /// </summary>
+    public bool ShowTranscodeReasons { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to show audio conversion (Source -> Target).
+    /// </summary>
+    public bool ShowAudioConversion { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to notify when user switches audio track during playback.
+    /// </summary>
+    public bool NotifyOnAudioTrackChange { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to ignore pure audio/music playback.
+    /// </summary>
+    public bool IgnoreAudioMedia { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a custom notification template, e.g. "{hdr} • {audio} • {playback} • {bitrate}".
+    /// If empty, default formatting is used.
+    /// </summary>
+    public string CustomTemplate { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the list of excluded library folder IDs.
+    /// </summary>
+    public List<string> ExcludedLibraryIds { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the list of excluded user IDs.
+    /// </summary>
+    public List<string> ExcludedUserIds { get; set; } = new();
 }

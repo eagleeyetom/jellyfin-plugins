@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,6 +9,7 @@ using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.MetadataNotifier.Configuration;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -19,12 +21,13 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.MetadataNotifier.Services;
 
 /// <summary>
-/// Background service that listens for playback start events and sends media info toast notifications.
+/// Background service that listens for playback events and sends media info toast notifications.
 /// </summary>
 public class MetadataNotifierService : IHostedService
 {
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<MetadataNotifierService> _logger;
+    private readonly ConcurrentDictionary<string, int> _lastActiveAudioTrack = new(StringComparer.Ordinal);
 
     private static readonly Regex Hdr10PlusPathRegex = new(
         @"(?:[\.\-_\[\(]HDR10Plus[\.\-_\]\)]|[\.\-_\[\(]HDR10\+[\.\-_\]\)]|\bHDR10Plus\b|\bHDR10\+\b)",
@@ -51,6 +54,8 @@ public class MetadataNotifierService : IHostedService
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _sessionManager.PlaybackStart += OnPlaybackStart;
+        _sessionManager.PlaybackProgress += OnPlaybackProgress;
+        _sessionManager.PlaybackStopped += OnPlaybackStopped;
         _logger.LogInformation("Metadata Notifier service started.");
         return Task.CompletedTask;
     }
@@ -59,8 +64,19 @@ public class MetadataNotifierService : IHostedService
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _sessionManager.PlaybackStart -= OnPlaybackStart;
+        _sessionManager.PlaybackProgress -= OnPlaybackProgress;
+        _sessionManager.PlaybackStopped -= OnPlaybackStopped;
+        _lastActiveAudioTrack.Clear();
         _logger.LogInformation("Metadata Notifier service stopped.");
         return Task.CompletedTask;
+    }
+
+    private void OnPlaybackStopped(object? sender, PlaybackStopEventArgs e)
+    {
+        if (e.Session != null)
+        {
+            _lastActiveAudioTrack.TryRemove(e.Session.Id, out _);
+        }
     }
 
     private async void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)
@@ -84,8 +100,13 @@ public class MetadataNotifierService : IHostedService
                 return;
             }
 
+            if (IsUserExcluded(session, config))
+            {
+                return;
+            }
+
             var item = e.Item;
-            if (item == null)
+            if (item == null || ShouldIgnoreItem(item, config))
             {
                 return;
             }
@@ -102,65 +123,58 @@ public class MetadataNotifierService : IHostedService
 
             session = activeSession;
 
-            var parts = new List<string>();
+            // Remember initial active audio track so progress event won't immediately trigger
+            int? initialAudioIndex = session.PlayState?.AudioStreamIndex;
+            if (initialAudioIndex.HasValue)
+            {
+                _lastActiveAudioTrack[session.Id] = initialAudioIndex.Value;
+            }
 
-            // 1. Video Dynamic Range / HDR metadata
+            var hdrInfo = string.Empty;
             if (config.ShowSdr || config.ShowHdr10Plus || config.ShowHdr10 || config.ShowDolbyVision || config.ShowHlg)
             {
-                var hdrInfo = GetHdrInfo(item, session, config);
-                if (!string.IsNullOrEmpty(hdrInfo))
-                {
-                    parts.Add(hdrInfo);
-                }
+                hdrInfo = GetHdrInfo(item, session, config);
             }
 
-            // 2. Audio Codec & Channels for the active track
+            var audioInfo = string.Empty;
             if (config.ShowAudio)
             {
-                var audioInfo = GetAudioInfo(item, session, config);
-                if (!string.IsNullOrEmpty(audioInfo))
-                {
-                    parts.Add(audioInfo);
-                }
+                audioInfo = GetAudioInfo(item, session, config);
             }
 
-            // 3. Transcoding or Direct Play status
+            var playbackInfo = string.Empty;
             if (config.ShowTranscoding || config.ShowDirectPlay)
             {
-                var transcodingInfo = GetTranscodingInfo(session);
+                var transcodingInfo = GetTranscodingInfo(session, config);
                 if (!string.IsNullOrEmpty(transcodingInfo))
                 {
                     if (config.ShowTranscoding)
                     {
-                        parts.Add(transcodingInfo);
+                        playbackInfo = transcodingInfo;
                     }
                 }
                 else
                 {
                     if (config.ShowDirectPlay)
                     {
-                        parts.Add("Direct Play");
+                        playbackInfo = "Direct Play";
                     }
                 }
             }
 
-            // 4. Bitrate
+            var bitrateInfo = string.Empty;
             if (config.ShowBitrate)
             {
-                var bitrateInfo = GetBitrateInfo(item, session);
-                if (!string.IsNullOrEmpty(bitrateInfo))
-                {
-                    parts.Add(bitrateInfo);
-                }
+                bitrateInfo = GetBitrateInfo(item, session);
             }
 
-            if (parts.Count == 0)
+            var header = GetNotificationHeader(item);
+            var messageText = BuildMessageText(config, hdrInfo, audioInfo, playbackInfo, bitrateInfo, header);
+
+            if (string.IsNullOrWhiteSpace(messageText))
             {
                 return;
             }
-
-            var messageText = string.Join(" • ", parts);
-            var header = GetNotificationHeader(item);
 
             _logger.LogInformation(
                 "Sending metadata toast to session {SessionId} ({Client} / {Device}): {Header} | {Message}",
@@ -187,6 +201,173 @@ public class MetadataNotifierService : IHostedService
         {
             _logger.LogError(ex, "Error sending metadata toast notification.");
         }
+    }
+
+    private async void OnPlaybackProgress(object? sender, PlaybackProgressEventArgs e)
+    {
+        try
+        {
+            var config = Plugin.Instance?.Configuration;
+            if (config == null || !config.IsEnabled || !config.NotifyOnAudioTrackChange)
+            {
+                return;
+            }
+
+            var session = e.Session;
+            if (session == null || !session.IsActive)
+            {
+                return;
+            }
+
+            if (config.TargetSamsungOnly && !IsSamsungClient(session))
+            {
+                return;
+            }
+
+            if (IsUserExcluded(session, config))
+            {
+                return;
+            }
+
+            var item = e.Item;
+            if (item == null || ShouldIgnoreItem(item, config))
+            {
+                return;
+            }
+
+            int? currentAudioIndex = session.PlayState?.AudioStreamIndex;
+            if (!currentAudioIndex.HasValue)
+            {
+                return;
+            }
+
+            if (_lastActiveAudioTrack.TryGetValue(session.Id, out var previousIndex)
+                && previousIndex != currentAudioIndex.Value)
+            {
+                _lastActiveAudioTrack[session.Id] = currentAudioIndex.Value;
+
+                var audioInfo = GetAudioInfo(item, session, config);
+                if (string.IsNullOrEmpty(audioInfo))
+                {
+                    return;
+                }
+
+                var header = GetNotificationHeader(item);
+                var toastText = $"Audio: {audioInfo}";
+
+                _logger.LogInformation(
+                    "Audio track changed in session {SessionId} ({Client}): {Text}",
+                    session.Id,
+                    session.Client,
+                    toastText);
+
+                var messageCommand = new MessageCommand
+                {
+                    Header = header,
+                    Text = toastText,
+                    TimeoutMs = config.NotificationDurationMs
+                };
+
+                await _sessionManager.SendMessageCommand(
+                    session.Id,
+                    session.Id,
+                    messageCommand,
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling audio track change event.");
+        }
+    }
+
+    private static string BuildMessageText(
+        PluginConfiguration config,
+        string hdrInfo,
+        string audioInfo,
+        string playbackInfo,
+        string bitrateInfo,
+        string header)
+    {
+        if (!string.IsNullOrWhiteSpace(config.CustomTemplate))
+        {
+            var formatted = config.CustomTemplate
+                .Replace("{hdr}", hdrInfo, StringComparison.OrdinalIgnoreCase)
+                .Replace("{audio}", audioInfo, StringComparison.OrdinalIgnoreCase)
+                .Replace("{playback}", playbackInfo, StringComparison.OrdinalIgnoreCase)
+                .Replace("{mode}", playbackInfo, StringComparison.OrdinalIgnoreCase)
+                .Replace("{bitrate}", bitrateInfo, StringComparison.OrdinalIgnoreCase)
+                .Replace("{title}", header, StringComparison.OrdinalIgnoreCase);
+
+            // Clean up any double bullets, leading/trailing bullets, or extra spaces left by empty placeholders
+            formatted = Regex.Replace(formatted, @"(?:\s*[•\|\-]\s*)+", " • ").Trim(' ', '•', '|', '-');
+            if (!string.IsNullOrWhiteSpace(formatted))
+            {
+                return formatted;
+            }
+        }
+
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(hdrInfo)) parts.Add(hdrInfo);
+        if (!string.IsNullOrEmpty(audioInfo)) parts.Add(audioInfo);
+        if (!string.IsNullOrEmpty(playbackInfo)) parts.Add(playbackInfo);
+        if (!string.IsNullOrEmpty(bitrateInfo)) parts.Add(bitrateInfo);
+
+        return string.Join(" • ", parts);
+    }
+
+    private static bool ShouldIgnoreItem(BaseItem item, PluginConfiguration config)
+    {
+        if (config.IgnoreAudioMedia && (item is Audio || item.MediaType == MediaType.Audio))
+        {
+            return true;
+        }
+
+        if (config.ExcludedLibraryIds != null && config.ExcludedLibraryIds.Count > 0)
+        {
+            var libId = GetLibraryId(item);
+            if (libId.HasValue)
+            {
+                var idStr = libId.Value.ToString();
+                var idN = libId.Value.ToString("N");
+                if (config.ExcludedLibraryIds.Contains(idStr, StringComparer.OrdinalIgnoreCase)
+                    || config.ExcludedLibraryIds.Contains(idN, StringComparer.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsUserExcluded(SessionInfo session, PluginConfiguration config)
+    {
+        if (config.ExcludedUserIds != null && config.ExcludedUserIds.Count > 0 && session.UserId != Guid.Empty)
+        {
+            var userIdStr = session.UserId.ToString();
+            var userIdN = session.UserId.ToString("N");
+            return config.ExcludedUserIds.Contains(userIdStr, StringComparer.OrdinalIgnoreCase)
+                || config.ExcludedUserIds.Contains(userIdN, StringComparer.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    private static Guid? GetLibraryId(BaseItem item)
+    {
+        var parent = item;
+        while (parent != null)
+        {
+            if (parent is Folder folder && folder.IsTopParent)
+            {
+                return folder.Id;
+            }
+
+            parent = parent.GetParent();
+        }
+
+        return item.ParentId != Guid.Empty ? item.ParentId : null;
     }
 
     private static string GetNotificationHeader(BaseItem item)
@@ -541,8 +722,38 @@ public class MetadataNotifierService : IHostedService
         }
 
         string channelStr = FormatAudioChannels(audioStream);
+        string displayAudio = !string.IsNullOrEmpty(channelStr) ? $"{displayCodec} {channelStr}" : displayCodec;
 
-        return !string.IsNullOrEmpty(channelStr) ? $"{displayCodec} {channelStr}" : displayCodec;
+        // Audio conversion visualization: e.g. "Dolby TrueHD 7.1 ➔ Dolby Digital 5.1"
+        if (config.ShowAudioConversion
+            && session.TranscodingInfo != null
+            && !session.TranscodingInfo.IsAudioDirect
+            && !string.IsNullOrWhiteSpace(session.TranscodingInfo.AudioCodec))
+        {
+            var targetCodec = GetBaseCodec(session.TranscodingInfo.AudioCodec.ToUpperInvariant(), config.UseDetailedAudioNames);
+            var targetChannels = session.TranscodingInfo.AudioChannels.HasValue
+                ? FormatChannelCount(session.TranscodingInfo.AudioChannels.Value)
+                : string.Empty;
+
+            var targetAudio = !string.IsNullOrEmpty(targetChannels) ? $"{targetCodec} {targetChannels}" : targetCodec;
+            return $"{displayAudio} ➔ {targetAudio}";
+        }
+
+        return displayAudio;
+    }
+
+    private static string FormatChannelCount(int channels)
+    {
+        return channels switch
+        {
+            8 => "7.1",
+            7 => "6.1",
+            6 => "5.1",
+            3 => "2.1",
+            2 => "2.0",
+            1 => "Mono",
+            _ => channels > 0 ? $"{channels}ch" : string.Empty
+        };
     }
 
     private static string FormatAudioChannels(MediaStream audioStream)
@@ -559,16 +770,7 @@ public class MetadataNotifierService : IHostedService
             if (channelLayout.Equals("mono", StringComparison.OrdinalIgnoreCase)) return "Mono";
         }
 
-        return channels switch
-        {
-            8 => "7.1",
-            7 => "6.1",
-            6 => "5.1",
-            3 => "2.1",
-            2 => "2.0",
-            1 => "Mono",
-            _ => channels > 0 ? $"{channels}ch" : string.Empty
-        };
+        return FormatChannelCount(channels);
     }
 
     private static string GetBaseCodec(string codec, bool detailed)
@@ -607,7 +809,7 @@ public class MetadataNotifierService : IHostedService
         };
     }
 
-    private static string? GetTranscodingInfo(SessionInfo session)
+    private static string? GetTranscodingInfo(SessionInfo session, PluginConfiguration config)
     {
         var transcodeInfo = session.TranscodingInfo;
         if (transcodeInfo == null)
@@ -618,22 +820,60 @@ public class MetadataNotifierService : IHostedService
         var videoTranscode = !transcodeInfo.IsVideoDirect;
         var audioTranscode = !transcodeInfo.IsAudioDirect;
 
+        string baseMode;
         if (videoTranscode && audioTranscode)
         {
-            return "Transcoding (Video & Audio)";
+            baseMode = "Transcoding (Video & Audio)";
         }
-
-        if (videoTranscode)
+        else if (videoTranscode)
         {
-            return "Transcoding (Video)";
+            baseMode = "Transcoding (Video)";
         }
-
-        if (audioTranscode)
+        else if (audioTranscode)
         {
-            return "Transcoding (Audio)";
+            baseMode = "Transcoding (Audio)";
+        }
+        else
+        {
+            baseMode = "Direct Stream";
         }
 
-        return "Direct Stream";
+        if (config.ShowTranscodeReasons && (int)transcodeInfo.TranscodeReasons != 0)
+        {
+            var reasons = Enum.GetValues<TranscodeReason>()
+                .Where(r => (int)r != 0 && transcodeInfo.TranscodeReasons.HasFlag(r))
+                .Select(FormatTranscodeReason)
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            var reasonsStr = string.Join(", ", reasons);
+            if (!string.IsNullOrEmpty(reasonsStr))
+            {
+                return $"{baseMode}: {reasonsStr}";
+            }
+        }
+
+        return baseMode;
+    }
+
+    private static string FormatTranscodeReason(TranscodeReason reason)
+    {
+        return reason switch
+        {
+            TranscodeReason.ContainerNotSupported => "Container not supported",
+            TranscodeReason.VideoCodecNotSupported => "Video codec not supported",
+            TranscodeReason.AudioCodecNotSupported => "Audio codec not supported",
+            TranscodeReason.SubtitleCodecNotSupported => "Subtitles incompatible",
+            TranscodeReason.AudioChannelsNotSupported => "Audio channels not supported",
+            TranscodeReason.AudioBitrateNotSupported => "Audio bitrate exceeded",
+            TranscodeReason.VideoBitrateNotSupported => "Bitrate limit exceeded",
+            TranscodeReason.VideoResolutionNotSupported => "Resolution not supported",
+            TranscodeReason.VideoProfileNotSupported => "Video profile not supported",
+            TranscodeReason.DirectPlayError => "Direct Play error",
+            TranscodeReason.SecondaryAudioNotSupported => "Secondary audio not supported",
+            TranscodeReason.RefFramesNotSupported => "Reference frames not supported",
+            TranscodeReason.VideoRangeTypeNotSupported => "HDR range not supported",
+            _ => reason.ToString()
+        };
     }
 
     private static string GetBitrateInfo(BaseItem item, SessionInfo session)
