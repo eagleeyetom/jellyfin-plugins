@@ -135,7 +135,7 @@
                                     </select>
                                 </div>
                                 <div class="fieldDescription" style="margin-bottom: 0.5em; font-weight: bold;">Live Preview</div>
-                                <div id="ToastPreviewContainer" style="position: relative; height: 160px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.2); overflow: hidden; display: flex; align-items: flex-end; justify-content: flex-end; padding: 16px; margin-bottom: 1em;">
+                                <div id="ToastPreviewContainer" style="position: relative; height: 160px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.2); overflow: hidden; display: flex; align-items: flex-end; justify-content: flex-start; padding: 16px; margin-bottom: 1em;">
                                     <div id="ToastPreviewElement" style="background: rgba(28, 28, 30, 0.95); color: #fff; padding: 12px 18px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); font-family: sans-serif; font-size: 14px; max-width: 380px; width: 100%; transition: all 0.3s ease;">
                                         <div id="ToastPreviewTitle" style="font-weight: bold; margin-bottom: 4px; color: #00a4dc;">Interstellar (2014)</div>
                                         <div id="ToastPreviewMessage" style="color: #ccc; font-size: 13px;">Dolby Vision • Atmos ➔ TrueHD • Direct Play • 45.2 Mbps</div>
@@ -231,6 +231,7 @@
                     await loadUsers(config.ExcludedUserIds || []);
 
                     updateGeneratedCss();
+                    updateToastPreview();
 
                     Dashboard.hideLoadingMsg();
                 } catch (error) {
