@@ -330,6 +330,12 @@
                 '</span>';
         }
 
+        var AVAILABLE_LOGOS = {
+            dv: true, hdr10: true, hdr10plus: true,
+            av1: true, h264: true, vp9: true, mpeg2: true,
+            atmos: true, dtsx: true, truehd: true, dtshdma: true, flac: true, dts: true, eac3: true, opus: true, ac3: true, aac: true
+        };
+
         function panelHTML(p, panelId) {
             var def = PANEL_DEFS[panelId];
             var k = p + panelId;
@@ -354,6 +360,20 @@
             h += num(k + 'Margin', 'Margin (%)', 0, 20, 0.5);
             h += sel(k + 'Style', 'Badge Style', [{v:'Image',l:'Image'},{v:'Text',l:'Text'},{v:'Logo',l:'Brand Logo'}]);
             h += sel(k + 'IconStyle', 'Icon Style', [{v:'Rectangular',l:'Rectangular'},{v:'Square',l:'Square'},{v:'Round',l:'Round'}]);
+
+            // Brand Logo settings (when Style == Logo)
+            var logoBadges = (def.badges || []).filter(function(b) { return !!AVAILABLE_LOGOS[b.key]; });
+            if (logoBadges.length > 0) {
+                h += '<div id="' + k + 'LogoSettings" class="jellytag-text-box hidden">';
+                h += '<div style="font-weight:600; margin-bottom:.3em;">Active Brand Logos</div>';
+                h += '<div class="fieldDescription" style="margin-bottom:.6em;">Select which formats use official brand logos. Unchecked formats fall back to standard badges.</div>';
+                h += '<div class="jellytag-grid">';
+                logoBadges.forEach(function(b) {
+                    h += chk(k + 'Logo_' + b.key, b.label);
+                });
+                h += '</div>';
+                h += '</div>'; // LogoSettings
+            }
 
             // Text settings
             h += '<div id="' + k + 'TextSettings" class="jellytag-text-box hidden">';
@@ -526,13 +546,19 @@
         function setupStyleToggle(key) {
             var styleEl = document.querySelector('#' + key + 'Style');
             var textDiv = document.querySelector('#' + key + 'TextSettings');
-            if (!styleEl || !textDiv) return;
-            function toggle() { styleEl.value === 'Text' ? textDiv.classList.remove('hidden') : textDiv.classList.add('hidden'); }
-            styleEl.addEventListener('change', function() {
+            var logoDiv = document.querySelector('#' + key + 'LogoSettings');
+            if (!styleEl) return;
+            function toggle() {
+                if (textDiv) textDiv.classList.toggle('hidden', styleEl.value !== 'Text');
+                if (logoDiv) logoDiv.classList.toggle('hidden', styleEl.value !== 'Logo');
+            }
+            function onStyleChanged() {
                 toggle();
                 // Switching to or from Brand Logo changes which asset the gallery edits.
                 if (document.getElementById('BadgeGallery')) loadBadgeGallery();
-            });
+            }
+            styleEl.addEventListener('change', onStyleChanged);
+            styleEl.addEventListener('input', onStyleChanged);
             toggle();
         }
 
@@ -659,6 +685,15 @@
                         } else {
                             el.checked = en.indexOf(b.key) >= 0;
                         }
+                    }
+
+                    var logoEl = q(k + 'Logo_' + b.key);
+                    if (logoEl) {
+                        var disLogos = pc.DisabledLogos || [];
+                        logoEl.checked = disLogos.indexOf(b.key) < 0;
+                        logoEl.addEventListener('change', function() {
+                            if (document.getElementById('BadgeGallery')) loadBadgeGallery();
+                        });
                     }
                 });
             }
@@ -865,6 +900,16 @@
         function collectPanelConfig(prefix, panelId, order) {
             var k = prefix + panelId;
             var ov = collectOverrides(k);
+            var def = PANEL_DEFS[panelId];
+            var disabledLogos = [];
+            if (def) {
+                def.badges.forEach(function(b) {
+                    var logoEl = q(k + 'Logo_' + b.key);
+                    if (logoEl && !logoEl.checked) {
+                        disabledLogos.push(b.key);
+                    }
+                });
+            }
             return {
                 Enabled: q(k + 'Enabled').checked,
                 Position: q(k + 'Position').value,
@@ -881,6 +926,7 @@
                 TextColor: ov.textColor,
                 TextCornerRadius: ov.textCornerRadius,
                 EnabledBadges: collectPanelBadges(prefix, panelId),
+                DisabledLogos: disabledLogos,
                 BadgeTypeOverrides: ov.overrides
             };
         }
@@ -1046,7 +1092,9 @@
                 var pid = panelOfBadge[key];
                 if (!pid) return false;
                 var el = q('Poster' + pid + 'Style');
-                return !!el && el.value === 'Logo';
+                if (!el || el.value !== 'Logo') return false;
+                var logoEl = q('Poster' + pid + 'Logo_' + key);
+                return !logoEl || logoEl.checked;
             }
 
             var url = ApiClient.getUrl('JellyTag/CustomBadges');
@@ -1175,15 +1223,17 @@
 
                 loadLibraryCheckboxes(config.ExcludedLibraryIds || []);
                 Dashboard.hideLoadingMsg();
+                loadBadgeGallery();
+                loadCacheStats();
+                toggleOutputQuality();
             }).catch(function(err) {
                 console.error('[JellyTag] Failed to load config:', err);
                 Dashboard.hideLoadingMsg();
                 Dashboard.alert('Failed to load JellyTag configuration.');
+                loadBadgeGallery();
+                loadCacheStats();
+                toggleOutputQuality();
             });
-
-            loadBadgeGallery();
-            loadCacheStats();
-            toggleOutputQuality();
 
             var panel = document.querySelector('.jellytag-preview-panel');
             var form = document.querySelector('#JellyTagConfigForm');
@@ -1206,6 +1256,7 @@
                 collectConfigFromForm(config);
                 ApiClient.updatePluginConfiguration(JellyTagConfig.pluginUniqueId, config).then(function() {
                     Dashboard.processPluginConfigurationUpdateResult();
+                    loadBadgeGallery();
                 });
             });
             return false;

@@ -68,6 +68,7 @@ public partial class JellyTagController : ControllerBase
     {
         _cacheService.ClearCache();
         _qualityService.ClearBadgeCache();
+        _overlayService.ReloadBadges();
         return NoContent();
     }
 
