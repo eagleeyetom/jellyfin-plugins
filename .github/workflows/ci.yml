@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - test
+  pull_request:
+    branches:
+      - main
+      - test
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Run Metadata Notifier unit tests
+        run: dotnet test MetadataNotifier/Jellyfin.Plugin.MetadataNotifier.Tests/Jellyfin.Plugin.MetadataNotifier.Tests.csproj --configuration Release
+
+      - name: Run JellyTag unit tests
+        run: dotnet test Jellytag/Jellyfin.Plugin.JellyTag.Tests/Jellyfin.Plugin.JellyTag.Tests.csproj --configuration Release
+
+      - name: Build all plugins
+        run: |
+          dotnet build MetadataNotifier/Jellyfin.Plugin.MetadataNotifier/Jellyfin.Plugin.MetadataNotifier.csproj --configuration Release
+          dotnet build Jellytag/Jellyfin.Plugin.JellyTag/Jellyfin.Plugin.JellyTag.csproj --configuration Release
+          dotnet build WatchSync/Jellyfin.Plugin.WatchSync/Jellyfin.Plugin.WatchSync.csproj --configuration Release

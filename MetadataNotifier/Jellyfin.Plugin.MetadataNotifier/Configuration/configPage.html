@@ -61,6 +61,17 @@
                             <label class="inputLabel" for="NotificationDurationMs">Notification Duration (ms)</label>
                             <input type="number" id="NotificationDurationMs" min="1000" max="30000" step="500"
                                 is="emby-input" />
+                            <div class="fieldDescription">
+                                Sent to the client as the dismissal timeout. Actual display duration is client-dependent; Jellyfin Web and native clients may use their own toast timing.
+                            </div>
+                        </div>
+                        <div class="inputContainer" style="margin-top: 1em;">
+                            <label class="inputLabel" for="StartupDelayMs">Startup Delay (ms)</label>
+                            <input type="number" id="StartupDelayMs" min="0" max="10000" step="250"
+                                is="emby-input" />
+                            <div class="fieldDescription">
+                                Wait time after playback starts before sending the toast, so transcode info has time to register.
+                            </div>
                         </div>
                     </div>
 
@@ -78,6 +89,9 @@
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressDvOnSamsung" is="emby-checkbox" /><span>Suppress Dolby Vision on Samsung & Android (Fallback to HDR10/HDR10+)</span></label></div>
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressHdr10PlusOnLg" is="emby-checkbox" /><span>Suppress HDR10+ on non-supporting clients (LG, Sony, Amazon, Roku - fallback to HDR10/Dolby Vision)</span></label></div>
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="DesktopSdrMode" is="emby-checkbox" /><span>Tone-mapped SDR detection (when HDR range is unsupported)</span></label></div>
+                                <div class="fieldDescription">
+                                    Only detects server-side tone-mapping. If Jellyfin sends HDR/Dolby Vision directly (no transcode) to a display that can't render it, the client itself does the tone-mapping and this plugin has no way to know — it will still report the source format.
+                                </div>
                             </div>
                         </details>
                         <details class="meta-section">
@@ -123,6 +137,7 @@
                             <div class="meta-section-body">
                                 <div class="fieldDescription" style="margin-bottom: 1em;">
                                     Configure notification title, positioning, and style. Copy the generated CSS below and paste it into your Jellyfin Server Dashboard ➔ General ➔ Custom CSS.
+                                    The preview and CSS apply to Jellyfin Web only; Android, Android TV, Fire TV, and other native clients render toasts using their own UI.
                                 </div>
                                 <div class="selectContainer" style="margin-bottom: 1em;">
                                     <label class="selectLabel" for="CssToastPosition">Toast Position</label>
@@ -138,7 +153,7 @@
                                 <div class="fieldDescription" style="margin-bottom: 0.5em; font-weight: bold;">Live Preview</div>
                                 <div id="ToastPreviewContainer" style="position: relative; height: 160px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.2); overflow: hidden; display: flex; align-items: flex-end; justify-content: flex-start; padding: 16px; margin-bottom: 1em;">
                                     <div id="ToastPreviewElement" style="background: rgba(28, 28, 30, 0.95); color: #fff; padding: 12px 18px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); font-family: sans-serif; font-size: 14px; max-width: 380px; width: 100%; transition: all 0.3s ease;">
-                                        <div id="ToastPreviewMessage" style="color: #ccc; font-size: 13px;">Dolby Vision • Atmos ➔ TrueHD • Direct Play • 45.2 Mbps</div>
+                                        <div id="ToastPreviewMessage" style="color: #ccc; font-size: 13px;">Dolby Vision • Dolby Atmos • Direct Play • 45.2 Mbps</div>
                                     </div>
                                 </div>
                                 <div class="inputContainer" style="margin-bottom: 1em;">
@@ -178,6 +193,42 @@
                         </details>
                     </div>
 
+                    <!-- Fullscreen Toast Fix -->
+                    <div class="verticalSection">
+                        <details class="meta-section">
+                            <summary>Fullscreen Toast Fix (Web Browser)</summary>
+                            <div class="meta-section-body">
+                                <div class="fieldDescription" style="margin-bottom: 1em; padding: 0.75em 1em; border-left: 3px solid #e6a817; background: rgba(230,168,23,0.08); border-radius: 0 4px 4px 0;">
+                                    ⚠️ <strong>Patches Jellyfin Web's <code>index.html</code> dynamically on HTTP request.</strong><br>
+                                    Disabled by default. Enable only if you experience missing toasts during browser fullscreen playback.
+                                </div>
+                                <div class="fieldDescription" style="margin-bottom: 0.75em;">
+                                    <strong>Purpose:</strong> When watching in a web browser, HTML5 fullscreen mode places the video player in a dedicated top-layer context. Because Jellyfin's notification container (<code>.toastContainer</code>) lives outside that element in the document body, toasts get hidden behind the video during fullscreen playback (or appear only on the first play/page load).
+                                </div>
+                                <div class="fieldDescription" style="margin-bottom: 0.75em;">
+                                    <strong>Method:</strong> When enabled, server middleware intercepts HTTP requests for <code>index.html</code> and injects a lightweight script. The script listens for fullscreen changes and dynamically moves <code>.toastContainer</code> inside the active fullscreen element so notifications stay visible on top of the video player.
+                                </div>
+                                <div class="fieldDescription" style="margin-bottom: 1em;">
+                                    <strong>Recommendation:</strong>
+                                    <ul style="margin: 0.35em 0 0.35em 1.5em; padding: 0;">
+                                        <li><strong>Web Browsers:</strong> Recommended to enable if a browser client (Chrome, Firefox, Edge, Safari) is your primary player and toasts are hidden during fullscreen playback.</li>
+                                        <li><strong>Samsung Tizen &amp; TV Apps:</strong> <em>Not needed.</em> Tizen and native TV clients handle notification layers natively and work fine without this option. If you primarily use Tizen or TV apps, keep this disabled.</li>
+                                        <li>Requires saving and performing a browser hard-refresh (<kbd>Ctrl+Shift+R</kbd> / <kbd>Cmd+Shift+R</kbd>) to reload the web client.</li>
+                                    </ul>
+                                </div>
+                                <div class="checkboxContainer checkboxContainer-withDescription">
+                                    <label class="emby-checkbox-label">
+                                        <input type="checkbox" id="EnableFullscreenToastFix" is="emby-checkbox" />
+                                        <span>Enable fullscreen toast fix for web browser clients</span>
+                                    </label>
+                                    <div class="fieldDescription">
+                                        Injects the toast re-parenting fix into <code>index.html</code>. Leave unchecked if using TV clients (such as Tizen) or if toasts work normally.
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
                     <div style="margin-top: 2em;">
                         <button is="emby-button" type="submit" class="raised button-submit block">Save</button>
                     </div>
@@ -207,6 +258,7 @@
                     document.querySelector('#IgnoreAudioMedia').checked = config.IgnoreAudioMedia ?? true;
                     document.querySelector('#NotifyOnAudioTrackChange').checked = config.NotifyOnAudioTrackChange ?? true;
                     document.querySelector('#NotificationDurationMs').value = config.NotificationDurationMs ?? 5000;
+                    document.querySelector('#StartupDelayMs').value = config.StartupDelayMs ?? 1500;
 
                     document.querySelector('#ShowSdr').checked = config.ShowSdr ?? true;
                     document.querySelector('#ShowHdr10Plus').checked = config.ShowHdr10Plus ?? true;
@@ -227,6 +279,7 @@
                     document.querySelector('#SuppressHdr10PlusOnLg').checked = config.SuppressHdr10PlusOnLg ?? true;
                     document.querySelector('#DesktopSdrMode').checked = config.DesktopSdrMode ?? false;
                     document.querySelector('#CustomTemplate').value = config.CustomTemplate ?? '';
+                    document.querySelector('#EnableFullscreenToastFix').checked = config.EnableFullscreenToastFix ?? false;
 
                     await loadLibraries(config.ExcludedLibraryIds || []);
                     await loadUsers(config.ExcludedUserIds || []);
@@ -300,7 +353,7 @@
                 const customTemplate = document.querySelector('#CustomTemplate').value.trim();
 
                 const hdrInfo = showDv ? 'Dolby Vision' : (showHdr10 ? 'HDR10' : '');
-                const audioInfo = showAudioConv ? 'Atmos ➔ TrueHD' : (showAudio ? 'Dolby Atmos' : '');
+                const audioInfo = showAudioConv ? 'TrueHD 7.1 ➔ AC3 5.1' : (showAudio ? 'Dolby Atmos' : '');
                 const playbackInfo = showPlayback ? 'Direct Play' : '';
                 const bitrateInfo = showBitrate ? '45.2 Mbps' : '';
                 const titleInfo = 'Interstellar (2014)';
@@ -315,7 +368,10 @@
                         .replace(/{bitrate}/gi, bitrateInfo)
                         .replace(/{title}/gi, titleInfo);
 
-                    messageText = messageText.replace(/(?:\s*[•\|\-]\s*)+/g, ' • ').trim(' •|-');
+                    messageText = messageText.replace(/(?:\s*[•|]\s*|\s+-\s+)+/g, ' • ')
+                        .trim()
+                        .replace(/^[•|\-\s]+|[•|\-\s]+$/g, '')
+                        .trim();
                 } else {
                     const parts = [];
                     if (hdrInfo) parts.push(hdrInfo);
@@ -441,6 +497,7 @@
                     config.IgnoreAudioMedia = document.querySelector('#IgnoreAudioMedia').checked;
                     config.NotifyOnAudioTrackChange = document.querySelector('#NotifyOnAudioTrackChange').checked;
                     config.NotificationDurationMs = parseInt(document.querySelector('#NotificationDurationMs').value, 10) || 5000;
+                    config.StartupDelayMs = parseInt(document.querySelector('#StartupDelayMs').value, 10) || 0;
 
                     config.ShowSdr = document.querySelector('#ShowSdr').checked;
                     config.ShowHdr10Plus = document.querySelector('#ShowHdr10Plus').checked;
@@ -461,6 +518,7 @@
                     config.SuppressHdr10PlusOnLg = document.querySelector('#SuppressHdr10PlusOnLg').checked;
                     config.DesktopSdrMode = document.querySelector('#DesktopSdrMode').checked;
                     config.CustomTemplate = document.querySelector('#CustomTemplate').value.trim();
+                    config.EnableFullscreenToastFix = document.querySelector('#EnableFullscreenToastFix').checked;
 
                     // Collect excluded libraries (unchecked)
                     config.ExcludedLibraryIds = [];

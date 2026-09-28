@@ -70,9 +70,16 @@ internal static class MetadataFormatter
         if (!string.IsNullOrWhiteSpace(channelLayout))
         {
             if (channelLayout.StartsWith("7.1", StringComparison.OrdinalIgnoreCase)) return "7.1";
-            if (channelLayout.StartsWith("5.1", StringComparison.OrdinalIgnoreCase)) return "5.1";
+            if (channelLayout.StartsWith("7.0", StringComparison.OrdinalIgnoreCase)) return "7.0";
             if (channelLayout.StartsWith("6.1", StringComparison.OrdinalIgnoreCase)) return "6.1";
-            if (channelLayout.Equals("stereo", StringComparison.OrdinalIgnoreCase)) return "2.0";
+            if (channelLayout.StartsWith("5.1", StringComparison.OrdinalIgnoreCase)) return "5.1";
+            if (channelLayout.StartsWith("5.0", StringComparison.OrdinalIgnoreCase)) return "5.0";
+            if (channelLayout.StartsWith("3.1", StringComparison.OrdinalIgnoreCase)) return "3.1";
+            if (channelLayout.StartsWith("2.1", StringComparison.OrdinalIgnoreCase)) return "2.1";
+            if (channelLayout.Equals("stereo", StringComparison.OrdinalIgnoreCase)
+                || channelLayout.StartsWith("2.0", StringComparison.OrdinalIgnoreCase)) return "2.0";
+            if (channelLayout.Equals("quad", StringComparison.OrdinalIgnoreCase)
+                || channelLayout.StartsWith("4.0", StringComparison.OrdinalIgnoreCase)) return "4.0";
             if (channelLayout.Equals("mono", StringComparison.OrdinalIgnoreCase)
                 || channelLayout.StartsWith("1.0", StringComparison.OrdinalIgnoreCase)) return "Mono";
         }
@@ -144,13 +151,20 @@ internal static class MetadataFormatter
             TranscodeReason.SecondaryAudioNotSupported => "Secondary audio not supported",
             TranscodeReason.RefFramesNotSupported => "Reference frames not supported",
             TranscodeReason.VideoRangeTypeNotSupported => "HDR range not supported",
-            _ => reason.ToString()
+            TranscodeReason.VideoFramerateNotSupported => "Framerate not supported",
+            TranscodeReason.AudioSampleRateNotSupported => "Audio sample rate not supported",
+            TranscodeReason.AudioBitDepthNotSupported => "Audio bit depth not supported",
+            TranscodeReason.AudioProfileNotSupported => "Audio profile not supported",
+            TranscodeReason.AnamorphicVideoNotSupported => "Anamorphic video not supported",
+            TranscodeReason.InterlacedVideoNotSupported => "Interlaced video not supported",
+            _ => Regex.Replace(reason.ToString(), "(\\B[A-Z])", " $1")
         };
     }
 
     internal static bool ShouldReportToneMappedSdr(PluginConfiguration config, TranscodingInfo? transcodeInfo)
     {
         return config.DesktopSdrMode
+            && transcodeInfo?.IsVideoDirect == false
             && transcodeInfo?.TranscodeReasons.HasFlag(TranscodeReason.VideoRangeTypeNotSupported) == true;
     }
 
@@ -172,7 +186,9 @@ internal static class MetadataFormatter
         if (showReasons && (int)transcodeInfo.TranscodeReasons != 0)
         {
             var reasons = Enum.GetValues<TranscodeReason>()
-                .Where(reason => (int)reason != 0 && transcodeInfo.TranscodeReasons.HasFlag(reason))
+                .Where(reason => (int)reason != 0
+                    && transcodeInfo.TranscodeReasons.HasFlag(reason)
+                    && (reason != TranscodeReason.VideoRangeTypeNotSupported || !transcodeInfo.IsVideoDirect))
                 .Select(FormatTranscodeReason)
                 .Distinct(StringComparer.OrdinalIgnoreCase);
 
@@ -191,12 +207,14 @@ internal static class MetadataFormatter
         if (bitrateBps >= 1_000_000)
         {
             double mbps = (double)bitrateBps / 1_000_000;
-            return mbps >= 10 ? $"{Math.Round(mbps, 0)} Mbps" : $"{Math.Round(mbps, 1)} Mbps";
+            return mbps >= 10
+                ? FormattableString.Invariant($"{Math.Round(mbps, 0)} Mbps")
+                : FormattableString.Invariant($"{Math.Round(mbps, 1)} Mbps");
         }
 
         if (bitrateBps >= 1_000)
         {
-            return $"{Math.Round((double)bitrateBps / 1_000, 0)} kbps";
+            return FormattableString.Invariant($"{Math.Round((double)bitrateBps / 1_000, 0)} kbps");
         }
 
         return $"{bitrateBps} bps";

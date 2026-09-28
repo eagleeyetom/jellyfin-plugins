@@ -31,6 +31,7 @@ public class MetadataNotifierService : IHostedService
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<MetadataNotifierService> _logger;
     private readonly ConcurrentDictionary<string, int> _lastActiveAudioTrack = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _pendingStartupToasts = new(StringComparer.Ordinal);
     private CancellationTokenSource? _serviceCancellation;
 
     private static readonly Regex Hdr10PlusPathRegex = new(
@@ -75,6 +76,20 @@ public class MetadataNotifierService : IHostedService
         _serviceCancellation?.Dispose();
         _serviceCancellation = null;
         _lastActiveAudioTrack.Clear();
+
+        foreach (var pending in _pendingStartupToasts.Values)
+        {
+            try
+            {
+                pending.Cancel();
+                pending.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+        _pendingStartupToasts.Clear();
+
         _logger.LogInformation("Metadata Notifier service stopped.");
         return Task.CompletedTask;
     }
@@ -84,16 +99,49 @@ public class MetadataNotifierService : IHostedService
         if (e.Session != null)
         {
             _lastActiveAudioTrack.TryRemove(e.Session.Id, out _);
+            if (_pendingStartupToasts.TryRemove(e.Session.Id, out var pendingCts))
+            {
+                try
+                {
+                    pendingCts.Cancel();
+                    pendingCts.Dispose();
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+            }
         }
     }
 
     private void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)
     {
-        _ = HandlePlaybackStartAsync(e, _serviceCancellation?.Token ?? CancellationToken.None);
+        var session = e.Session;
+        if (session == null)
+        {
+            return;
+        }
+
+        if (_pendingStartupToasts.TryRemove(session.Id, out var existingCts))
+        {
+            try
+            {
+                existingCts.Cancel();
+                existingCts.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(_serviceCancellation?.Token ?? CancellationToken.None);
+        _pendingStartupToasts[session.Id] = cts;
+
+        _ = HandlePlaybackStartAsync(e, cts);
     }
 
-    private async Task HandlePlaybackStartAsync(PlaybackProgressEventArgs e, CancellationToken cancellationToken)
+    private async Task HandlePlaybackStartAsync(PlaybackProgressEventArgs e, CancellationTokenSource cts)
     {
+        var cancellationToken = cts.Token;
         try
         {
             var config = Plugin.Instance?.Configuration;
@@ -125,7 +173,18 @@ public class MetadataNotifierService : IHostedService
                 _lastActiveAudioTrack[session.Id] = initialAudioIndex.Value;
             }
 
-            session = await WaitForUpdatedSessionAsync(session, cancellationToken).ConfigureAwait(false);
+            var originalDeviceId = session.DeviceId;
+            session = await WaitForUpdatedSessionAsync(session, originalDeviceId, config.StartupDelayMs, cancellationToken).ConfigureAwait(false);
+
+            if (!session.IsActive)
+            {
+                return;
+            }
+
+            if (session.PlayState?.AudioStreamIndex is int postDelayAudioIndex)
+            {
+                _lastActiveAudioTrack[session.Id] = postDelayAudioIndex;
+            }
 
             var hdrInfo = string.Empty;
             var hdrRule = "disabled";
@@ -193,6 +252,15 @@ public class MetadataNotifierService : IHostedService
                 return;
             }
 
+            if (!session.IsActive)
+            {
+                _logger.LogWarning(
+                    "Session {SessionId} ({Client} / {Device}) has no active WebSocket controllers at send time — toast may not be delivered.",
+                    session.Id,
+                    session.Client,
+                    session.DeviceName);
+            }
+
             _logger.LogInformation(
                 "Sending metadata toast to session {SessionId} ({Client} / {Device}): {Header} | {Message}",
                 session.Id,
@@ -216,11 +284,19 @@ public class MetadataNotifierService : IHostedService
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _logger.LogDebug("Metadata notification was cancelled because the service is stopping.");
+            _logger.LogDebug("Metadata notification was cancelled.");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending metadata toast notification.");
+        }
+        finally
+        {
+            if (e.Session != null && _pendingStartupToasts.TryGetValue(e.Session.Id, out var current) && current == cts)
+            {
+                _pendingStartupToasts.TryRemove(e.Session.Id, out _);
+            }
+            cts.Dispose();
         }
     }
 
@@ -262,8 +338,13 @@ public class MetadataNotifierService : IHostedService
                 return;
             }
 
-            if (_lastActiveAudioTrack.TryGetValue(session.Id, out var previousIndex)
-                && previousIndex != currentAudioIndex.Value)
+            if (!_lastActiveAudioTrack.TryGetValue(session.Id, out var previousIndex))
+            {
+                _lastActiveAudioTrack[session.Id] = currentAudioIndex.Value;
+                return;
+            }
+
+            if (previousIndex != currentAudioIndex.Value)
             {
                 _lastActiveAudioTrack[session.Id] = currentAudioIndex.Value;
 
@@ -306,20 +387,81 @@ public class MetadataNotifierService : IHostedService
         }
     }
 
-    private async Task<SessionInfo> WaitForUpdatedSessionAsync(SessionInfo originalSession, CancellationToken cancellationToken)
-    {
-        var session = originalSession;
+    private const int SessionPollIntervalMs = 250;
 
-        for (var attempt = 0; attempt < 6; attempt++)
+    private async Task<SessionInfo> WaitForUpdatedSessionAsync(
+        SessionInfo originalSession,
+        string deviceId,
+        int startupDelayMs,
+        CancellationToken cancellationToken)
+    {
+        if (startupDelayMs <= 0)
         {
-            await Task.Delay(250, cancellationToken).ConfigureAwait(false);
+            var activeSession = _sessionManager.Sessions.FirstOrDefault(
+                candidate => string.Equals(candidate.Id, originalSession.Id, StringComparison.Ordinal));
+            return ResolveActiveSession(activeSession ?? originalSession, deviceId);
+        }
+
+        var session = originalSession;
+        var elapsed = 0;
+
+        while (elapsed < startupDelayMs)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var delay = Math.Min(SessionPollIntervalMs, startupDelayMs - elapsed);
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            elapsed += delay;
 
             var activeSession = _sessionManager.Sessions.FirstOrDefault(
                 candidate => string.Equals(candidate.Id, originalSession.Id, StringComparison.Ordinal));
             if (activeSession != null)
             {
                 session = activeSession;
+                if (!session.IsActive)
+                {
+                    break;
+                }
             }
+        }
+
+        return ResolveActiveSession(session, deviceId);
+    }
+
+    /// <summary>
+    /// Returns <paramref name="session"/> if it has at least one active WebSocket controller.
+    /// Otherwise falls back to the most-recently-active session for the same <paramref name="deviceId"/>.
+    /// This handles the case where the client's WebSocket reconnected during the startup delay
+    /// and Jellyfin assigned a new <see cref="SessionInfo"/> to the same physical device.
+    /// </summary>
+    private SessionInfo ResolveActiveSession(SessionInfo session, string deviceId)
+    {
+        if (session.IsActive)
+        {
+            return session;
+        }
+
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            return session;
+        }
+
+        // Find the most-recently-active session for the same device that actually has an open WS connection.
+        var fallback = _sessionManager.Sessions
+            .Where(s => string.Equals(s.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase)
+                        && s.IsActive
+                        && !string.Equals(s.Id, session.Id, StringComparison.Ordinal))
+            .OrderByDescending(s => s.LastActivityDate)
+            .FirstOrDefault();
+
+        if (fallback != null)
+        {
+            _logger.LogDebug(
+                "Original session {OriginalId} has no active WebSocket; falling back to session {FallbackId} for device {DeviceId}.",
+                session.Id,
+                fallback.Id,
+                deviceId);
+            return fallback;
         }
 
         return session;
@@ -444,6 +586,9 @@ public class MetadataNotifierService : IHostedService
             || client.Contains("AFT", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Roku", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Shield", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Sharp", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Toshiba", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("webOS", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("LG", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Sony", StringComparison.OrdinalIgnoreCase)
@@ -451,7 +596,10 @@ public class MetadataNotifierService : IHostedService
             || deviceName.Contains("Fire", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("AFT", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
-            || deviceName.Contains("Roku", StringComparison.OrdinalIgnoreCase);
+            || deviceName.Contains("Roku", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Shield", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Sharp", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Toshiba", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsNonDolbyVisionClient(SessionInfo session)
@@ -464,12 +612,28 @@ public class MetadataNotifierService : IHostedService
             return true;
         }
 
-        // Standard Android mobile or non-Shield Android clients
-        if ((client.Contains("Android", StringComparison.OrdinalIgnoreCase) || deviceName.Contains("Android", StringComparison.OrdinalIgnoreCase))
-            && !deviceName.Contains("Shield", StringComparison.OrdinalIgnoreCase)
-            && !client.Contains("AndroidTV", StringComparison.OrdinalIgnoreCase))
+        // Check if client is Android
+        bool isAndroid = client.Contains("Android", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Android", StringComparison.OrdinalIgnoreCase);
+
+        if (isAndroid)
         {
-            return true;
+            // TV clients running Android TV / Google TV / Fire TV / Shield DO support Dolby Vision
+            bool isAndroidTvOrBox = client.Contains("Android TV", StringComparison.OrdinalIgnoreCase)
+                || client.Contains("AndroidTV", StringComparison.OrdinalIgnoreCase)
+                || client.Contains("Google TV", StringComparison.OrdinalIgnoreCase)
+                || deviceName.Contains("Shield", StringComparison.OrdinalIgnoreCase)
+                || deviceName.Contains("AFT", StringComparison.OrdinalIgnoreCase)
+                || deviceName.Contains("Fire", StringComparison.OrdinalIgnoreCase)
+                || deviceName.Contains("BRAVIA", StringComparison.OrdinalIgnoreCase)
+                || deviceName.Contains("Google TV", StringComparison.OrdinalIgnoreCase)
+                || deviceName.Contains("TV", StringComparison.OrdinalIgnoreCase)
+                || deviceName.Contains("Box", StringComparison.OrdinalIgnoreCase);
+
+            if (!isAndroidTvOrBox)
+            {
+                return true;
+            }
         }
 
         return false;
@@ -504,7 +668,7 @@ public class MetadataNotifierService : IHostedService
         bool hasHdr10Plus = IsHdr10Plus(rangeType, profile, displayTitle, comment, itemPath, itemName);
 
         // Detect Dolby Vision via VideoRangeType, stream metadata, or filename
-        bool hasDolbyVision = IsDolbyVision(rangeType, range, profile, displayTitle, itemPath);
+        bool hasDolbyVision = IsDolbyVision(rangeType, range, profile, displayTitle, itemPath, itemName);
 
         // Non-supporting TVs/clients (e.g. LG, Sony, Amazon, Roku) do not support HDR10+ hardware decoding
         if (hasHdr10Plus && isNonHdr10Plus && config.SuppressHdr10PlusOnLg)
@@ -614,7 +778,7 @@ public class MetadataNotifierService : IHostedService
             || profile.Contains("Profile 7", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsDolbyVision(VideoRangeType rangeType, VideoRange range, string profile, string displayTitle, string itemPath)
+    private static bool IsDolbyVision(VideoRangeType rangeType, VideoRange range, string profile, string displayTitle, string itemPath, string itemName)
     {
         return rangeType is VideoRangeType.DOVI
                 or VideoRangeType.DOVIWithHDR10
@@ -626,8 +790,9 @@ public class MetadataNotifierService : IHostedService
             || profile.Contains("DOVI", StringComparison.OrdinalIgnoreCase)
             || profile.Contains("DOLBY VISION", StringComparison.OrdinalIgnoreCase)
             || displayTitle.Contains("Dolby Vision", StringComparison.OrdinalIgnoreCase)
-            || displayTitle.Contains("DV", StringComparison.OrdinalIgnoreCase)
-            || (!string.IsNullOrEmpty(itemPath) && DolbyVisionPathRegex.IsMatch(itemPath));
+            || DolbyVisionPathRegex.IsMatch(displayTitle)
+            || (!string.IsNullOrEmpty(itemPath) && DolbyVisionPathRegex.IsMatch(itemPath))
+            || (!string.IsNullOrEmpty(itemName) && DolbyVisionPathRegex.IsMatch(itemName));
     }
 
     private static bool IsHdr10Plus(VideoRangeType rangeType, string profile, string displayTitle, string comment, string itemPath, string itemName)

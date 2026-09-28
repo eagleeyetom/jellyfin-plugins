@@ -9,6 +9,18 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
+  ## v1.4.0.0 (2026-09-28)
+  - Add optional Fullscreen Toast Fix for web browsers via HTML script injection middleware
+  - Add customizable notification templates supporting {title} variable
+  - Add Desktop SDR Mode forcing SDR display for tone-mapped playback on Windows, Linux, and macOS clients
+  - Expand client detection and fallback rules for Android TV, Nvidia Shield, Sharp, and Toshiba devices
+  - Fix culture-sensitive bitrate formatting (prevent comma decimal separator on non-English locales)
+  - Prevent false-positive Dolby Vision detection on DVD and DVB stream titles
+  - Make startup delay immediately bypass polling when configured to zero
+  - Cancel pending startup toasts when playback stops or is superseded during the delay
+  - Ensure audio track switch notifications trigger even when audio index initializes after start
+  - Expand audio channel layout mapping (5.0, 7.0, 2.1, 3.1, 4.0) and transcode reason labels
+  - Fix config page preview separator cleanup and hyphenated codec preservation
   ## v1.3.0.0
   - Add optional tone-mapped SDR detection using Jellyfin transcode reasons
   - Improve mono PCM, Direct Stream, custom template, and audio track reporting

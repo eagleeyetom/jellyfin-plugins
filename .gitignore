@@ -39,3 +39,9 @@ AGENTS.md
 GEMINI.md
 CLAUDE.md
 *-review.md
+
+# Deployment scripts
+deploy.ps1
+**/deploy.ps1
+deploy*.ps1
+**/deploy*.ps1

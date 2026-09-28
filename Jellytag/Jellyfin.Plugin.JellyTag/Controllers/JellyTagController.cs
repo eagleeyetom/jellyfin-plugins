@@ -68,6 +68,7 @@ public partial class JellyTagController : ControllerBase
     {
         _cacheService.ClearCache();
         _qualityService.ClearBadgeCache();
+        _overlayService.ReloadBadges();
         return NoContent();
     }
 
@@ -152,6 +153,11 @@ public partial class JellyTagController : ControllerBase
             "truehd" => "badge-truehd.svg",
             "dtshdma" => "badge-dtshdma.svg",
             "opus" => "badge-opus.svg",
+            "flac" => "badge-flac.svg",
+            "dts" => "badge-dts.svg",
+            "eac3" => "badge-eac3.svg",
+            "ac3" => "badge-ac3.svg",
+            "aac" => "badge-aac.svg",
             "5.1" => "badge-5_1.svg",
             "7.1" => "badge-7_1.svg",
             "stereo" => "badge-stereo.svg",
@@ -162,6 +168,8 @@ public partial class JellyTagController : ControllerBase
             "hevc" => "badge-hevc.svg",
             "av1" => "badge-av1.svg",
             "vp9" => "badge-vp9.svg",
+            "mpeg2" => "badge-mpeg2.svg",
+            "vc1" => "badge-vc1.svg",
             _ => null
         };
 

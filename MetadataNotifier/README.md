@@ -16,6 +16,12 @@ Sends on-screen toast notifications when playback starts on any Jellyfin client,
 - **Audio Conversion Details:** Displays real-time audio conversion (e.g. `TrueHD 7.1 ➔ AC3 5.1 (Transcoded)`).
 - **Custom Notification Template:** Customize the order and layout of notification items with flexible template variables.
 - **Exclusion Lists:** Easily exclude specific media libraries or users from toast notifications.
+- **Optional Browser Fullscreen Toast Fix:** In web browsers, HTML5 fullscreen mode can hide standard toast notifications behind the video element. An optional server setting dynamically patches `index.html` on HTTP requests to keep toasts visible in fullscreen on web browsers. (Disabled by default; not needed for Samsung Tizen or native TV clients which display toasts natively).
 - **Fully Configurable:** Customize notification duration, target clients, and displayed information categories.
+
+## Known Limitations
+
+- **Client-side HDR tone-mapping is undetectable.** "Tone-mapped SDR detection" only fires when Jellyfin itself transcodes/tone-maps the video server-side. If Jellyfin Direct Plays or Direct Streams an HDR/Dolby Vision file to a client whose display can't actually render it (e.g. a standard SDR monitor on a Windows/desktop client), the tone-mapping happens invisibly on the client or OS side. The plugin will still report the source format (e.g. Dolby Vision) because that is genuinely what Jellyfin sent.
+- **Toast duration and delivery are client-dependent.** The configured notification duration is sent as a hint (`TimeoutMs`); some clients (e.g. Jellyfin Web, Kodi) use their own fixed display timing and may ignore it. Some clients may not render the message at all.
 
 

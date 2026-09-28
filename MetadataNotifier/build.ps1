@@ -20,7 +20,7 @@ $PngPath = Join-Path $PluginDir "MetadataNotifier.png"
 if (Test-Path $PngPath) { Copy-Item $PngPath $OutputDir }
 
 $Version = (dotnet msbuild (Join-Path $PluginDir "Jellyfin.Plugin.MetadataNotifier.csproj") -getProperty:Version).Trim()
-if (-not $Version) { $Version = "1.3.0.0" }
+if (-not $Version) { $Version = "1.3.1.0" }
 
 $zipPath = Join-Path $OutputDir "metadatanotifier-$Version.zip"
 if (Test-Path $zipPath) { Remove-Item -Force $zipPath }

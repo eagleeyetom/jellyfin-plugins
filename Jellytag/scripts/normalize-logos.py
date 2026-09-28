@@ -9,8 +9,8 @@ badge-*.svg assets use, so they drop straight into the existing renderer.
 Always re-downloads, so it is safe to run repeatedly (wrapping is not additive).
 
 Licences (verified via the Commons API):
-  public domain : Dolby Vision, Dolby Atmos, Dolby TrueHD, HDR10, AV1, H.264, VP9, DTS-HD MA
-  CC BY-SA 4.0  : HDR10+, DTS:X   -> require attribution, see README
+  public domain : Dolby Vision, Dolby Atmos, Dolby TrueHD, Dolby Digital (AC-3), Dolby Digital Plus (E-AC-3), HDR10, AV1, H.264, VP9, DTS, DTS-HD MA, FLAC, AAC
+  CC BY-SA 4.0  : HDR10+, DTS:X, MPEG-2   -> require attribution, see README
 """
 
 import copy
@@ -31,6 +31,8 @@ SOURCES = {
     "logo-dv.svg": (f"{COMMONS}/0/03/Dolby_Vision_2021_logo.svg", "#000000", True),
     "logo-atmos.svg": (f"{COMMONS}/8/82/Logo_Dolby_Atmos.svg", "#000000", True),
     "logo-truehd.svg": (f"{COMMONS}/9/90/Dolby_TrueHD.svg", "#000000", True),
+    "logo-ac3.svg": (f"{COMMONS}/2/27/Dolby-Digital-Logo.svg", "#000000", True),
+    "logo-eac3.svg": (f"{COMMONS}/a/a9/Dolby-Digital-Plus.svg", "#000000", True),
     "logo-hdr10.svg": (f"{COMMONS}/9/94/HDR_10_logo_%28black%29.svg", "#000000", True),
     "logo-vp9.svg": (f"{COMMONS}/c/c7/Vp9-logo-for-mediawiki.svg", "#000000", True),
     # Partly-coloured marks. force_white still matters here: these files leave many
@@ -38,6 +40,10 @@ SOURCES = {
     # plate. Setting the group fill white catches those while explicit colours survive.
     "logo-av1.svg": (f"{COMMONS}/8/84/AV1_logo_2018.svg", "#000000", True),
     "logo-dtshdma.svg": (f"{COMMONS}/b/bd/DTS-HD-MA.svg", "#000000", True),
+    "logo-dts.svg": (f"{COMMONS}/2/20/DTS_logo.svg", "#000000", True),
+    "logo-flac.svg": (f"{COMMONS}/f/f7/FLAC_logo_vector.svg", "#000000", False),
+    "logo-aac.svg": (f"{COMMONS}/b/b3/AAC_original_logo.svg", "#000000", True),
+    "logo-mpeg2.svg": (f"{COMMONS}/6/6e/Mpeg_logo.svg", "#000000", True),
     # Near-black art that must keep its colours, so it gets a light plate instead.
     "logo-hdr10plus.svg": (f"{COMMONS}/7/7c/HDR10%2B_Logo.svg", "#FFFFFF", False),
     # Already carries its own dark rounded background, so it gets no plate.

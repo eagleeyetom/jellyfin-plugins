@@ -28,11 +28,13 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
     {
         { "4k", "4K" }, { "1080p", "1080p" }, { "720p", "720p" }, { "sd", "SD" },
         { "hdr10", "HDR10" }, { "hdr10plus", "HDR10+" }, { "dv", "DV" }, { "hlg", "HLG" },
-        { "atmos", "ATMOS" }, { "dtsx", "DTS:X" }, { "truehd", "TrueHD" }, { "dtshdma", "DTS-HD MA" }, { "opus", "OPUS" },
-        { "7.1", "7.1" }, { "5.1", "5.1" }, { "stereo", "STEREO" },
+        { "atmos", "ATMOS" }, { "dtsx", "DTS:X" }, { "truehd", "TrueHD" }, { "dtshdma", "DTS-HD MA" },
+        { "flac", "FLAC" }, { "dts", "DTS" }, { "eac3", "E-AC-3" }, { "ac3", "AC3" }, { "opus", "OPUS" }, { "aac", "AAC" },
+        { "7.1", "7.1" }, { "5.1", "5.1" }, { "stereo", "STEREO" }, { "mono", "Mono" },
         { "hdr", "HDR" }, { "3d", "3D" },
         { "UHD4K", "4K" }, { "FHD1080p", "1080p" }, { "HD720p", "720p" },
         { "h264", "H.264" }, { "hevc", "HEVC" }, { "av1", "AV1" }, { "vp9", "VP9" },
+        { "mpeg2", "MPEG-2" }, { "vc1", "VC-1" },
         // Language and VOST keys are canonical ISO 639-1; anything not listed falls
         // back to the uppercased code (e.g. "en" -> "EN", "vostfr" -> "VOSTFR").
         { "ja", "JP" }, { "ko", "KR" }, { "el", "GR" },
@@ -55,6 +57,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             BadgeCategory.Hdr or BadgeCategory.ThreeD => imageConfig.HdrPanel,
             BadgeCategory.VideoCodec => imageConfig.CodecPanel,
             BadgeCategory.Audio => imageConfig.AudioPanel,
+            BadgeCategory.Channels => imageConfig.ChannelPanel,
             BadgeCategory.Language or BadgeCategory.Subtitle => imageConfig.LanguagePanel,
             _ => imageConfig.ResolutionPanel
         };
@@ -254,6 +257,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             (imageConfig.HdrPanel, "HDR"),
             (imageConfig.CodecPanel, "Codec"),
             (imageConfig.AudioPanel, "Audio"),
+            (imageConfig.ChannelPanel, "Channel"),
             (imageConfig.LanguagePanel, "Language")
         };
         panels.Sort((a, b) => a.Panel.Order.CompareTo(b.Panel.Order));
@@ -334,10 +338,18 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 // Brand logos only exist for some badges; the rest keep the generated art.
                 if (panel.Style == BadgeStyle.Logo && resourceFileName.StartsWith("badge-", StringComparison.OrdinalIgnoreCase))
                 {
-                    var logoName = "logo-" + resourceFileName[6..];
-                    if (_svgCache.ContainsKey(logoName) || _rasterCache.ContainsKey(logoName))
+                    var fileKey = resourceFileName[6..];
+                    var isLogoDisabled = panel.DisabledLogos != null &&
+                        (panel.DisabledLogos.Contains(badgeInfo.BadgeKey, StringComparer.OrdinalIgnoreCase) ||
+                         panel.DisabledLogos.Contains(fileKey, StringComparer.OrdinalIgnoreCase));
+
+                    if (!isLogoDisabled)
                     {
-                        targetResource = logoName;
+                        var logoName = "logo-" + fileKey;
+                        if (_svgCache.ContainsKey(logoName) || _rasterCache.ContainsKey(logoName))
+                        {
+                            targetResource = logoName;
+                        }
                     }
                 }
 

@@ -21,6 +21,11 @@ public enum BadgeCategory
     Audio,
 
     /// <summary>
+    /// Audio channel layout badge (7.1, 5.1, stereo, mono).
+    /// </summary>
+    Channels,
+
+    /// <summary>
     /// 3D content badge.
     /// </summary>
     ThreeD,
