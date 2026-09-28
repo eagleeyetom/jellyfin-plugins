@@ -193,6 +193,43 @@
                         </details>
                     </div>
 
+                    <!-- Fullscreen Toast Fix -->
+                    <div class="verticalSection">
+                        <details class="meta-section" id="FullscreenFixSection" open>
+                            <summary>Fullscreen Toast Fix</summary>
+                            <div class="meta-section-body">
+                                <div class="fieldDescription" style="margin-bottom: 1em;">
+                                    Jellyfin Web's toast notifications are attached to
+                                    <code>document.body</code> and are hidden by the browser's native
+                                    Fullscreen API when the video player is in fullscreen — this is why
+                                    toasts appear on the first play (player not yet fullscreen) but
+                                    disappear on subsequent plays.<br><br>
+                                    Clicking <strong>Apply Fix</strong> installs a lightweight DOM patch
+                                    that relocates the toast container into the active fullscreen element
+                                    whenever fullscreen is entered, making toasts visible again.
+                                    The fix is active for the entire browser session once applied.
+                                    Enable <em>Auto-apply on page load</em> to have it re-applied
+                                    automatically each time you open this config page.
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 1em; flex-wrap: wrap; margin-bottom: 0.75em;">
+                                    <button id="ApplyFullscreenFix" type="button" is="emby-button" class="raised emby-button" style="padding: 0.4em 1.2em;">
+                                        <span>Apply Fix</span>
+                                    </button>
+                                    <span id="FullscreenFixStatus" style="font-size: .9em; opacity: .7;">Not applied this session</span>
+                                </div>
+                                <div class="checkboxContainer checkboxContainer-withDescription">
+                                    <label class="emby-checkbox-label">
+                                        <input type="checkbox" id="AutoApplyFullscreenFix" is="emby-checkbox" />
+                                        <span>Auto-apply fix whenever this config page is opened</span>
+                                    </label>
+                                    <div class="fieldDescription">
+                                        Stores the preference in browser localStorage. Does not affect other users or devices.
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
                     <div style="margin-top: 2em;">
                         <button is="emby-button" type="submit" class="raised button-submit block">Save</button>
                     </div>
@@ -202,6 +239,82 @@
 
         <script type="text/javascript">
             const pluginId = 'b7c3e2f1-4a5d-6e7f-8b9c-1a2b3c4d5e6f';
+            const LS_AUTO_FIX = 'metaNotifier_autoApplyFullscreenFix';
+            let fullscreenFixApplied = false;
+
+            // ── Fullscreen Toast Fix ──────────────────────────────────────────────
+            // Jellyfin Web's toast container is appended to document.body. When the
+            // video player calls element.requestFullscreen(), the browser hides all
+            // body-level content that is outside the fullscreen element's subtree.
+            // This patch moves .toastContainer into the active fullscreen element
+            // (and back out when fullscreen exits), making toasts visible.
+            function applyFullscreenToastFix() {
+                if (fullscreenFixApplied) {
+                    updateFixStatus(true);
+                    return;
+                }
+
+                // Move the container to whichever element is currently fullscreen (or back to body).
+                function syncToastContainer() {
+                    const container = document.querySelector('.toastContainer');
+                    if (!container) return;
+                    const target = document.fullscreenElement || document.webkitFullscreenElement || null;
+                    if (target && container.parentNode !== target) {
+                        target.appendChild(container);
+                    } else if (!target && container.parentNode !== document.body) {
+                        document.body.appendChild(container);
+                    }
+                }
+
+                // When fullscreen state changes, sync immediately.
+                document.addEventListener('fullscreenchange', syncToastContainer);
+                document.addEventListener('webkitfullscreenchange', syncToastContainer);
+
+                // Watch for the toast container being created (first toast ever fired).
+                const bodyObserver = new MutationObserver(function (mutations) {
+                    for (var i = 0; i < mutations.length; i++) {
+                        var added = mutations[i].addedNodes;
+                        for (var j = 0; j < added.length; j++) {
+                            if (added[j].nodeType === 1 && added[j].classList.contains('toastContainer')) {
+                                // Newly created — move into fullscreen element if active.
+                                syncToastContainer();
+                            }
+                        }
+                    }
+                });
+                bodyObserver.observe(document.body, { childList: true });
+
+                // Handle the case where .toastContainer already exists in the DOM.
+                syncToastContainer();
+
+                fullscreenFixApplied = true;
+                updateFixStatus(true);
+            }
+
+            function updateFixStatus(applied) {
+                const el = document.querySelector('#FullscreenFixStatus');
+                if (!el) return;
+                if (applied) {
+                    el.textContent = '\u2713 Applied for this browser session';
+                    el.style.color = '#4caf50';
+                } else {
+                    el.textContent = 'Not applied this session';
+                    el.style.color = '';
+                }
+            }
+
+            document.querySelector('#ApplyFullscreenFix').addEventListener('click', function () {
+                applyFullscreenToastFix();
+            });
+
+            document.querySelector('#AutoApplyFullscreenFix').addEventListener('change', function () {
+                if (this.checked) {
+                    localStorage.setItem(LS_AUTO_FIX, '1');
+                } else {
+                    localStorage.removeItem(LS_AUTO_FIX);
+                }
+            });
+            // ── End Fullscreen Toast Fix ──────────────────────────────────────────
 
             document.querySelector('#MetadataNotifierConfigPage').addEventListener('pageshow', function () {
                 Dashboard.showLoadingMsg();
@@ -249,6 +362,15 @@
 
                     updateGeneratedCss();
                     updateToastPreview();
+
+                    // Restore auto-fix preference and apply if enabled.
+                    const autoFix = localStorage.getItem(LS_AUTO_FIX) === '1';
+                    document.querySelector('#AutoApplyFullscreenFix').checked = autoFix;
+                    if (autoFix && !fullscreenFixApplied) {
+                        applyFullscreenToastFix();
+                    } else {
+                        updateFixStatus(fullscreenFixApplied);
+                    }
 
                     Dashboard.hideLoadingMsg();
                 } catch (error) {

@@ -173,7 +173,8 @@ public class MetadataNotifierService : IHostedService
                 _lastActiveAudioTrack[session.Id] = initialAudioIndex.Value;
             }
 
-            session = await WaitForUpdatedSessionAsync(session, config.StartupDelayMs, cancellationToken).ConfigureAwait(false);
+            var originalDeviceId = session.DeviceId;
+            session = await WaitForUpdatedSessionAsync(session, originalDeviceId, config.StartupDelayMs, cancellationToken).ConfigureAwait(false);
 
             if (!session.IsActive)
             {
@@ -249,6 +250,15 @@ public class MetadataNotifierService : IHostedService
             if (string.IsNullOrWhiteSpace(messageText))
             {
                 return;
+            }
+
+            if (!session.IsActive)
+            {
+                _logger.LogWarning(
+                    "Session {SessionId} ({Client} / {Device}) has no active WebSocket controllers at send time — toast may not be delivered.",
+                    session.Id,
+                    session.Client,
+                    session.DeviceName);
             }
 
             _logger.LogInformation(
@@ -379,13 +389,17 @@ public class MetadataNotifierService : IHostedService
 
     private const int SessionPollIntervalMs = 250;
 
-    private async Task<SessionInfo> WaitForUpdatedSessionAsync(SessionInfo originalSession, int startupDelayMs, CancellationToken cancellationToken)
+    private async Task<SessionInfo> WaitForUpdatedSessionAsync(
+        SessionInfo originalSession,
+        string deviceId,
+        int startupDelayMs,
+        CancellationToken cancellationToken)
     {
         if (startupDelayMs <= 0)
         {
             var activeSession = _sessionManager.Sessions.FirstOrDefault(
                 candidate => string.Equals(candidate.Id, originalSession.Id, StringComparison.Ordinal));
-            return activeSession ?? originalSession;
+            return ResolveActiveSession(activeSession ?? originalSession, deviceId);
         }
 
         var session = originalSession;
@@ -409,6 +423,45 @@ public class MetadataNotifierService : IHostedService
                     break;
                 }
             }
+        }
+
+        return ResolveActiveSession(session, deviceId);
+    }
+
+    /// <summary>
+    /// Returns <paramref name="session"/> if it has at least one active WebSocket controller.
+    /// Otherwise falls back to the most-recently-active session for the same <paramref name="deviceId"/>.
+    /// This handles the case where the client's WebSocket reconnected during the startup delay
+    /// and Jellyfin assigned a new <see cref="SessionInfo"/> to the same physical device.
+    /// </summary>
+    private SessionInfo ResolveActiveSession(SessionInfo session, string deviceId)
+    {
+        if (session.IsActive)
+        {
+            return session;
+        }
+
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            return session;
+        }
+
+        // Find the most-recently-active session for the same device that actually has an open WS connection.
+        var fallback = _sessionManager.Sessions
+            .Where(s => string.Equals(s.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase)
+                        && s.IsActive
+                        && !string.Equals(s.Id, session.Id, StringComparison.Ordinal))
+            .OrderByDescending(s => s.LastActivityDate)
+            .FirstOrDefault();
+
+        if (fallback != null)
+        {
+            _logger.LogDebug(
+                "Original session {OriginalId} has no active WebSocket; falling back to session {FallbackId} for device {DeviceId}.",
+                session.Id,
+                fallback.Id,
+                deviceId);
+            return fallback;
         }
 
         return session;
