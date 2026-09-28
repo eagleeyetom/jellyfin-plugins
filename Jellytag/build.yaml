@@ -21,8 +21,13 @@ artifacts:
 changelog: |
   ## v2.5.0.0 (2026-09-28)
   - Separate Audio Channel Badges (7.1, 5.1, Stereo, Mono) into a dedicated panel with independent positioning, styling, ordering, and badge selection
-  - Allows displaying both audio codec brand logos (e.g. Dolby Digital, DTS, Atmos) and channel numbers simultaneously without one hiding the other under ShowMode=Highest
-  - Backward compatibility: automatically migrates channel settings from existing installations
+  - Allow displaying audio codec brand logos (e.g. Dolby Digital, DTS, Atmos) and channel numbers simultaneously without one hiding the other under ShowMode=Highest
+  - Add official Brand Logos for FLAC, DTS, Dolby Digital (AC3), Dolby Digital+ (EAC3), AAC, and MPEG-2
+  - Add per-badge brand logo toggles in web configuration UI to customize which formats use logos vs standard badges
+  - Add audio and video codec detection for AC3, EAC3, DTS, FLAC, AAC, VC-1, and MPEG-2
+  - Fix CSS selector escaping for badge keys containing dots (e.g. 7.1, 5.1) in web configuration preview
+  - Add automatic migration and backfilling of channel and audio badge settings for existing configurations
+  - Add comprehensive automated unit test suite (64 tests) covering detection, scoring, migration, and caching
   ## v2.4.2.0 (2026-09-27)
   - Upgrade plugin target framework to .NET 10 and Jellyfin 12 packages
   ## v2.4.1.0 (2026-09-27)
