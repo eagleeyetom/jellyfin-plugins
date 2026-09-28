@@ -336,10 +336,18 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 // Brand logos only exist for some badges; the rest keep the generated art.
                 if (panel.Style == BadgeStyle.Logo && resourceFileName.StartsWith("badge-", StringComparison.OrdinalIgnoreCase))
                 {
-                    var logoName = "logo-" + resourceFileName[6..];
-                    if (_svgCache.ContainsKey(logoName) || _rasterCache.ContainsKey(logoName))
+                    var fileKey = resourceFileName[6..];
+                    var isLogoDisabled = panel.DisabledLogos != null &&
+                        (panel.DisabledLogos.Contains(badgeInfo.BadgeKey, StringComparer.OrdinalIgnoreCase) ||
+                         panel.DisabledLogos.Contains(fileKey, StringComparer.OrdinalIgnoreCase));
+
+                    if (!isLogoDisabled)
                     {
-                        targetResource = logoName;
+                        var logoName = "logo-" + fileKey;
+                        if (_svgCache.ContainsKey(logoName) || _rasterCache.ContainsKey(logoName))
+                        {
+                            targetResource = logoName;
+                        }
                     }
                 }
 

@@ -256,6 +256,10 @@ public class ImageCacheService : IImageCacheService
         sb.Append((int)p.Style).Append((int)p.IconStyle).Append(p.Order);
         sb.Append(p.TextBgColor).Append(p.TextBgOpacity).Append(p.TextColor).Append(p.TextCornerRadius);
         sb.Append(string.Join(",", p.EnabledBadges));
+        if (p.DisabledLogos != null && p.DisabledLogos.Count > 0)
+        {
+            sb.Append(":disLogos:").Append(string.Join(",", p.DisabledLogos));
+        }
         if (p.BadgeTypeOverrides != null)
         {
             foreach (var o in p.BadgeTypeOverrides)

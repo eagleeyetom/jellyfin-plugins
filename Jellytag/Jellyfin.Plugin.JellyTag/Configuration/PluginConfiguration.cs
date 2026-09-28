@@ -115,6 +115,11 @@ public class BadgePanelSettings
 
     // Badges enabled in this panel (e.g. ["4k","1080p","720p","sd"])
     public List<string> EnabledBadges { get; set; } = new();
+
+    /// <summary>
+    /// Logos disabled in this panel when Style == Logo (falls back to standard badge).
+    /// </summary>
+    public List<string> DisabledLogos { get; set; } = new();
 }
 
 /// <summary>

@@ -42,7 +42,8 @@ public class ConfigurationAndCacheTests
             Position = BadgePosition.TopRight,
             Style = BadgeStyle.Image,
             IconStyle = BadgeIconStyle.Round,
-            EnabledBadges = ["4k", "1080p"]
+            EnabledBadges = ["4k", "1080p"],
+            DisabledLogos = ["ac3", "aac"]
         };
 
         var reduced = ImageOverlayMiddleware.ClonePanelWithReduction(original, 15);
@@ -52,6 +53,20 @@ public class ConfigurationAndCacheTests
         Assert.AreEqual(BadgePosition.TopRight, reduced.Position);
         Assert.AreEqual(BadgeStyle.Image, reduced.Style);
         CollectionAssert.AreEqual(new[] { "4k", "1080p" }, reduced.EnabledBadges);
+        CollectionAssert.AreEqual(new[] { "ac3", "aac" }, reduced.DisabledLogos);
+    }
+
+    [TestMethod]
+    public void ComputeConfigFingerprint_ChangesWhenDisabledLogosChange()
+    {
+        var config1 = new PluginConfiguration();
+        var config2 = new PluginConfiguration();
+        config2.PosterConfig.AudioPanel.DisabledLogos.Add("ac3");
+
+        var fp1 = ImageCacheService.ComputeConfigFingerprint(config1);
+        var fp2 = ImageCacheService.ComputeConfigFingerprint(config2);
+
+        Assert.AreNotEqual(fp1, fp2, "Fingerprint should differ when DisabledLogos change");
     }
 
     [TestMethod]
@@ -99,5 +114,67 @@ public class ConfigurationAndCacheTests
 
             CollectionAssert.Contains(c.HdrPanel.EnabledBadges, "hdr");
         }
+    }
+
+    [TestMethod]
+    [DataRow("logo-flac.svg")]
+    [DataRow("logo-dts.svg")]
+    [DataRow("logo-ac3.svg")]
+    [DataRow("logo-eac3.svg")]
+    [DataRow("logo-aac.svg")]
+    [DataRow("logo-mpeg2.svg")]
+    public void EmbeddedBrandLogos_ExistAndAreValidXml(string logoFileName)
+    {
+        var asm = typeof(PluginConfiguration).Assembly;
+        var resourceNames = asm.GetManifestResourceNames();
+        var match = resourceNames.FirstOrDefault(r => r.EndsWith($".{logoFileName}", StringComparison.OrdinalIgnoreCase));
+
+        Assert.IsNotNull(match, $"Resource {logoFileName} should be embedded in assembly");
+
+        using var stream = asm.GetManifestResourceStream(match);
+        Assert.IsNotNull(stream);
+#pragma warning disable MSTEST0037
+        Assert.IsTrue(stream.Length > 0);
+#pragma warning restore MSTEST0037
+
+        var doc = System.Xml.Linq.XDocument.Load(stream);
+        Assert.IsNotNull(doc.Root);
+        Assert.AreEqual("svg", doc.Root.Name.LocalName);
+
+        using var skSvg = new Svg.Skia.SKSvg();
+        using var stream2 = asm.GetManifestResourceStream(match);
+        skSvg.Load(stream2);
+        Assert.IsNotNull(skSvg.Picture);
+        Assert.IsTrue(skSvg.Picture.CullRect.Width > 0, "Width should be > 0");
+        Assert.IsTrue(skSvg.Picture.CullRect.Height > 0, "Height should be > 0");
+    }
+
+    [TestMethod]
+    public async Task ImageOverlayService_WithDisabledLogos_RunsWithoutError()
+    {
+        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<ImageOverlayService>.Instance;
+        using var service = new ImageOverlayService(logger);
+
+        var config = new ImageTypeConfig();
+        config.AudioPanel.Style = BadgeStyle.Logo;
+        config.AudioPanel.DisabledLogos.Add("ac3");
+
+        var badges = new List<BadgeInfo>
+        {
+            new() { Category = BadgeCategory.Audio, BadgeKey = "ac3", ResourceFileName = "badge-ac3.svg" },
+            new() { Category = BadgeCategory.Audio, BadgeKey = "dts", ResourceFileName = "badge-dts.svg" }
+        };
+
+        using var bitmap = new SkiaSharp.SKBitmap(200, 300);
+        using var canvas = new SkiaSharp.SKCanvas(bitmap);
+        canvas.Clear(SkiaSharp.SKColors.Blue);
+        using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 80);
+        using var ms = new MemoryStream(data.ToArray());
+
+        var (resultStream, contentType) = await service.AddBadgeOverlaysAsync(ms, badges, config);
+        Assert.IsNotNull(resultStream);
+        Assert.IsTrue(resultStream.Length > 0);
+        resultStream.Dispose();
     }
 }

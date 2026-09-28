@@ -298,7 +298,8 @@ public partial class ImageOverlayMiddleware
             TextColor = panel.TextColor,
             TextCornerRadius = panel.TextCornerRadius,
             BadgeTypeOverrides = new List<BadgeTypeStyleOverride>(panel.BadgeTypeOverrides),
-            EnabledBadges = new List<string>(panel.EnabledBadges)
+            EnabledBadges = new List<string>(panel.EnabledBadges),
+            DisabledLogos = new List<string>(panel.DisabledLogos)
         };
     }
 }
