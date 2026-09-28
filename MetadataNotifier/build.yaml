@@ -9,6 +9,15 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
+  ## v1.3.1.0
+  - Fix culture-sensitive bitrate formatting (prevent comma separator on non-English locales)
+  - Prevent false-positive Dolby Vision detection on DVD and DVB stream titles
+  - Support Android TV and Google TV client detection for Dolby Vision
+  - Make startup delay immediately bypass polling when configured to zero
+  - Cancel pending startup toasts when playback stops or is superseded during the delay
+  - Ensure audio track switch notifications trigger even when audio index initializes after start
+  - Expand audio channel layout mapping (5.0, 7.0, 2.1, 3.1, 4.0) and transcode reason labels
+  - Fix config page preview separator cleanup and hyphenated codec preservation
   ## v1.3.0.0
   - Add optional tone-mapped SDR detection using Jellyfin transcode reasons
   - Improve mono PCM, Direct Stream, custom template, and audio track reporting

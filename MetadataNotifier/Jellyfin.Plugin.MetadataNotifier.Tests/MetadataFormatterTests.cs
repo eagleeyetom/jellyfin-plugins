@@ -65,11 +65,48 @@ public class MetadataFormatterTests
     }
 
     [TestMethod]
+    [DataRow("7.0", "7.0")]
+    [DataRow("5.0", "5.0")]
+    [DataRow("4.0", "4.0")]
+    [DataRow("quad", "4.0")]
+    [DataRow("3.1", "3.1")]
+    [DataRow("2.1", "2.1")]
+    [DataRow("stereo", "2.0")]
+    public void FormatAudioChannels_RecognizesExtendedLayouts(string layout, string expected)
+    {
+        var stream = new MediaStream { ChannelLayout = layout };
+
+        Assert.AreEqual(expected, MetadataFormatter.FormatAudioChannels(stream));
+    }
+
+    [TestMethod]
+    public void FormatBitrate_UsesDotDecimalRegardlessOfCulture()
+    {
+        var previousCulture = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("pl-PL");
+            Assert.AreEqual("5.5 Mbps", MetadataFormatter.FormatBitrate(5_500_000L));
+            Assert.AreEqual("12 Mbps", MetadataFormatter.FormatBitrate(12_000_000L));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previousCulture;
+        }
+    }
+
+    [TestMethod]
     public void FormatTranscodeReason_DescribesUnsupportedHdrRange()
     {
         Assert.AreEqual(
             "HDR range not supported",
             MetadataFormatter.FormatTranscodeReason(TranscodeReason.VideoRangeTypeNotSupported));
+        Assert.AreEqual(
+            "Framerate not supported",
+            MetadataFormatter.FormatTranscodeReason(TranscodeReason.VideoFramerateNotSupported));
+        Assert.AreEqual(
+            "Audio sample rate not supported",
+            MetadataFormatter.FormatTranscodeReason(TranscodeReason.AudioSampleRateNotSupported));
     }
 
     [TestMethod]

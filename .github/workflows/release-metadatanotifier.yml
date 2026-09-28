@@ -25,6 +25,7 @@ concurrency:
 
 env:
   PROJECT: MetadataNotifier/Jellyfin.Plugin.MetadataNotifier/Jellyfin.Plugin.MetadataNotifier.csproj
+  TEST_PROJECT: MetadataNotifier/Jellyfin.Plugin.MetadataNotifier.Tests/Jellyfin.Plugin.MetadataNotifier.Tests.csproj
   MANIFEST_BRANCH: main
 
 jobs:
@@ -64,6 +65,9 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Run unit tests
+        run: dotnet test "$TEST_PROJECT" --configuration Release
+
       - name: Publish plugin
         run: dotnet publish "$PROJECT" --configuration Release --output "$RUNNER_TEMP/metadatanotifier-publish"
 
@@ -91,7 +95,7 @@ jobs:
           echo "zip=$zip_path" >> "$GITHUB_OUTPUT"
           echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
 
-      - name: Update manifest checksum
+      - name: Update manifest checksum and timestamp
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
           RELEASE_CHECKSUM: ${{ steps.package.outputs.checksum }}
@@ -103,12 +107,14 @@ jobs:
           python3 - <<'PY'
           import json
           import os
+          from datetime import datetime, timezone
           from pathlib import Path
 
           path = Path("manifest.json")
           data = json.loads(path.read_text(encoding="utf-8"))
           version = os.environ["RELEASE_VERSION"]
           checksum = os.environ["RELEASE_CHECKSUM"]
+          timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
           updated = False
 
           for plugin in data:
@@ -117,6 +123,7 @@ jobs:
               for release in plugin.get("versions", []):
                   if release.get("version") == version:
                       release["checksum"] = checksum
+                      release["timestamp"] = timestamp
                       updated = True
 
           if not updated:
@@ -127,7 +134,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add manifest.json
-          git diff --cached --quiet || git commit -m "Update Metadata Notifier $RELEASE_VERSION checksum"
+          git diff --cached --quiet || git commit -m "Update Metadata Notifier $RELEASE_VERSION checksum and timestamp"
           git push origin "$MANIFEST_BRANCH"
 
       - name: Publish GitHub release
