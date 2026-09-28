@@ -151,6 +151,7 @@ internal static class MetadataFormatter
     internal static bool ShouldReportToneMappedSdr(PluginConfiguration config, TranscodingInfo? transcodeInfo)
     {
         return config.DesktopSdrMode
+            && transcodeInfo?.IsVideoDirect == false
             && transcodeInfo?.TranscodeReasons.HasFlag(TranscodeReason.VideoRangeTypeNotSupported) == true;
     }
 
@@ -172,7 +173,9 @@ internal static class MetadataFormatter
         if (showReasons && (int)transcodeInfo.TranscodeReasons != 0)
         {
             var reasons = Enum.GetValues<TranscodeReason>()
-                .Where(reason => (int)reason != 0 && transcodeInfo.TranscodeReasons.HasFlag(reason))
+                .Where(reason => (int)reason != 0
+                    && transcodeInfo.TranscodeReasons.HasFlag(reason)
+                    && (reason != TranscodeReason.VideoRangeTypeNotSupported || !transcodeInfo.IsVideoDirect))
                 .Select(FormatTranscodeReason)
                 .Distinct(StringComparer.OrdinalIgnoreCase);
 

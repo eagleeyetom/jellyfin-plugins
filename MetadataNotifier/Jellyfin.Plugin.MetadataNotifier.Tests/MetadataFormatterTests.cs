@@ -77,6 +77,7 @@ public class MetadataFormatterTests
     {
         var transcodeInfo = new TranscodingInfo
         {
+            IsVideoDirect = false,
             TranscodeReasons = TranscodeReason.VideoRangeTypeNotSupported
         };
 
@@ -85,6 +86,9 @@ public class MetadataFormatterTests
         var enabledConfig = new PluginConfiguration { DesktopSdrMode = true };
         Assert.IsTrue(MetadataFormatter.ShouldReportToneMappedSdr(enabledConfig, transcodeInfo));
         Assert.IsFalse(MetadataFormatter.ShouldReportToneMappedSdr(enabledConfig, null));
+
+        transcodeInfo.IsVideoDirect = true;
+        Assert.IsFalse(MetadataFormatter.ShouldReportToneMappedSdr(enabledConfig, transcodeInfo));
     }
 
     [TestMethod]
@@ -115,6 +119,21 @@ public class MetadataFormatterTests
 
         Assert.AreEqual(
             "Transcoding (Video): Video codec not supported, HDR range not supported",
+            MetadataFormatter.FormatPlayback(transcodeInfo, showReasons: true));
+    }
+
+    [TestMethod]
+    public void FormatPlayback_OmitsHdrRangeReasonWhenVideoIsDirect()
+    {
+        var transcodeInfo = new TranscodingInfo
+        {
+            IsVideoDirect = true,
+            IsAudioDirect = false,
+            TranscodeReasons = TranscodeReason.VideoRangeTypeNotSupported
+        };
+
+        Assert.AreEqual(
+            "Transcoding (Audio)",
             MetadataFormatter.FormatPlayback(transcodeInfo, showReasons: true));
     }
 }
