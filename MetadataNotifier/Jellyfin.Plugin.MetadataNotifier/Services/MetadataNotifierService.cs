@@ -533,6 +533,7 @@ public class MetadataNotifierService : IHostedService
             || client.Contains("AFT", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Roku", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Shield", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("webOS", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("LG", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Sony", StringComparison.OrdinalIgnoreCase)
@@ -540,7 +541,8 @@ public class MetadataNotifierService : IHostedService
             || deviceName.Contains("Fire", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("AFT", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
-            || deviceName.Contains("Roku", StringComparison.OrdinalIgnoreCase);
+            || deviceName.Contains("Roku", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Shield", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsNonDolbyVisionClient(SessionInfo session)
