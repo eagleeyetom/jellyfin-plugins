@@ -9,6 +9,12 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
+  ## v1.3.0.0
+  - Add optional tone-mapped SDR detection using Jellyfin transcode reasons
+  - Improve mono PCM, Direct Stream, custom template, and audio track reporting
+  - Use the selected media version for HDR, audio, and bitrate metadata
+  - Replace fixed startup delay with bounded session polling and cancellable handlers
+  - Add debug diagnostics and unit coverage for metadata formatting
   ## v1.2.1.0
   - Upgrade plugin target framework to .NET 10 and Jellyfin 12 packages
   ## v1.2.0.0

@@ -130,7 +130,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool IgnoreAudioMedia { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets a value indicating whether an unsupported HDR transcode should be reported as SDR.
+    /// Gets or sets a value indicating whether Jellyfin tone mapping should be reported as SDR.
     /// </summary>
     public bool DesktopSdrMode { get; set; } = false;
 

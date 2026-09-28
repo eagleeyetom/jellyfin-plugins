@@ -13,6 +13,7 @@ using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Hosting;
@@ -25,9 +26,12 @@ namespace Jellyfin.Plugin.MetadataNotifier.Services;
 /// </summary>
 public class MetadataNotifierService : IHostedService
 {
+    private readonly record struct HdrDetectionResult(string Value, string Rule);
+
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<MetadataNotifierService> _logger;
     private readonly ConcurrentDictionary<string, int> _lastActiveAudioTrack = new(StringComparer.Ordinal);
+    private CancellationTokenSource? _serviceCancellation;
 
     private static readonly Regex Hdr10PlusPathRegex = new(
         @"(?:[\.\-_\[\(]HDR10Plus[\.\-_\]\)]|[\.\-_\[\(]HDR10\+[\.\-_\]\)]|\bHDR10Plus\b|\bHDR10\+\b)",
@@ -35,10 +39,6 @@ public class MetadataNotifierService : IHostedService
 
     private static readonly Regex DolbyVisionPathRegex = new(
         @"(?:[\.\-_\[\(](?:DV|DOVI|Dolby[\.\-_]?Vision)[\.\-_\]\)]|\b(?:DV|DOVI|Dolby[\.\-_]?Vision)\b)",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-    private static readonly Regex MonoChannelRegex = new(
-        @"\b(?:mono|1(?:\.0)?\s*(?:ch|channels?))\b",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
@@ -57,6 +57,7 @@ public class MetadataNotifierService : IHostedService
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        _serviceCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _sessionManager.PlaybackStart += OnPlaybackStart;
         _sessionManager.PlaybackProgress += OnPlaybackProgress;
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
@@ -70,6 +71,9 @@ public class MetadataNotifierService : IHostedService
         _sessionManager.PlaybackStart -= OnPlaybackStart;
         _sessionManager.PlaybackProgress -= OnPlaybackProgress;
         _sessionManager.PlaybackStopped -= OnPlaybackStopped;
+        _serviceCancellation?.Cancel();
+        _serviceCancellation?.Dispose();
+        _serviceCancellation = null;
         _lastActiveAudioTrack.Clear();
         _logger.LogInformation("Metadata Notifier service stopped.");
         return Task.CompletedTask;
@@ -83,7 +87,12 @@ public class MetadataNotifierService : IHostedService
         }
     }
 
-    private async void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)
+    private void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e)
+    {
+        _ = HandlePlaybackStartAsync(e, _serviceCancellation?.Token ?? CancellationToken.None);
+    }
+
+    private async Task HandlePlaybackStartAsync(PlaybackProgressEventArgs e, CancellationToken cancellationToken)
     {
         try
         {
@@ -116,20 +125,15 @@ public class MetadataNotifierService : IHostedService
                 _lastActiveAudioTrack[session.Id] = initialAudioIndex.Value;
             }
 
-            // Short delay to allow client player UI to stabilize and transcode jobs to register
-            await Task.Delay(1500).ConfigureAwait(false);
-
-            // Re-fetch session from manager to ensure it has updated transcoding info
-            var activeSession = _sessionManager.Sessions.FirstOrDefault(s => string.Equals(s.Id, session.Id, StringComparison.Ordinal));
-            if (activeSession != null)
-            {
-                session = activeSession;
-            }
+            session = await WaitForUpdatedSessionAsync(session, cancellationToken).ConfigureAwait(false);
 
             var hdrInfo = string.Empty;
+            var hdrRule = "disabled";
             if (config.ShowSdr || config.ShowHdr10Plus || config.ShowHdr10 || config.ShowDolbyVision || config.ShowHlg)
             {
-                hdrInfo = GetHdrInfo(item, session, config);
+                var hdrResult = GetHdrInfo(item, session, config);
+                hdrInfo = hdrResult.Value;
+                hdrRule = hdrResult.Rule;
             }
 
             var audioInfo = string.Empty;
@@ -141,7 +145,7 @@ public class MetadataNotifierService : IHostedService
             var playbackInfo = string.Empty;
             if (config.ShowTranscoding || config.ShowDirectPlay)
             {
-                var transcodingInfo = GetTranscodingInfo(session, config);
+                var transcodingInfo = MetadataFormatter.FormatPlayback(session.TranscodingInfo, config.ShowTranscodeReasons);
                 if (!string.IsNullOrEmpty(transcodingInfo))
                 {
                     if (string.Equals(transcodingInfo, "Direct Stream", StringComparison.Ordinal))
@@ -172,7 +176,17 @@ public class MetadataNotifierService : IHostedService
             }
 
             var header = GetNotificationHeader(item);
-            var messageText = BuildMessageText(config, hdrInfo, audioInfo, playbackInfo, bitrateInfo, header);
+            var messageText = MetadataFormatter.BuildMessageText(config, hdrInfo, audioInfo, playbackInfo, bitrateInfo, header);
+
+            _logger.LogDebug(
+                "Metadata detection for session {SessionId}: media source {MediaSourceId}, HDR rule {HdrRule}, HDR {HdrInfo}, audio {AudioInfo}, playback {PlaybackInfo}, transcode reasons {TranscodeReasons}",
+                session.Id,
+                session.PlayState?.MediaSourceId,
+                hdrRule,
+                hdrInfo,
+                audioInfo,
+                playbackInfo,
+                session.TranscodingInfo?.TranscodeReasons);
 
             if (string.IsNullOrWhiteSpace(messageText))
             {
@@ -198,7 +212,11 @@ public class MetadataNotifierService : IHostedService
                 session.Id,
                 session.Id,
                 messageCommand,
-                CancellationToken.None).ConfigureAwait(false);
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Metadata notification was cancelled because the service is stopping.");
         }
         catch (Exception ex)
         {
@@ -206,7 +224,12 @@ public class MetadataNotifierService : IHostedService
         }
     }
 
-    private async void OnPlaybackProgress(object? sender, PlaybackProgressEventArgs e)
+    private void OnPlaybackProgress(object? sender, PlaybackProgressEventArgs e)
+    {
+        _ = HandlePlaybackProgressAsync(e, _serviceCancellation?.Token ?? CancellationToken.None);
+    }
+
+    private async Task HandlePlaybackProgressAsync(PlaybackProgressEventArgs e, CancellationToken cancellationToken)
     {
         try
         {
@@ -270,8 +293,12 @@ public class MetadataNotifierService : IHostedService
                     session.Id,
                     session.Id,
                     messageCommand,
-                    CancellationToken.None).ConfigureAwait(false);
+                    cancellationToken).ConfigureAwait(false);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Audio track notification was cancelled because the service is stopping.");
         }
         catch (Exception ex)
         {
@@ -279,42 +306,27 @@ public class MetadataNotifierService : IHostedService
         }
     }
 
-    private static string BuildMessageText(
-        PluginConfiguration config,
-        string hdrInfo,
-        string audioInfo,
-        string playbackInfo,
-        string bitrateInfo,
-        string header)
+    private async Task<SessionInfo> WaitForUpdatedSessionAsync(SessionInfo originalSession, CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(config.CustomTemplate))
-        {
-            var formatted = config.CustomTemplate
-                .Replace("{hdr}", hdrInfo, StringComparison.OrdinalIgnoreCase)
-                .Replace("{audio}", audioInfo, StringComparison.OrdinalIgnoreCase)
-                .Replace("{playback}", playbackInfo, StringComparison.OrdinalIgnoreCase)
-                .Replace("{mode}", playbackInfo, StringComparison.OrdinalIgnoreCase)
-                .Replace("{bitrate}", bitrateInfo, StringComparison.OrdinalIgnoreCase)
-                .Replace("{title}", header, StringComparison.OrdinalIgnoreCase);
+        var session = originalSession;
 
-            // Clean up separators left by empty placeholders without splitting hyphenated values such as DTS-HD.
-            formatted = Regex.Replace(formatted, @"(?:\s*[•|]\s*|\s+-\s+)+", " • ")
-                .Trim()
-                .Trim('•', '|')
-                .Trim();
-            if (!string.IsNullOrWhiteSpace(formatted))
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            await Task.Delay(250, cancellationToken).ConfigureAwait(false);
+
+            var activeSession = _sessionManager.Sessions.FirstOrDefault(
+                candidate => string.Equals(candidate.Id, originalSession.Id, StringComparison.Ordinal));
+            if (activeSession != null)
             {
-                return formatted;
+                session = activeSession;
+                if (session.TranscodingInfo != null)
+                {
+                    break;
+                }
             }
         }
 
-        var parts = new List<string>();
-        if (!string.IsNullOrEmpty(hdrInfo)) parts.Add(hdrInfo);
-        if (!string.IsNullOrEmpty(audioInfo)) parts.Add(audioInfo);
-        if (!string.IsNullOrEmpty(playbackInfo)) parts.Add(playbackInfo);
-        if (!string.IsNullOrEmpty(bitrateInfo)) parts.Add(bitrateInfo);
-
-        return string.Join(" • ", parts);
+        return session;
     }
 
     private static bool ShouldIgnoreItem(BaseItem item, PluginConfiguration config)
@@ -467,19 +479,18 @@ public class MetadataNotifierService : IHostedService
         return false;
     }
 
-    private static string GetHdrInfo(BaseItem item, SessionInfo session, PluginConfiguration config)
+    private static HdrDetectionResult GetHdrInfo(BaseItem item, SessionInfo session, PluginConfiguration config)
     {
-        if (config.DesktopSdrMode
-            && session.TranscodingInfo?.TranscodeReasons.HasFlag(TranscodeReason.VideoRangeTypeNotSupported) == true)
+        if (MetadataFormatter.ShouldReportToneMappedSdr(config, session.TranscodingInfo))
         {
-            return config.ShowSdr ? "SDR" : string.Empty;
+            return new(config.ShowSdr ? "SDR" : string.Empty, "unsupported-hdr-transcode");
         }
 
-        var mediaStreams = item.GetMediaStreams();
+        var mediaStreams = GetMediaStreams(item, session);
         var videoStream = mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
         if (videoStream == null)
         {
-            return string.Empty;
+            return new(string.Empty, "no-video-stream");
         }
 
         var rangeType = videoStream.VideoRangeType;
@@ -504,25 +515,25 @@ public class MetadataNotifierService : IHostedService
         {
             if (hasDolbyVision && config.ShowDolbyVision)
             {
-                return config.UseDetailedVideoNames ? GetDetailedDolbyVisionInfo(profile, displayTitle) : "Dolby Vision";
+                return new(config.UseDetailedVideoNames ? GetDetailedDolbyVisionInfo(profile, displayTitle) : "Dolby Vision", "hdr10plus-client-fallback-dolby-vision");
             }
 
             if (HasHdr10BaseLayer(rangeType, range, profile, displayTitle) && config.ShowHdr10)
             {
-                return config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10";
+                return new(config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10", "hdr10plus-client-fallback-hdr10");
             }
 
             if ((rangeType == VideoRangeType.DOVIWithHLG || rangeType == VideoRangeType.HLG || displayTitle.Contains("HLG", StringComparison.OrdinalIgnoreCase)) && config.ShowHlg)
             {
-                return "HLG";
+                return new("HLG", "hdr10plus-client-fallback-hlg");
             }
 
             if (config.ShowSdr)
             {
-                return "SDR";
+                return new("SDR", "hdr10plus-client-fallback-sdr");
             }
 
-            return string.Empty;
+            return new(string.Empty, "hdr10plus-client-fallback-hidden");
         }
 
         // Samsung and non-DV Android clients do not support Dolby Vision hardware decoding
@@ -533,46 +544,46 @@ public class MetadataNotifierService : IHostedService
                 // Fall back to HDR10+ if the media contains HDR10+ metadata
                 if (hasHdr10Plus && config.ShowHdr10Plus)
                 {
-                    return config.UseDetailedVideoNames ? GetDetailedHdr10PlusInfo(profile, displayTitle) : "HDR10+";
+                    return new(config.UseDetailedVideoNames ? GetDetailedHdr10PlusInfo(profile, displayTitle) : "HDR10+", "dolby-vision-client-fallback-hdr10plus");
                 }
 
                 // Fall back to HDR10 base layer (Profile 7/8, DOVIWithHDR10, DOVIWithEL, or standard HDR)
                 if (HasHdr10BaseLayer(rangeType, range, profile, displayTitle) && config.ShowHdr10)
                 {
-                    return config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10";
+                    return new(config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10", "dolby-vision-client-fallback-hdr10");
                 }
 
                 // Fall back to HLG if present
                 if (rangeType == VideoRangeType.DOVIWithHLG && config.ShowHlg)
                 {
-                    return "HLG";
+                    return new("HLG", "dolby-vision-client-fallback-hlg");
                 }
 
                 // Fall back to SDR base layer (e.g. DOVI Profile 8.2 with SDR)
                 if ((rangeType == VideoRangeType.DOVIWithSDR || rangeType == VideoRangeType.SDR) && config.ShowSdr)
                 {
-                    return "SDR";
+                    return new("SDR", "dolby-vision-client-fallback-sdr");
                 }
 
-                return string.Empty;
+                return new(string.Empty, "dolby-vision-client-fallback-hidden");
             }
 
             if (config.ShowDolbyVision)
             {
-                return config.UseDetailedVideoNames ? GetDetailedDolbyVisionInfo(profile, displayTitle) : "Dolby Vision";
+                return new(config.UseDetailedVideoNames ? GetDetailedDolbyVisionInfo(profile, displayTitle) : "Dolby Vision", "dolby-vision");
             }
         }
 
         if (hasHdr10Plus && config.ShowHdr10Plus)
         {
-            return config.UseDetailedVideoNames ? GetDetailedHdr10PlusInfo(profile, displayTitle) : "HDR10+";
+            return new(config.UseDetailedVideoNames ? GetDetailedHdr10PlusInfo(profile, displayTitle) : "HDR10+", "hdr10plus");
         }
 
         if (rangeType == VideoRangeType.HLG || displayTitle.Contains("HLG", StringComparison.OrdinalIgnoreCase))
         {
             if (config.ShowHlg)
             {
-                return "HLG";
+                return new("HLG", "hlg");
             }
         }
 
@@ -580,16 +591,16 @@ public class MetadataNotifierService : IHostedService
         {
             if (config.ShowHdr10)
             {
-                return config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10";
+                return new(config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10", "hdr10");
             }
         }
 
         if (config.ShowSdr)
         {
-            return "SDR";
+            return new("SDR", "sdr");
         }
 
-        return string.Empty;
+        return new(string.Empty, "hidden-by-configuration");
     }
 
     private static bool HasHdr10BaseLayer(VideoRangeType rangeType, VideoRange range, string profile, string displayTitle)
@@ -733,7 +744,7 @@ public class MetadataNotifierService : IHostedService
 
     private static MediaStream? GetActiveAudioStream(BaseItem item, SessionInfo session)
     {
-        var mediaStreams = item.GetMediaStreams();
+        var mediaStreams = GetMediaStreams(item, session);
         int? targetAudioIndex = session.PlayState?.AudioStreamIndex;
 
         if (targetAudioIndex.HasValue)
@@ -747,6 +758,36 @@ public class MetadataNotifierService : IHostedService
 
         return mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Audio && s.IsDefault)
             ?? mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Audio);
+    }
+
+    private static IReadOnlyList<MediaStream> GetMediaStreams(BaseItem item, SessionInfo session)
+    {
+        var activeSource = GetActiveMediaSource(item, session);
+        if (activeSource?.MediaStreams is { Count: > 0 } mediaStreams)
+        {
+            return mediaStreams;
+        }
+
+        return item.GetMediaStreams();
+    }
+
+    private static MediaSourceInfo? GetActiveMediaSource(BaseItem item, SessionInfo session)
+    {
+        if (item is not IHasMediaSources hasMediaSources)
+        {
+            return null;
+        }
+
+        var mediaSources = hasMediaSources.GetMediaSources(false);
+        if (mediaSources == null || mediaSources.Count == 0)
+        {
+            return null;
+        }
+
+        var mediaSourceId = session.PlayState?.MediaSourceId;
+        return string.IsNullOrEmpty(mediaSourceId)
+            ? mediaSources[0]
+            : mediaSources.FirstOrDefault(source => string.Equals(source.Id, mediaSourceId, StringComparison.Ordinal));
     }
 
     private static string GetAudioInfo(BaseItem item, SessionInfo session, PluginConfiguration config)
@@ -772,11 +813,11 @@ public class MetadataNotifierService : IHostedService
 
         if (isAtmos)
         {
-            displayCodec = config.UseDetailedAudioNames ? $"{GetBaseCodec(codec, true)} Atmos" : "Dolby Atmos";
+            displayCodec = config.UseDetailedAudioNames ? $"{MetadataFormatter.GetBaseCodec(codec, true)} Atmos" : "Dolby Atmos";
         }
         else if (isDtsx)
         {
-            displayCodec = config.UseDetailedAudioNames ? $"{GetBaseCodec(codec, true)} DTS:X" : "DTS:X";
+            displayCodec = config.UseDetailedAudioNames ? $"{MetadataFormatter.GetBaseCodec(codec, true)} DTS:X" : "DTS:X";
         }
         else if (combined.Contains("DTS-HD MA", StringComparison.OrdinalIgnoreCase)
                  || combined.Contains("DTS-HD MASTER", StringComparison.OrdinalIgnoreCase)
@@ -796,10 +837,10 @@ public class MetadataNotifierService : IHostedService
         }
         else
         {
-            displayCodec = GetBaseCodec(codec, config.UseDetailedAudioNames);
+            displayCodec = MetadataFormatter.GetBaseCodec(codec, config.UseDetailedAudioNames);
         }
 
-        string channelStr = FormatAudioChannels(audioStream);
+        string channelStr = MetadataFormatter.FormatAudioChannels(audioStream);
         string displayAudio = !string.IsNullOrEmpty(channelStr) ? $"{displayCodec} {channelStr}" : displayCodec;
 
         // Audio conversion visualization: e.g. "Dolby TrueHD 7.1 ➔ Dolby Digital 5.1"
@@ -808,9 +849,9 @@ public class MetadataNotifierService : IHostedService
             && !session.TranscodingInfo.IsAudioDirect
             && !string.IsNullOrWhiteSpace(session.TranscodingInfo.AudioCodec))
         {
-            var targetCodec = GetBaseCodec(session.TranscodingInfo.AudioCodec.ToUpperInvariant(), config.UseDetailedAudioNames);
+            var targetCodec = MetadataFormatter.GetBaseCodec(session.TranscodingInfo.AudioCodec.ToUpperInvariant(), config.UseDetailedAudioNames);
             var targetChannels = session.TranscodingInfo.AudioChannels.HasValue
-                ? FormatChannelCount(session.TranscodingInfo.AudioChannels.Value)
+                ? MetadataFormatter.FormatChannelCount(session.TranscodingInfo.AudioChannels.Value)
                 : string.Empty;
 
             var targetAudio = !string.IsNullOrEmpty(targetChannels) ? $"{targetCodec} {targetChannels}" : targetCodec;
@@ -820,208 +861,43 @@ public class MetadataNotifierService : IHostedService
         return displayAudio;
     }
 
-    private static string FormatChannelCount(int channels)
-    {
-        return channels switch
-        {
-            8 => "7.1",
-            7 => "6.1",
-            6 => "5.1",
-            3 => "2.1",
-            2 => "2.0",
-            1 => "Mono",
-            _ => channels > 0 ? $"{channels}ch" : string.Empty
-        };
-    }
-
-    private static string FormatAudioChannels(MediaStream audioStream)
-    {
-        var channels = audioStream.Channels ?? 0;
-        var channelLayout = audioStream.ChannelLayout ?? string.Empty;
-
-        if (!string.IsNullOrWhiteSpace(channelLayout))
-        {
-            if (channelLayout.StartsWith("7.1", StringComparison.OrdinalIgnoreCase)) return "7.1";
-            if (channelLayout.StartsWith("5.1", StringComparison.OrdinalIgnoreCase)) return "5.1";
-            if (channelLayout.StartsWith("6.1", StringComparison.OrdinalIgnoreCase)) return "6.1";
-            if (channelLayout.Equals("stereo", StringComparison.OrdinalIgnoreCase)) return "2.0";
-            if (channelLayout.Equals("mono", StringComparison.OrdinalIgnoreCase)
-                || channelLayout.StartsWith("1.0", StringComparison.OrdinalIgnoreCase)) return "Mono";
-        }
-
-        var channelMetadata = $"{audioStream.Title} {audioStream.DisplayTitle}";
-        if (MonoChannelRegex.IsMatch(channelMetadata))
-        {
-            return "Mono";
-        }
-
-        return FormatChannelCount(channels);
-    }
-
-    private static string GetBaseCodec(string codec, bool detailed)
-    {
-        if (!detailed && codec.StartsWith("PCM_", StringComparison.OrdinalIgnoreCase))
-        {
-            return "PCM";
-        }
-
-        if (detailed)
-        {
-            return codec switch
-            {
-                "TRUEHD" or "TRUHD" => "TRUEHD",
-                "EAC3" => "E-AC-3",
-                "AC3" => "AC3",
-                "DCA" or "DTS" => "DTS",
-                "AAC" => "AAC",
-                "FLAC" => "FLAC",
-                "OPUS" => "OPUS",
-                "VORBIS" => "VORBIS",
-                "MP3" => "MP3",
-                "PCM" or "LPCM" => "PCM",
-                _ => codec
-            };
-        }
-
-        return codec switch
-        {
-            "TRUEHD" or "TRUHD" => "Dolby TrueHD",
-            "EAC3" => "Dolby Digital+",
-            "AC3" => "Dolby Digital",
-            "DCA" or "DTS" => "DTS",
-            "AAC" => "AAC",
-            "FLAC" => "FLAC",
-            "OPUS" => "Opus",
-            "VORBIS" => "Vorbis",
-            "MP3" => "MP3",
-            "PCM" or "LPCM" => "PCM",
-            _ => codec
-        };
-    }
-
-    private static string? GetTranscodingInfo(SessionInfo session, PluginConfiguration config)
-    {
-        var transcodeInfo = session.TranscodingInfo;
-        if (transcodeInfo == null)
-        {
-            return null;
-        }
-
-        var videoTranscode = !transcodeInfo.IsVideoDirect;
-        var audioTranscode = !transcodeInfo.IsAudioDirect;
-
-        string baseMode;
-        if (videoTranscode && audioTranscode)
-        {
-            baseMode = "Transcoding (Video & Audio)";
-        }
-        else if (videoTranscode)
-        {
-            baseMode = "Transcoding (Video)";
-        }
-        else if (audioTranscode)
-        {
-            baseMode = "Transcoding (Audio)";
-        }
-        else
-        {
-            baseMode = "Direct Stream";
-        }
-
-        if (config.ShowTranscodeReasons && (int)transcodeInfo.TranscodeReasons != 0)
-        {
-            var reasons = Enum.GetValues<TranscodeReason>()
-                .Where(r => (int)r != 0 && transcodeInfo.TranscodeReasons.HasFlag(r))
-                .Select(FormatTranscodeReason)
-                .Distinct(StringComparer.OrdinalIgnoreCase);
-
-            var reasonsStr = string.Join(", ", reasons);
-            if (!string.IsNullOrEmpty(reasonsStr))
-            {
-                return $"{baseMode}: {reasonsStr}";
-            }
-        }
-
-        return baseMode;
-    }
-
-    private static string FormatTranscodeReason(TranscodeReason reason)
-    {
-        return reason switch
-        {
-            TranscodeReason.ContainerNotSupported => "Container not supported",
-            TranscodeReason.VideoCodecNotSupported => "Video codec not supported",
-            TranscodeReason.AudioCodecNotSupported => "Audio codec not supported",
-            TranscodeReason.SubtitleCodecNotSupported => "Subtitles incompatible",
-            TranscodeReason.AudioChannelsNotSupported => "Audio channels not supported",
-            TranscodeReason.AudioBitrateNotSupported => "Audio bitrate exceeded",
-            TranscodeReason.VideoBitrateNotSupported => "Bitrate limit exceeded",
-            TranscodeReason.VideoResolutionNotSupported => "Resolution not supported",
-            TranscodeReason.VideoProfileNotSupported => "Video profile not supported",
-            TranscodeReason.DirectPlayError => "Direct Play error",
-            TranscodeReason.SecondaryAudioNotSupported => "Secondary audio not supported",
-            TranscodeReason.RefFramesNotSupported => "Reference frames not supported",
-            TranscodeReason.VideoRangeTypeNotSupported => "HDR range not supported",
-            _ => reason.ToString()
-        };
-    }
-
     private static string GetBitrateInfo(BaseItem item, SessionInfo session)
     {
         // 1. Check transcoding bitrate first if actively transcoding
         if (session.TranscodingInfo?.Bitrate > 0)
         {
-            return FormatBitrate((long)session.TranscodingInfo.Bitrate);
+            return MetadataFormatter.FormatBitrate((long)session.TranscodingInfo.Bitrate);
         }
 
         // 2. Try container / media source total bitrate
-        if (item is IHasMediaSources hasMediaSources)
+        var activeSource = GetActiveMediaSource(item, session);
+        if (activeSource?.Bitrate is int totalBitrate && totalBitrate > 0)
         {
-            var mediaSources = hasMediaSources.GetMediaSources(false);
-            var source = mediaSources?.FirstOrDefault();
-            if (source?.Bitrate is int totalBitrate && totalBitrate > 0)
-            {
-                return FormatBitrate(totalBitrate);
-            }
+            return MetadataFormatter.FormatBitrate(totalBitrate);
         }
 
         if (item.TotalBitrate is int itemBitrate && itemBitrate > 0)
         {
-            return FormatBitrate(itemBitrate);
+            return MetadataFormatter.FormatBitrate(itemBitrate);
         }
 
         // 3. Fall back to summing video stream and active audio stream
-        var mediaStreams = item.GetMediaStreams();
+        var mediaStreams = GetMediaStreams(item, session);
         var videoStream = mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
         if (videoStream?.BitRate is int videoBitrate && videoBitrate > 0)
         {
             var audioStream = GetActiveAudioStream(item, session);
             long totalBps = videoBitrate + (audioStream?.BitRate ?? 0);
-            return FormatBitrate(totalBps);
+            return MetadataFormatter.FormatBitrate(totalBps);
         }
 
         var fallbackAudio = GetActiveAudioStream(item, session);
         if (fallbackAudio?.BitRate is int audioOnlyBitrate && audioOnlyBitrate > 0)
         {
-            return FormatBitrate(audioOnlyBitrate);
+            return MetadataFormatter.FormatBitrate(audioOnlyBitrate);
         }
 
         return string.Empty;
     }
 
-    private static string FormatBitrate(long bitrateBps)
-    {
-        if (bitrateBps >= 1_000_000)
-        {
-            double mbps = (double)bitrateBps / 1_000_000;
-            return mbps >= 10 ? $"{Math.Round(mbps, 0)} Mbps" : $"{Math.Round(mbps, 1)} Mbps";
-        }
-
-        if (bitrateBps >= 1_000)
-        {
-            return $"{Math.Round((double)bitrateBps / 1_000, 0)} kbps";
-        }
-
-        return $"{bitrateBps} bps";
-    }
 }
