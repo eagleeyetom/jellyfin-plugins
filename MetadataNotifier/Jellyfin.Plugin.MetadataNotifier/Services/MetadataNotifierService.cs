@@ -37,6 +37,10 @@ public class MetadataNotifierService : IHostedService
         @"(?:[\.\-_\[\(](?:DV|DOVI|Dolby[\.\-_]?Vision)[\.\-_\]\)]|\b(?:DV|DOVI|Dolby[\.\-_]?Vision)\b)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static readonly Regex MonoChannelRegex = new(
+        @"\b(?:mono|1(?:\.0)?\s*(?:ch|channels?))\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     /// <summary>
     /// Initializes a new instance of the <see cref="MetadataNotifierService"/> class.
     /// </summary>
@@ -106,6 +110,12 @@ public class MetadataNotifierService : IHostedService
                 return;
             }
 
+            int? initialAudioIndex = session.PlayState?.AudioStreamIndex;
+            if (initialAudioIndex.HasValue)
+            {
+                _lastActiveAudioTrack[session.Id] = initialAudioIndex.Value;
+            }
+
             // Short delay to allow client player UI to stabilize and transcode jobs to register
             await Task.Delay(1500).ConfigureAwait(false);
 
@@ -114,13 +124,6 @@ public class MetadataNotifierService : IHostedService
             if (activeSession != null)
             {
                 session = activeSession;
-            }
-
-            // Remember initial active audio track so progress event won't immediately trigger
-            int? initialAudioIndex = session.PlayState?.AudioStreamIndex;
-            if (initialAudioIndex.HasValue)
-            {
-                _lastActiveAudioTrack[session.Id] = initialAudioIndex.Value;
             }
 
             var hdrInfo = string.Empty;
@@ -141,7 +144,14 @@ public class MetadataNotifierService : IHostedService
                 var transcodingInfo = GetTranscodingInfo(session, config);
                 if (!string.IsNullOrEmpty(transcodingInfo))
                 {
-                    if (config.ShowTranscoding)
+                    if (string.Equals(transcodingInfo, "Direct Stream", StringComparison.Ordinal))
+                    {
+                        if (config.ShowDirectPlay)
+                        {
+                            playbackInfo = transcodingInfo;
+                        }
+                    }
+                    else if (config.ShowTranscoding)
                     {
                         playbackInfo = transcodingInfo;
                     }
@@ -287,8 +297,11 @@ public class MetadataNotifierService : IHostedService
                 .Replace("{bitrate}", bitrateInfo, StringComparison.OrdinalIgnoreCase)
                 .Replace("{title}", header, StringComparison.OrdinalIgnoreCase);
 
-            // Clean up any double bullets, leading/trailing bullets, or extra spaces left by empty placeholders
-            formatted = Regex.Replace(formatted, @"(?:\s*[•\|\-]\s*)+", " • ").Trim(' ', '•', '|', '-');
+            // Clean up separators left by empty placeholders without splitting hyphenated values such as DTS-HD.
+            formatted = Regex.Replace(formatted, @"(?:\s*[•|]\s*|\s+-\s+)+", " • ")
+                .Trim()
+                .Trim('•', '|')
+                .Trim();
             if (!string.IsNullOrWhiteSpace(formatted))
             {
                 return formatted;
@@ -456,13 +469,10 @@ public class MetadataNotifierService : IHostedService
 
     private static string GetHdrInfo(BaseItem item, SessionInfo session, PluginConfiguration config)
     {
-        if (config.DesktopSdrMode)
+        if (config.DesktopSdrMode
+            && session.TranscodingInfo?.TranscodeReasons.HasFlag(TranscodeReason.VideoRangeTypeNotSupported) == true)
         {
-            if (config.ShowSdr)
-            {
-                return "SDR";
-            }
-            return string.Empty;
+            return config.ShowSdr ? "SDR" : string.Empty;
         }
 
         var mediaStreams = item.GetMediaStreams();
@@ -835,7 +845,14 @@ public class MetadataNotifierService : IHostedService
             if (channelLayout.StartsWith("5.1", StringComparison.OrdinalIgnoreCase)) return "5.1";
             if (channelLayout.StartsWith("6.1", StringComparison.OrdinalIgnoreCase)) return "6.1";
             if (channelLayout.Equals("stereo", StringComparison.OrdinalIgnoreCase)) return "2.0";
-            if (channelLayout.Equals("mono", StringComparison.OrdinalIgnoreCase)) return "Mono";
+            if (channelLayout.Equals("mono", StringComparison.OrdinalIgnoreCase)
+                || channelLayout.StartsWith("1.0", StringComparison.OrdinalIgnoreCase)) return "Mono";
+        }
+
+        var channelMetadata = $"{audioStream.Title} {audioStream.DisplayTitle}";
+        if (MonoChannelRegex.IsMatch(channelMetadata))
+        {
+            return "Mono";
         }
 
         return FormatChannelCount(channels);
@@ -843,6 +860,11 @@ public class MetadataNotifierService : IHostedService
 
     private static string GetBaseCodec(string codec, bool detailed)
     {
+        if (!detailed && codec.StartsWith("PCM_", StringComparison.OrdinalIgnoreCase))
+        {
+            return "PCM";
+        }
+
         if (detailed)
         {
             return codec switch
