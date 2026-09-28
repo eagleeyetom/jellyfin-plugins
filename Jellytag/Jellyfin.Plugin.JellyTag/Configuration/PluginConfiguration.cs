@@ -132,6 +132,7 @@ public class ImageTypeConfig
     public BadgePanelSettings HdrPanel { get; set; } = new();
     public BadgePanelSettings CodecPanel { get; set; } = new();
     public BadgePanelSettings AudioPanel { get; set; } = new();
+    public BadgePanelSettings ChannelPanel { get; set; } = new();
     public BadgePanelSettings LanguagePanel { get; set; } = new();
 
     // VOST settings (attached to Language panel)
@@ -240,18 +241,71 @@ public class PluginConfiguration : BasePluginConfiguration
     {
         foreach (var imageConfig in new[] { PosterConfig, ThumbnailConfig })
         {
+            if (imageConfig.ChannelPanel == null || imageConfig.ChannelPanel.EnabledBadges == null || imageConfig.ChannelPanel.EnabledBadges.Count == 0)
+            {
+                var chBadges = new List<string>();
+                var audioBadgesList = imageConfig.AudioPanel?.EnabledBadges;
+                if (audioBadgesList != null)
+                {
+                    chBadges = audioBadgesList.Where(k => k is "7.1" or "5.1" or "stereo" or "mono").ToList();
+                    audioBadgesList.RemoveAll(k => k is "7.1" or "5.1" or "stereo" or "mono");
+                }
+
+                if (chBadges.Count == 0)
+                {
+                    chBadges = new List<string> { "7.1", "5.1", "stereo", "mono" };
+                }
+
+                var basePanel = imageConfig.AudioPanel;
+                imageConfig.ChannelPanel = new BadgePanelSettings
+                {
+                    Enabled = basePanel?.Enabled ?? true,
+                    Order = 4,
+                    Position = basePanel?.Position ?? BadgePosition.TopLeft,
+                    Layout = basePanel?.Layout ?? BadgeLayout.Vertical,
+                    SizePercent = basePanel?.SizePercent > 0 ? basePanel.SizePercent : 15,
+                    MarginPercent = basePanel?.MarginPercent ?? 2f,
+                    GapPercent = basePanel?.GapPercent ?? 10f,
+                    Style = BadgeStyle.Image,
+                    TextBgColor = basePanel?.TextBgColor ?? "#000000",
+                    TextBgOpacity = basePanel?.TextBgOpacity ?? 180,
+                    TextColor = basePanel?.TextColor ?? "#FFFFFF",
+                    TextCornerRadius = basePanel?.TextCornerRadius ?? 25,
+                    EnabledBadges = chBadges
+                };
+
+                if (imageConfig.LanguagePanel != null && imageConfig.LanguagePanel.Order <= 4)
+                {
+                    imageConfig.LanguagePanel.Order = 5;
+                }
+            }
+            else
+            {
+                var audioBadgesList = imageConfig.AudioPanel?.EnabledBadges;
+                if (audioBadgesList != null)
+                {
+                    audioBadgesList.RemoveAll(k => k is "7.1" or "5.1" or "stereo" or "mono");
+                }
+            }
+
+            var channels = imageConfig.ChannelPanel?.EnabledBadges;
+            if (channels != null && channels.Count > 0)
+            {
+                if (channels.Contains("stereo", StringComparer.OrdinalIgnoreCase)
+                    && !channels.Contains("mono", StringComparer.OrdinalIgnoreCase))
+                {
+                    channels.Add("mono");
+                }
+            }
+
             var audio = imageConfig?.AudioPanel?.EnabledBadges;
             if (audio != null)
             {
+                audio.RemoveAll(k => k is "7.1" or "5.1" or "stereo" or "mono");
                 if (audio.Contains("truehd", StringComparer.OrdinalIgnoreCase)
                     && !audio.Contains("opus", StringComparer.OrdinalIgnoreCase))
                 {
                     audio.Add("opus");
-                }
-                if (audio.Contains("stereo", StringComparer.OrdinalIgnoreCase)
-                    && !audio.Contains("mono", StringComparer.OrdinalIgnoreCase))
-                {
-                    audio.Add("mono");
                 }
                 if (audio.Contains("dtshdma", StringComparer.OrdinalIgnoreCase))
                 {
@@ -325,7 +379,9 @@ public class PluginConfiguration : BasePluginConfiguration
         if (ShowTrueHD == true) audioBadges.Add("truehd");
         if (ShowDtsHdMa == true) audioBadges.Add("dtshdma");
         if (ShowOpus == true) audioBadges.Add("opus");
-        if (ShowChannelBadge == true) { audioBadges.Add("7.1"); audioBadges.Add("5.1"); audioBadges.Add("stereo"); audioBadges.Add("mono"); }
+
+        var channelBadges = new List<string>();
+        if (ShowChannelBadge == true) { channelBadges.Add("7.1"); channelBadges.Add("5.1"); channelBadges.Add("stereo"); channelBadges.Add("mono"); }
 
         var langMode = LanguageBadgeMode ?? Configuration.LanguageBadgeMode.All;
 
@@ -394,6 +450,20 @@ public class PluginConfiguration : BasePluginConfiguration
             target.AudioPanel.EnabledBadges = new List<string>(audioBadges);
             target.AudioPanel.Order = 3;
 
+            // Channel panel
+            target.ChannelPanel.Position = audioPos;
+            target.ChannelPanel.Layout = audioLayout;
+            target.ChannelPanel.SizePercent = old.AudioBadgeSizePercent > 0 ? old.AudioBadgeSizePercent : old.BadgeSizePercent;
+            target.ChannelPanel.MarginPercent = old.BadgeMarginPercent;
+            target.ChannelPanel.GapPercent = old.BadgeGapPercent;
+            target.ChannelPanel.Style = BadgeStyle.Image;
+            target.ChannelPanel.TextBgColor = old.AudioBadgeBgColor ?? old.TextBadgeBgColor;
+            target.ChannelPanel.TextBgOpacity = old.AudioTextBadgeBgOpacity > 0 ? old.AudioTextBadgeBgOpacity : old.TextBadgeBgOpacity;
+            target.ChannelPanel.TextColor = old.AudioBadgeTextColor ?? old.TextBadgeTextColor;
+            target.ChannelPanel.TextCornerRadius = old.AudioTextBadgeCornerRadius >= 0 ? old.AudioTextBadgeCornerRadius : old.TextBadgeCornerRadius;
+            target.ChannelPanel.EnabledBadges = new List<string>(channelBadges);
+            target.ChannelPanel.Order = 4;
+
             // Language panel
             var langPos = old.LanguageBadgePosition ?? audioPos;
             var langLayout = old.LanguageBadgeLayout ?? audioLayout;
@@ -410,7 +480,7 @@ public class PluginConfiguration : BasePluginConfiguration
             target.LanguagePanel.TextCornerRadius = old.LanguageTextBadgeCornerRadius >= 0 ? old.LanguageTextBadgeCornerRadius : old.TextBadgeCornerRadius;
             target.LanguagePanel.Enabled = langMode != Configuration.LanguageBadgeMode.None;
             target.LanguagePanel.ShowMode = langMode == Configuration.LanguageBadgeMode.DefaultOnly ? BadgeDisplayMode.Highest : BadgeDisplayMode.All;
-            target.LanguagePanel.Order = 4;
+            target.LanguagePanel.Order = 5;
 
             // VOST
             target.ShowVostIndicator = ShowSubtitleIndicator ?? true;
@@ -477,11 +547,17 @@ public class PluginConfiguration : BasePluginConfiguration
         {
             Enabled = true, Order = 3, Position = BadgePosition.TopLeft,
             Layout = BadgeLayout.Vertical, SizePercent = 15, MarginPercent = 2f, GapPercent = 10f,
-            EnabledBadges = new List<string> { "atmos", "dtsx", "truehd", "dtshdma", "flac", "dts", "eac3", "opus", "ac3", "aac", "7.1", "5.1", "stereo", "mono" }
+            EnabledBadges = new List<string> { "atmos", "dtsx", "truehd", "dtshdma", "flac", "dts", "eac3", "opus", "ac3", "aac" }
+        };
+        config.ChannelPanel = new BadgePanelSettings
+        {
+            Enabled = true, Order = 4, Position = BadgePosition.TopLeft,
+            Layout = BadgeLayout.Vertical, SizePercent = 15, MarginPercent = 2f, GapPercent = 10f,
+            EnabledBadges = new List<string> { "7.1", "5.1", "stereo", "mono" }
         };
         config.LanguagePanel = new BadgePanelSettings
         {
-            Enabled = true, Order = 4, Position = BadgePosition.TopLeft,
+            Enabled = true, Order = 5, Position = BadgePosition.TopLeft,
             Layout = BadgeLayout.Vertical, SizePercent = 15, MarginPercent = 2f, GapPercent = 10f,
             ShowMode = BadgeDisplayMode.All,
             Style = BadgeStyle.Image,
@@ -523,11 +599,17 @@ public class PluginConfiguration : BasePluginConfiguration
         {
             Enabled = true, Order = 3, Position = BadgePosition.TopLeft,
             Layout = BadgeLayout.Vertical, SizePercent = 10, MarginPercent = 2.5f, GapPercent = 10f,
-            EnabledBadges = new List<string> { "atmos", "dtsx", "truehd", "dtshdma", "flac", "dts", "eac3", "opus", "ac3", "aac", "7.1", "5.1", "stereo", "mono" }
+            EnabledBadges = new List<string> { "atmos", "dtsx", "truehd", "dtshdma", "flac", "dts", "eac3", "opus", "ac3", "aac" }
+        };
+        config.ChannelPanel = new BadgePanelSettings
+        {
+            Enabled = true, Order = 4, Position = BadgePosition.TopLeft,
+            Layout = BadgeLayout.Vertical, SizePercent = 10, MarginPercent = 2.5f, GapPercent = 10f,
+            EnabledBadges = new List<string> { "7.1", "5.1", "stereo", "mono" }
         };
         config.LanguagePanel = new BadgePanelSettings
         {
-            Enabled = true, Order = 4, Position = BadgePosition.TopLeft,
+            Enabled = true, Order = 5, Position = BadgePosition.TopLeft,
             Layout = BadgeLayout.Vertical, SizePercent = 10, MarginPercent = 2.5f, GapPercent = 10f,
             ShowMode = BadgeDisplayMode.All,
             Style = BadgeStyle.Image,

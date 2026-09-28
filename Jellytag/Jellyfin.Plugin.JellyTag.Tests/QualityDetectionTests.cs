@@ -287,4 +287,48 @@ public class QualityDetectionTests
         Assert.AreEqual("dv", badges[0].BadgeKey);
         Assert.AreEqual("hdr10", badges[1].BadgeKey);
     }
+
+    [TestMethod]
+    public void DetectAudio_AssignsChannelsCategoryToChannelBadges()
+    {
+        var stream = new MediaStream
+        {
+            Type = MediaStreamType.Audio,
+            Codec = "AC3",
+            Title = "USP Sound Handler - Polish - Dolby Digital - 5.1 - Domyślne",
+            Channels = 6,
+            ChannelLayout = "5.1"
+        };
+
+        var badges = QualityDetectionService.DetectAudio([stream]);
+
+        var codecBadge = badges.FirstOrDefault(b => b.BadgeKey == "ac3");
+        var channelBadge = badges.FirstOrDefault(b => b.BadgeKey == "5.1");
+
+        Assert.IsNotNull(codecBadge, "Codec badge should be detected");
+        Assert.AreEqual(BadgeCategory.Audio, codecBadge.Category, "Codec badge should have Audio category");
+
+        Assert.IsNotNull(channelBadge, "Channel badge should be detected");
+        Assert.AreEqual(BadgeCategory.Channels, channelBadge.Category, "Channel badge should have Channels category");
+    }
+
+    [TestMethod]
+    public void GetChannelQualityScore_ScoresHigherChannelCountsHigher()
+    {
+        var ch71 = new List<BadgeInfo> { new() { Category = BadgeCategory.Channels, BadgeKey = "7.1" } };
+        var ch51 = new List<BadgeInfo> { new() { Category = BadgeCategory.Channels, BadgeKey = "5.1" } };
+        var chStereo = new List<BadgeInfo> { new() { Category = BadgeCategory.Channels, BadgeKey = "stereo" } };
+        var chMono = new List<BadgeInfo> { new() { Category = BadgeCategory.Channels, BadgeKey = "mono" } };
+
+        var score71 = QualityDetectionService.GetChannelQualityScore(ch71);
+        var score51 = QualityDetectionService.GetChannelQualityScore(ch51);
+        var scoreStereo = QualityDetectionService.GetChannelQualityScore(chStereo);
+        var scoreMono = QualityDetectionService.GetChannelQualityScore(chMono);
+
+#pragma warning disable MSTEST0037
+        Assert.IsTrue(score71 > score51);
+        Assert.IsTrue(score51 > scoreStereo);
+        Assert.IsTrue(scoreStereo > scoreMono);
+#pragma warning restore MSTEST0037
+    }
 }

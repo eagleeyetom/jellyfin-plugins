@@ -19,7 +19,7 @@ The fork contains practical fixes and maintenance changes for a personal Jellyfi
 
 ## Features
 
-- **Multi-category badges**: Resolution, HDR, Video Codec, Audio, Language flags, and VOST indicator
+- **Multi-category badges**: Resolution, HDR, Video Codec, Audio Codec, Audio Channels, Language flags, and VOST indicator
 - **Universal client support**: Server-side rendering via HTTP middleware — works on all Jellyfin clients
 - **Per-image-type configuration**: Independent settings for posters and thumbnails (position, size, layout, style)
 - **Per-panel customization**: Each badge category has its own panel with position, layout, ordering, colors, and display mode (highest only or all)

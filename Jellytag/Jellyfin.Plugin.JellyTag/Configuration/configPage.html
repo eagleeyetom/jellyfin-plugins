@@ -285,7 +285,13 @@
             },
             Audio: {
                 title: 'Audio Badges',
-                badges: [{id:'Atmos',key:'atmos',label:'Dolby Atmos'},{id:'DtsX',key:'dtsx',label:'DTS:X'},{id:'TrueHD',key:'truehd',label:'Dolby TrueHD'},{id:'DtsHdMa',key:'dtshdma',label:'DTS-HD MA'},{id:'Flac',key:'flac',label:'FLAC'},{id:'Dts',key:'dts',label:'DTS'},{id:'Eac3',key:'eac3',label:'Dolby Digital+ (E-AC-3)'},{id:'Opus',key:'opus',label:'Opus'},{id:'Ac3',key:'ac3',label:'Dolby Digital (AC3)'},{id:'Aac',key:'aac',label:'AAC'},{id:'Channel',key:'channel',label:'Channel Layout (7.1/5.1/Stereo/Mono)'}],
+                badges: [{id:'Atmos',key:'atmos',label:'Dolby Atmos'},{id:'DtsX',key:'dtsx',label:'DTS:X'},{id:'TrueHD',key:'truehd',label:'Dolby TrueHD'},{id:'DtsHdMa',key:'dtshdma',label:'DTS-HD MA'},{id:'Flac',key:'flac',label:'FLAC'},{id:'Dts',key:'dts',label:'DTS'},{id:'Eac3',key:'eac3',label:'Dolby Digital+ (E-AC-3)'},{id:'Opus',key:'opus',label:'Opus'},{id:'Ac3',key:'ac3',label:'Dolby Digital (AC3)'},{id:'Aac',key:'aac',label:'AAC'}],
+                hasShowMode: true,
+                showModeOptions: [{v:'Highest',l:'Highest only'},{v:'All',l:'All'}]
+            },
+            Channel: {
+                title: 'Channel Badges',
+                badges: [{id:'Ch71',key:'7.1',label:'7.1 Surround'},{id:'Ch51',key:'5.1',label:'5.1 Surround'},{id:'ChStereo',key:'stereo',label:'Stereo / 2.0'},{id:'ChMono',key:'mono',label:'Mono'}],
                 hasShowMode: true,
                 showModeOptions: [{v:'Highest',l:'Highest only'},{v:'All',l:'All'}]
             }
@@ -358,11 +364,14 @@
             h += '<div id="' + k + 'GapWrap">' + num(k + 'Gap', 'Gap between badges (%)', 0, 50, 1) + '</div>';
             h += num(k + 'Size', 'Badge Size (%)', 0, 100, 1);
             h += num(k + 'Margin', 'Margin (%)', 0, 20, 0.5);
-            h += sel(k + 'Style', 'Badge Style', [{v:'Image',l:'Image'},{v:'Text',l:'Text'},{v:'Logo',l:'Brand Logo'}]);
+            var logoBadges = (def.badges || []).filter(function(b) { return !!AVAILABLE_LOGOS[b.key]; });
+            var styleOpts = logoBadges.length > 0
+                ? [{v:'Image',l:'Image'},{v:'Text',l:'Text'},{v:'Logo',l:'Brand Logo'}]
+                : [{v:'Image',l:'Image'},{v:'Text',l:'Text'}];
+            h += sel(k + 'Style', 'Badge Style', styleOpts);
             h += sel(k + 'IconStyle', 'Icon Style', [{v:'Rectangular',l:'Rectangular'},{v:'Square',l:'Square'},{v:'Round',l:'Round'}]);
 
             // Brand Logo settings (when Style == Logo)
-            var logoBadges = (def.badges || []).filter(function(b) { return !!AVAILABLE_LOGOS[b.key]; });
             if (logoBadges.length > 0) {
                 h += '<div id="' + k + 'LogoSettings" class="jellytag-text-box hidden">';
                 h += '<div style="font-weight:600; margin-bottom:.3em;">Active Brand Logos</div>';
@@ -424,7 +433,7 @@
         }
 
         function generatePanels(prefix) {
-            return panelHTML(prefix, 'Res') + panelHTML(prefix, 'Hdr') + panelHTML(prefix, 'Codec') + panelHTML(prefix, 'Audio') + langPanelHTML(prefix);
+            return panelHTML(prefix, 'Res') + panelHTML(prefix, 'Hdr') + panelHTML(prefix, 'Codec') + panelHTML(prefix, 'Audio') + panelHTML(prefix, 'Channel') + langPanelHTML(prefix);
         }
 
         // ===== Panel reordering =====
@@ -644,7 +653,7 @@
         }
 
         function setupAllToggles(prefix) {
-            ['Res', 'Hdr', 'Codec', 'Audio'].forEach(function(pid) {
+            ['Res', 'Hdr', 'Codec', 'Audio', 'Channel'].forEach(function(pid) {
                 setupEnableToggle(prefix + pid);
                 setupStyleToggle(prefix + pid);
                 setupBadgeSelToggle(prefix + pid);
@@ -658,7 +667,7 @@
         }
 
         // ===== Config loading =====
-        function q(id) { return document.querySelector('#' + id); }
+        function q(id) { return document.getElementById(id); }
 
         function loadPanelConfig(prefix, panelId, pc) {
             if (!pc) return;
@@ -680,11 +689,7 @@
                 def.badges.forEach(function(b) {
                     var el = q(k + b.id);
                     if (el) {
-                        if (b.key === 'channel') {
-                            el.checked = en.indexOf('7.1') >= 0 || en.indexOf('5.1') >= 0 || en.indexOf('stereo') >= 0 || en.indexOf('mono') >= 0;
-                        } else {
-                            el.checked = en.indexOf(b.key) >= 0;
-                        }
+                        el.checked = en.indexOf(b.key) >= 0;
                     }
 
                     var logoEl = q(k + 'Logo_' + b.key);
@@ -866,6 +871,17 @@
             loadPanelConfig(prefix, 'Hdr', itc.HdrPanel);
             loadPanelConfig(prefix, 'Codec', itc.CodecPanel);
             loadPanelConfig(prefix, 'Audio', itc.AudioPanel);
+            if (!itc.ChannelPanel || !itc.ChannelPanel.EnabledBadges || itc.ChannelPanel.EnabledBadges.length === 0) {
+                var chBadges = (itc.AudioPanel && itc.AudioPanel.EnabledBadges ? itc.AudioPanel.EnabledBadges : []).filter(function(x) {
+                    return x === '7.1' || x === '5.1' || x === 'stereo' || x === 'mono';
+                });
+                itc.ChannelPanel = Object.assign({}, itc.AudioPanel || {}, {
+                    EnabledBadges: chBadges.length > 0 ? chBadges : ['7.1', '5.1', 'stereo', 'mono'],
+                    Order: 4,
+                    Style: 'Image'
+                });
+            }
+            loadPanelConfig(prefix, 'Channel', itc.ChannelPanel);
             loadLangConfig(prefix, itc.LanguagePanel, itc);
             // Sort panels by Order
             var orderMap = {
@@ -873,7 +889,8 @@
                 Hdr: (itc.HdrPanel || {}).Order || 0,
                 Codec: (itc.CodecPanel || {}).Order || 0,
                 Audio: (itc.AudioPanel || {}).Order || 0,
-                Lang: (itc.LanguagePanel || {}).Order || 0
+                Channel: (itc.ChannelPanel || {}).Order != null ? itc.ChannelPanel.Order : 4,
+                Lang: (itc.LanguagePanel || {}).Order != null ? itc.LanguagePanel.Order : 5
             };
             var container = document.getElementById(prefix + 'Panels');
             if (container) sortPanelsByOrder(container, orderMap);
@@ -887,11 +904,7 @@
             def.badges.forEach(function(b) {
                 var el = q(k + b.id);
                 if (el && el.checked) {
-                    if (b.key === 'channel') {
-                        badges.push('7.1'); badges.push('5.1'); badges.push('stereo'); badges.push('mono');
-                    } else {
-                        badges.push(b.key);
-                    }
+                    badges.push(b.key);
                 }
             });
             return badges;
@@ -934,7 +947,7 @@
         function collectLangConfig(prefix) {
             var k = prefix + 'Lang';
             var container = document.getElementById(prefix + 'Panels');
-            var order = container ? getPanelOrder(container) : {Lang:4};
+            var order = container ? getPanelOrder(container) : {Lang:5};
             return {
                 Enabled: q(k + 'Enabled').checked,
                 Position: q(k + 'Position').value,
@@ -945,7 +958,7 @@
                 MarginPercent: parseFloat(q(k + 'Margin').value) || 2.5,
                 Style: q(k + 'Style').value,
                 IconStyle: q(k + 'IconStyle') ? q(k + 'IconStyle').value : 'Rectangular',
-                Order: order.Lang != null ? order.Lang : 4,
+                Order: order.Lang != null ? order.Lang : 5,
                 TextBgColor: q(k + 'BgColor').value,
                 TextBgOpacity: parseInt(q(k + 'BgOpacity').value, 10) || 0,
                 TextColor: q(k + 'TextColor').value,
@@ -958,13 +971,14 @@
         function collectImageTypeConfig(prefix) {
             var k = prefix + 'Lang';
             var container = document.getElementById(prefix + 'Panels');
-            var order = container ? getPanelOrder(container) : {Res:0,Hdr:1,Codec:2,Audio:3,Lang:4};
+            var order = container ? getPanelOrder(container) : {Res:0,Hdr:1,Codec:2,Audio:3,Channel:4,Lang:5};
             return {
                 Enabled: q(prefix + 'Enabled').checked,
                 ResolutionPanel: collectPanelConfig(prefix, 'Res', order.Res || 0),
                 HdrPanel: collectPanelConfig(prefix, 'Hdr', order.Hdr || 0),
                 CodecPanel: collectPanelConfig(prefix, 'Codec', order.Codec || 0),
                 AudioPanel: collectPanelConfig(prefix, 'Audio', order.Audio || 0),
+                ChannelPanel: collectPanelConfig(prefix, 'Channel', order.Channel != null ? order.Channel : 4),
                 LanguagePanel: collectLangConfig(prefix),
                 ShowVostIndicator: q(k + 'Vost').checked,
                 VostBgColor: q(k + 'VostBgColor').value || null,
@@ -1079,13 +1093,9 @@
             // The gallery must edit whatever the renderer uses, so a badge whose panel is in
             // Brand Logo style points at the logo asset instead of the generated one.
             var panelOfBadge = {};
-            ['Res','Hdr','Codec','Audio'].forEach(function(pid) {
+            ['Res','Hdr','Codec','Audio','Channel'].forEach(function(pid) {
                 (PANEL_DEFS[pid].badges || []).forEach(function(b) {
-                    if (b.key === 'channel') {
-                        ['7.1','5.1','stereo','mono'].forEach(function(k) { panelOfBadge[k] = pid; });
-                    } else {
-                        panelOfBadge[b.key] = pid;
-                    }
+                    panelOfBadge[b.key] = pid;
                 });
             });
             function usesLogo(key) {

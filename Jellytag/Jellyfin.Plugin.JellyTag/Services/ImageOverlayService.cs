@@ -57,6 +57,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             BadgeCategory.Hdr or BadgeCategory.ThreeD => imageConfig.HdrPanel,
             BadgeCategory.VideoCodec => imageConfig.CodecPanel,
             BadgeCategory.Audio => imageConfig.AudioPanel,
+            BadgeCategory.Channels => imageConfig.ChannelPanel,
             BadgeCategory.Language or BadgeCategory.Subtitle => imageConfig.LanguagePanel,
             _ => imageConfig.ResolutionPanel
         };
@@ -256,6 +257,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             (imageConfig.HdrPanel, "HDR"),
             (imageConfig.CodecPanel, "Codec"),
             (imageConfig.AudioPanel, "Audio"),
+            (imageConfig.ChannelPanel, "Channel"),
             (imageConfig.LanguagePanel, "Language")
         };
         panels.Sort((a, b) => a.Panel.Order.CompareTo(b.Panel.Order));

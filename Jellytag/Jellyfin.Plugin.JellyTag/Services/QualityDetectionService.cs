@@ -154,6 +154,8 @@ public partial class QualityDetectionService : IQualityDetectionService
             int bestHdrScore = -1;
             var bestAudioBadges = new List<BadgeInfo>();
             int bestAudioScore = -1;
+            var bestChannelBadges = new List<BadgeInfo>();
+            int bestChannelScore = -1;
             var otherBadges = new List<BadgeInfo>();
 
             foreach (var child in children)
@@ -185,7 +187,15 @@ public partial class QualityDetectionService : IQualityDetectionService
                         bestAudioBadges = childAudio;
                     }
 
-                    otherBadges.AddRange(childBadges.Where(b => b.Category is not (BadgeCategory.Hdr or BadgeCategory.Audio)));
+                    var childChannels = childBadges.Where(b => b.Category == BadgeCategory.Channels).ToList();
+                    var channelScore = GetChannelQualityScore(childChannels);
+                    if (channelScore > bestChannelScore)
+                    {
+                        bestChannelScore = channelScore;
+                        bestChannelBadges = childChannels;
+                    }
+
+                    otherBadges.AddRange(childBadges.Where(b => b.Category is not (BadgeCategory.Hdr or BadgeCategory.Audio or BadgeCategory.Channels)));
                 }
             }
 
@@ -196,6 +206,7 @@ public partial class QualityDetectionService : IQualityDetectionService
 
             badges.AddRange(bestHdrBadges);
             badges.AddRange(bestAudioBadges);
+            badges.AddRange(bestChannelBadges);
             badges.AddRange(otherBadges);
 
             DeduplicateBadges(badges);
@@ -248,6 +259,24 @@ public partial class QualityDetectionService : IQualityDetectionService
             };
         }
         return score;
+    }
+
+    internal static int GetChannelQualityScore(List<BadgeInfo> channelBadges)
+    {
+        int max = -1;
+        foreach (var b in channelBadges)
+        {
+            int score = b.BadgeKey switch
+            {
+                "7.1" => 4,
+                "5.1" => 3,
+                "stereo" => 2,
+                "mono" => 1,
+                _ => 0
+            };
+            if (score > max) max = score;
+        }
+        return max;
     }
 
     private void DetectBadgesFromVideo(Video video, List<BadgeInfo> badges)
@@ -789,13 +818,13 @@ public partial class QualityDetectionService : IQualityDetectionService
         if (codecBadge != null) badges.Add(codecBadge);
 
         if (bestChannels >= 7)
-            badges.Add(new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "7.1", ResourceFileName = "badge-7_1.svg" });
+            badges.Add(new BadgeInfo { Category = BadgeCategory.Channels, BadgeKey = "7.1", ResourceFileName = "badge-7_1.svg" });
         else if (bestChannels >= 5)
-            badges.Add(new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "5.1", ResourceFileName = "badge-5_1.svg" });
+            badges.Add(new BadgeInfo { Category = BadgeCategory.Channels, BadgeKey = "5.1", ResourceFileName = "badge-5_1.svg" });
         else if (bestChannels >= 2)
-            badges.Add(new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "stereo", ResourceFileName = "badge-stereo.svg" });
+            badges.Add(new BadgeInfo { Category = BadgeCategory.Channels, BadgeKey = "stereo", ResourceFileName = "badge-stereo.svg" });
         else if (bestChannels == 1)
-            badges.Add(new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "mono", ResourceFileName = "badge-mono.svg" });
+            badges.Add(new BadgeInfo { Category = BadgeCategory.Channels, BadgeKey = "mono", ResourceFileName = "badge-mono.svg" });
 
         return badges;
     }

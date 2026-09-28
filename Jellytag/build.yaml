@@ -1,6 +1,6 @@
 name: "JellyTag"
 guid: "f4a2e8c1-9b3d-4f7a-b6c5-2d8e1a3f9b04"
-version: "2.4.2.0"
+version: "2.5.0.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 owner: "JellyTag"
@@ -19,6 +19,10 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.JellyTag.dll"
 changelog: |
+  ## v2.5.0.0 (2026-09-28)
+  - Separate Audio Channel Badges (7.1, 5.1, Stereo, Mono) into a dedicated panel with independent positioning, styling, ordering, and badge selection
+  - Allows displaying both audio codec brand logos (e.g. Dolby Digital, DTS, Atmos) and channel numbers simultaneously without one hiding the other under ShowMode=Highest
+  - Backward compatibility: automatically migrates channel settings from existing installations
   ## v2.4.2.0 (2026-09-27)
   - Upgrade plugin target framework to .NET 10 and Jellyfin 12 packages
   ## v2.4.1.0 (2026-09-27)
