@@ -534,6 +534,8 @@ public class MetadataNotifierService : IHostedService
             || client.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Roku", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Shield", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Sharp", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Toshiba", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("webOS", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("LG", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Sony", StringComparison.OrdinalIgnoreCase)
@@ -542,7 +544,9 @@ public class MetadataNotifierService : IHostedService
             || deviceName.Contains("AFT", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Roku", StringComparison.OrdinalIgnoreCase)
-            || deviceName.Contains("Shield", StringComparison.OrdinalIgnoreCase);
+            || deviceName.Contains("Shield", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Sharp", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Toshiba", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsNonDolbyVisionClient(SessionInfo session)
@@ -564,11 +568,14 @@ public class MetadataNotifierService : IHostedService
             // TV clients running Android TV / Google TV / Fire TV / Shield DO support Dolby Vision
             bool isAndroidTvOrBox = client.Contains("Android TV", StringComparison.OrdinalIgnoreCase)
                 || client.Contains("AndroidTV", StringComparison.OrdinalIgnoreCase)
+                || client.Contains("Google TV", StringComparison.OrdinalIgnoreCase)
                 || deviceName.Contains("Shield", StringComparison.OrdinalIgnoreCase)
                 || deviceName.Contains("AFT", StringComparison.OrdinalIgnoreCase)
                 || deviceName.Contains("Fire", StringComparison.OrdinalIgnoreCase)
                 || deviceName.Contains("BRAVIA", StringComparison.OrdinalIgnoreCase)
-                || deviceName.Contains("Google TV", StringComparison.OrdinalIgnoreCase);
+                || deviceName.Contains("Google TV", StringComparison.OrdinalIgnoreCase)
+                || deviceName.Contains("TV", StringComparison.OrdinalIgnoreCase)
+                || deviceName.Contains("Box", StringComparison.OrdinalIgnoreCase);
 
             if (!isAndroidTvOrBox)
             {
