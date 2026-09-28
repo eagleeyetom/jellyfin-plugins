@@ -26,6 +26,9 @@ jobs:
       - name: Run Metadata Notifier unit tests
         run: dotnet test MetadataNotifier/Jellyfin.Plugin.MetadataNotifier.Tests/Jellyfin.Plugin.MetadataNotifier.Tests.csproj --configuration Release
 
+      - name: Run JellyTag unit tests
+        run: dotnet test Jellytag/Jellyfin.Plugin.JellyTag.Tests/Jellyfin.Plugin.JellyTag.Tests.csproj --configuration Release
+
       - name: Build all plugins
         run: |
           dotnet build MetadataNotifier/Jellyfin.Plugin.MetadataNotifier/Jellyfin.Plugin.MetadataNotifier.csproj --configuration Release

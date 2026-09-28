@@ -280,12 +280,12 @@
             },
             Codec: {
                 title: 'Codec Badges',
-                badges: [{id:'H264',key:'h264',label:'H.264 / AVC'},{id:'HEVC',key:'hevc',label:'HEVC / H.265'},{id:'AV1',key:'av1',label:'AV1'},{id:'VP9',key:'vp9',label:'VP9'}],
+                badges: [{id:'H264',key:'h264',label:'H.264 / AVC'},{id:'HEVC',key:'hevc',label:'HEVC / H.265'},{id:'AV1',key:'av1',label:'AV1'},{id:'VP9',key:'vp9',label:'VP9'},{id:'MPEG2',key:'mpeg2',label:'MPEG-2'},{id:'VC1',key:'vc1',label:'VC-1'}],
                 hasShowMode: false
             },
             Audio: {
                 title: 'Audio Badges',
-                badges: [{id:'Atmos',key:'atmos',label:'Dolby Atmos'},{id:'DtsX',key:'dtsx',label:'DTS:X'},{id:'TrueHD',key:'truehd',label:'Dolby TrueHD'},{id:'DtsHdMa',key:'dtshdma',label:'DTS-HD MA'},{id:'Opus',key:'opus',label:'Opus'},{id:'Channel',key:'channel',label:'Channel Layout (7.1/5.1/Stereo/Mono)'}],
+                badges: [{id:'Atmos',key:'atmos',label:'Dolby Atmos'},{id:'DtsX',key:'dtsx',label:'DTS:X'},{id:'TrueHD',key:'truehd',label:'Dolby TrueHD'},{id:'DtsHdMa',key:'dtshdma',label:'DTS-HD MA'},{id:'Flac',key:'flac',label:'FLAC'},{id:'Dts',key:'dts',label:'DTS'},{id:'Eac3',key:'eac3',label:'Dolby Digital+ (E-AC-3)'},{id:'Opus',key:'opus',label:'Opus'},{id:'Ac3',key:'ac3',label:'Dolby Digital (AC3)'},{id:'Aac',key:'aac',label:'AAC'},{id:'Channel',key:'channel',label:'Channel Layout (7.1/5.1/Stereo/Mono)'}],
                 hasShowMode: true,
                 showModeOptions: [{v:'Highest',l:'Highest only'},{v:'All',l:'All'}]
             }
@@ -1023,10 +1023,10 @@
         // ===== Badge Gallery =====
         var allBadgeKeys = [
             {key:'4k',label:'4K'},{key:'1080p',label:'1080p'},{key:'720p',label:'720p'},{key:'sd',label:'SD'},
-            {key:'hdr10',label:'HDR10'},{key:'hdr10plus',label:'HDR10+'},{key:'dv',label:'Dolby Vision'},{key:'hlg',label:'HLG'},
-            {key:'atmos',label:'Atmos'},{key:'dtsx',label:'DTS:X'},{key:'truehd',label:'TrueHD'},{key:'dtshdma',label:'DTS-HD MA'},{key:'opus',label:'Opus'},
+            {key:'hdr10',label:'HDR10'},{key:'hdr10plus',label:'HDR10+'},{key:'dv',label:'Dolby Vision'},{key:'hlg',label:'HLG'},{key:'hdr',label:'Generic HDR'},{key:'3d',label:'3D'},
+            {key:'atmos',label:'Atmos'},{key:'dtsx',label:'DTS:X'},{key:'truehd',label:'TrueHD'},{key:'dtshdma',label:'DTS-HD MA'},{key:'flac',label:'FLAC'},{key:'dts',label:'DTS'},{key:'eac3',label:'E-AC-3'},{key:'opus',label:'Opus'},{key:'ac3',label:'AC3'},{key:'aac',label:'AAC'},
             {key:'7.1',label:'7.1'},{key:'5.1',label:'5.1'},{key:'stereo',label:'Stereo'},{key:'mono',label:'Mono'},
-            {key:'h264',label:'H.264'},{key:'hevc',label:'HEVC'},{key:'av1',label:'AV1'},{key:'vp9',label:'VP9'}
+            {key:'h264',label:'H.264'},{key:'hevc',label:'HEVC'},{key:'av1',label:'AV1'},{key:'vp9',label:'VP9'},{key:'mpeg2',label:'MPEG-2'},{key:'vc1',label:'VC-1'}
         ];
 
         function loadBadgeGallery() {

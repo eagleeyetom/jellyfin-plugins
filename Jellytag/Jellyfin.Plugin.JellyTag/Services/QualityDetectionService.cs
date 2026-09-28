@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -13,7 +14,7 @@ namespace Jellyfin.Plugin.JellyTag.Services;
 /// <summary>
 /// Service for detecting video quality from media items.
 /// </summary>
-public class QualityDetectionService : IQualityDetectionService
+public partial class QualityDetectionService : IQualityDetectionService
 {
     private readonly ILibraryManager _libraryManager;
     private readonly ILogger<QualityDetectionService> _logger;
@@ -203,7 +204,7 @@ public class QualityDetectionService : IQualityDetectionService
         return badges;
     }
 
-    private static int GetHdrQualityScore(List<BadgeInfo> hdrBadges)
+    internal static int GetHdrQualityScore(List<BadgeInfo> hdrBadges)
     {
         int max = -1;
         foreach (var b in hdrBadges)
@@ -222,18 +223,23 @@ public class QualityDetectionService : IQualityDetectionService
         return max;
     }
 
-    private static int GetAudioQualityScore(List<BadgeInfo> audioBadges)
+    internal static int GetAudioQualityScore(List<BadgeInfo> audioBadges)
     {
         int score = 0;
         foreach (var b in audioBadges)
         {
             score += b.BadgeKey switch
             {
-                "atmos" => 70,
-                "dtsx" => 60,
-                "truehd" => 50,
-                "dtshdma" => 40,
-                "opus" => 20,
+                "atmos" => 90,
+                "dtsx" => 80,
+                "truehd" => 70,
+                "dtshdma" => 60,
+                "flac" => 50,
+                "dts" => 40,
+                "eac3" => 35,
+                "opus" => 30,
+                "ac3" => 25,
+                "aac" => 20,
                 "7.1" => 8,
                 "5.1" => 6,
                 "stereo" => 2,
@@ -276,7 +282,7 @@ public class QualityDetectionService : IQualityDetectionService
                 }
 
                 // HDR detection - always detect, filtering happens in ShouldShowBadge
-                badges.AddRange(DetectHdr(videoStream));
+                badges.AddRange(DetectHdr(videoStream, video.Path ?? string.Empty, video.Name ?? string.Empty));
 
                 // Video codec detection
                 var codec = videoStream.Codec?.ToLowerInvariant() ?? string.Empty;
@@ -295,6 +301,14 @@ public class QualityDetectionService : IQualityDetectionService
                 else if (codec == "vp9")
                 {
                     badges.Add(new BadgeInfo { Category = BadgeCategory.VideoCodec, BadgeKey = "vp9", ResourceFileName = "badge-vp9.svg" });
+                }
+                else if (codec is "mpeg2video" or "mpeg2" or "mp2")
+                {
+                    badges.Add(new BadgeInfo { Category = BadgeCategory.VideoCodec, BadgeKey = "mpeg2", ResourceFileName = "badge-mpeg2.svg" });
+                }
+                else if (codec is "vc1" or "vc-1" or "wmv3")
+                {
+                    badges.Add(new BadgeInfo { Category = BadgeCategory.VideoCodec, BadgeKey = "vc1", ResourceFileName = "badge-vc1.svg" });
                 }
             }
 
@@ -355,7 +369,7 @@ public class QualityDetectionService : IQualityDetectionService
         }
     }
 
-    private static bool IsCommentaryStream(MediaStream stream)
+    internal static bool IsCommentaryStream(MediaStream stream)
     {
         var combined = $"{stream.Title} {stream.DisplayTitle} {stream.Comment}";
         return combined.Contains("commentary", StringComparison.OrdinalIgnoreCase)
@@ -477,7 +491,7 @@ public class QualityDetectionService : IQualityDetectionService
     /// Detects all language and subtitle badges. Always detects all languages;
     /// filtering by mode (DefaultOnly/All) is done in ShouldShowBadge.
     /// </summary>
-    private static List<BadgeInfo> DetectLanguages(List<MediaStream> allStreams)
+    internal static List<BadgeInfo> DetectLanguages(List<MediaStream> allStreams)
     {
         var badges = new List<BadgeInfo>();
         var audioStreams = allStreams.Where(s => s.Type == MediaStreamType.Audio).ToList();
@@ -492,7 +506,7 @@ public class QualityDetectionService : IQualityDetectionService
             if (string.IsNullOrEmpty(lang)) continue;
 
             var key = NormalizeLanguageCode(lang);
-            if (key.Length == 0 || !addedLanguages.Add(key)) continue;
+            if (key.Length == 0 || key is "und" or "zxx" or "mis" or "mul" || !addedLanguages.Add(key)) continue;
 
             badges.Add(new BadgeInfo
             {
@@ -511,7 +525,7 @@ public class QualityDetectionService : IQualityDetectionService
         foreach (var sub in subtitleStreams)
         {
             var subLang = NormalizeLanguageCode(sub.Language);
-            if (subLang.Length > 0 && !audioLanguages.Contains(subLang))
+            if (subLang.Length > 0 && subLang is not ("und" or "zxx" or "mis" or "mul") && !audioLanguages.Contains(subLang))
             {
                 var key = "vost" + subLang;
                 if (addedLanguages.Add(key))
@@ -529,7 +543,12 @@ public class QualityDetectionService : IQualityDetectionService
         return badges;
     }
 
-    private static List<BadgeInfo> DetectHdr(MediaStream videoStream)
+    [GeneratedRegex(
+        @"(?:[\.\-_\(\[](?:DV|DOVI|Dolby[\.\-_ ]?Vision)[\.\-_\)\]]|\b(?:DV|DOVI|Dolby[\.\-_ ]?Vision)\b)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    internal static partial Regex DolbyVisionRegex();
+
+    internal static List<BadgeInfo> DetectHdr(MediaStream videoStream, string path, string name)
     {
         var badges = new List<BadgeInfo>();
         var added = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -539,6 +558,7 @@ public class QualityDetectionService : IQualityDetectionService
         var title = videoStream.Title ?? string.Empty;
         var displayTitle = videoStream.DisplayTitle ?? string.Empty;
         var comment = videoStream.Comment ?? string.Empty;
+        var colorTransfer = videoStream.ColorTransfer ?? string.Empty;
 
         void AddHdrBadge(string badgeKey, string resourceFileName)
         {
@@ -548,27 +568,44 @@ public class QualityDetectionService : IQualityDetectionService
             }
         }
 
-        if (IsDolbyVision(rangeType, range, profile, title, displayTitle))
+        // 1. Dolby Vision (Priority 4)
+        if (IsDolbyVision(rangeType, profile, title, displayTitle, path, name))
         {
             AddHdrBadge("dv", "badge-dv.svg");
         }
 
-        if (IsHdr10Plus(rangeType, profile, title, displayTitle, comment))
+        // 2. HDR10+ (Priority 3)
+        if (IsHdr10Plus(rangeType, profile, title, displayTitle, comment, path, name))
         {
             AddHdrBadge("hdr10plus", "badge-hdr10plus.svg");
         }
 
-        if (rangeType == VideoRangeType.HLG)
-        {
-            AddHdrBadge("hlg", "badge-hlg.svg");
-        }
+        // 3. HDR10 (Priority 2)
+        var combinedText = $"{profile} {title} {displayTitle} {comment} {path} {name}";
+        var isHdr10 = rangeType == VideoRangeType.HDR10
+            || rangeType is VideoRangeType.DOVIWithHDR10 or VideoRangeType.DOVIWithEL
+            || rangeType is VideoRangeType.HDR10Plus or VideoRangeType.DOVIWithHDR10Plus or VideoRangeType.DOVIWithELHDR10Plus
+            || string.Equals(colorTransfer, "smpte2084", StringComparison.OrdinalIgnoreCase)
+            || combinedText.Contains("HDR10", StringComparison.OrdinalIgnoreCase);
 
-        if (rangeType == VideoRangeType.HDR10 || rangeType is VideoRangeType.DOVIWithHDR10 or VideoRangeType.DOVIWithEL)
+        if (isHdr10)
         {
             AddHdrBadge("hdr10", "badge-hdr10.svg");
         }
 
-        if (badges.Count == 0 && range == VideoRange.HDR)
+        // 4. HLG (Priority 1)
+        var isHlg = rangeType == VideoRangeType.HLG
+            || rangeType == VideoRangeType.DOVIWithHLG
+            || string.Equals(colorTransfer, "arib-std-b67", StringComparison.OrdinalIgnoreCase)
+            || combinedText.Contains("HLG", StringComparison.OrdinalIgnoreCase);
+
+        if (isHlg)
+        {
+            AddHdrBadge("hlg", "badge-hlg.svg");
+        }
+
+        // 5. Generic HDR (Priority 0)
+        if (badges.Count == 0 && (range == VideoRange.HDR || combinedText.Contains("HDR", StringComparison.OrdinalIgnoreCase)))
         {
             AddHdrBadge("hdr", "badge-hdr.svg");
         }
@@ -576,22 +613,39 @@ public class QualityDetectionService : IQualityDetectionService
         return badges;
     }
 
-    private static bool IsDolbyVision(VideoRangeType rangeType, VideoRange range, string profile, string title, string displayTitle)
+    internal static bool IsDolbyVision(VideoRangeType rangeType, string profile, string title, string displayTitle, string path, string name)
     {
-        var combined = $"{profile} {title} {displayTitle}";
-        return rangeType is VideoRangeType.DOVI
+        if (rangeType is VideoRangeType.DOVI
                 or VideoRangeType.DOVIWithHDR10
                 or VideoRangeType.DOVIWithHLG
                 or VideoRangeType.DOVIWithSDR
                 or VideoRangeType.DOVIWithEL
                 or VideoRangeType.DOVIWithHDR10Plus
-                or VideoRangeType.DOVIWithELHDR10Plus
-            || combined.Contains("DOVI", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("DOLBY VISION", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("DV", StringComparison.OrdinalIgnoreCase);
+                or VideoRangeType.DOVIWithELHDR10Plus)
+        {
+            return true;
+        }
+
+        var combinedMeta = $"{profile} {title} {displayTitle}";
+        if (DolbyVisionRegex().IsMatch(combinedMeta))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(path) && DolbyVisionRegex().IsMatch(path))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(name) && DolbyVisionRegex().IsMatch(name))
+        {
+            return true;
+        }
+
+        return false;
     }
 
-    private static bool IsHdr10Plus(VideoRangeType rangeType, string profile, string title, string displayTitle, string comment)
+    internal static bool IsHdr10Plus(VideoRangeType rangeType, string profile, string title, string displayTitle, string comment, string path, string name)
     {
         if (rangeType is VideoRangeType.HDR10Plus
                 or VideoRangeType.DOVIWithHDR10Plus
@@ -601,28 +655,44 @@ public class QualityDetectionService : IQualityDetectionService
         }
 
         var combined = $"{profile} {title} {displayTitle} {comment}";
-        return combined.Contains("HDR10+", StringComparison.OrdinalIgnoreCase)
+        if (combined.Contains("HDR10+", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("HDR10 PLUS", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("ST 2094-40", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("SMPTE ST 2094", StringComparison.OrdinalIgnoreCase);
+            || combined.Contains("SMPTE ST 2094", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(path) && (path.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) || path.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase) || path.Contains("HDR10.Plus", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(name) && (name.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) || name.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase) || name.Contains("HDR10.Plus", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return false;
     }
 
-    private static void DeduplicateBadges(List<BadgeInfo> badges)
+    internal static void DeduplicateBadges(List<BadgeInfo> badges)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (var i = badges.Count - 1; i >= 0; i--)
+        for (var i = 0; i < badges.Count; i++)
         {
             var badge = badges[i];
             var key = $"{badge.Category}:{badge.BadgeKey}";
             if (!seen.Add(key))
             {
                 badges.RemoveAt(i);
+                i--;
             }
         }
     }
 
-    private static List<BadgeInfo> DetectAudio(IEnumerable<MediaStream> audioStreams)
+    internal static List<BadgeInfo> DetectAudio(IEnumerable<MediaStream> audioStreams)
     {
         var badges = new List<BadgeInfo>();
         BadgeInfo? codecBadge = null;
@@ -635,14 +705,23 @@ public class QualityDetectionService : IQualityDetectionService
             var profile = stream.Profile ?? string.Empty;
             var title = stream.Title ?? string.Empty;
             var displayTitle = stream.DisplayTitle ?? string.Empty;
-            var combined = $"{profile} {title} {displayTitle}";
+            var comment = stream.Comment ?? string.Empty;
+            var combined = $"{profile} {title} {displayTitle} {comment}";
             var channels = stream.Channels ?? 0;
             var layout = stream.ChannelLayout ?? string.Empty;
 
-            if (layout.StartsWith("7.1", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 8);
-            else if (layout.StartsWith("5.1", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 6);
-            else if (layout.Equals("stereo", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 2);
-            else if (layout.Equals("mono", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 1);
+            if (!string.IsNullOrWhiteSpace(layout))
+            {
+                if (layout.StartsWith("7.1", StringComparison.OrdinalIgnoreCase) || layout.StartsWith("7.0", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 8);
+                else if (layout.StartsWith("6.1", StringComparison.OrdinalIgnoreCase) || layout.StartsWith("5.1", StringComparison.OrdinalIgnoreCase) || layout.StartsWith("5.0", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 6);
+                else if (layout.Equals("quad", StringComparison.OrdinalIgnoreCase) || layout.StartsWith("4.0", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 4);
+                else if (layout.Equals("stereo", StringComparison.OrdinalIgnoreCase) || layout.StartsWith("2.0", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 2);
+                else if (layout.Equals("mono", StringComparison.OrdinalIgnoreCase) || layout.StartsWith("1.0", StringComparison.OrdinalIgnoreCase)) channels = Math.Max(channels, 1);
+            }
+            if (channels == 0 && (combined.Contains("Mono", StringComparison.OrdinalIgnoreCase) || combined.Contains("1.0", StringComparison.OrdinalIgnoreCase)))
+            {
+                channels = 1;
+            }
 
             if (channels > bestChannels) bestChannels = channels;
 
@@ -651,28 +730,53 @@ public class QualityDetectionService : IQualityDetectionService
 
             if (combined.Contains("ATMOS", StringComparison.OrdinalIgnoreCase))
             {
-                priority = 7;
+                priority = 90;
                 candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "atmos", ResourceFileName = "badge-atmos.svg" };
             }
             else if (combined.Contains("DTS:X", StringComparison.OrdinalIgnoreCase) || combined.Contains("DTS-X", StringComparison.OrdinalIgnoreCase) || combined.Contains("DTSX", StringComparison.OrdinalIgnoreCase))
             {
-                priority = 6;
+                priority = 80;
                 candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "dtsx", ResourceFileName = "badge-dtsx.svg" };
             }
-            else if (codec == "TRUEHD" || combined.Contains("TRUEHD", StringComparison.OrdinalIgnoreCase))
+            else if (codec is "TRUEHD" or "TRUHD" || combined.Contains("TRUEHD", StringComparison.OrdinalIgnoreCase))
             {
-                priority = 5;
+                priority = 70;
                 candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "truehd", ResourceFileName = "badge-truehd.svg" };
             }
             else if (combined.Contains("DTS-HD MA", StringComparison.OrdinalIgnoreCase) || combined.Contains("DTS-HD MASTER", StringComparison.OrdinalIgnoreCase) || (codec == "DTS" && profile.Contains("MA", StringComparison.OrdinalIgnoreCase)))
             {
-                priority = 4;
+                priority = 60;
                 candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "dtshdma", ResourceFileName = "badge-dtshdma.svg" };
+            }
+            else if (codec == "FLAC" || combined.Contains("FLAC", StringComparison.OrdinalIgnoreCase))
+            {
+                priority = 50;
+                candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "flac", ResourceFileName = "badge-flac.svg" };
+            }
+            else if (combined.Contains("DTS-HD", StringComparison.OrdinalIgnoreCase) || (codec == "DTS" && (profile.Contains("HRA", StringComparison.OrdinalIgnoreCase) || profile.Contains("HR", StringComparison.OrdinalIgnoreCase))) || codec is "DTS" or "DCA" || combined.Contains("DTS", StringComparison.OrdinalIgnoreCase))
+            {
+                priority = 40;
+                candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "dts", ResourceFileName = "badge-dts.svg" };
+            }
+            else if (codec is "EAC3" or "E-AC-3" || profile.Contains("E-AC-3", StringComparison.OrdinalIgnoreCase) || combined.Contains("EAC3", StringComparison.OrdinalIgnoreCase) || combined.Contains("DD+", StringComparison.OrdinalIgnoreCase) || combined.Contains("DOLBY DIGITAL PLUS", StringComparison.OrdinalIgnoreCase))
+            {
+                priority = 35;
+                candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "eac3", ResourceFileName = "badge-eac3.svg" };
             }
             else if (codec == "OPUS" || codec.Contains("OPUS") || combined.Contains("OPUS", StringComparison.OrdinalIgnoreCase))
             {
-                priority = 2;
+                priority = 30;
                 candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "opus", ResourceFileName = "badge-opus.svg" };
+            }
+            else if (codec is "AC3" or "AC-3" || combined.Contains("AC3", StringComparison.OrdinalIgnoreCase) || combined.Contains("DOLBY DIGITAL", StringComparison.OrdinalIgnoreCase))
+            {
+                priority = 25;
+                candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "ac3", ResourceFileName = "badge-ac3.svg" };
+            }
+            else if (codec == "AAC" || combined.Contains("AAC", StringComparison.OrdinalIgnoreCase))
+            {
+                priority = 20;
+                candidate = new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "aac", ResourceFileName = "badge-aac.svg" };
             }
 
             if (candidate != null && priority > codecPriority)
@@ -684,9 +788,9 @@ public class QualityDetectionService : IQualityDetectionService
 
         if (codecBadge != null) badges.Add(codecBadge);
 
-        if (bestChannels >= 8)
+        if (bestChannels >= 7)
             badges.Add(new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "7.1", ResourceFileName = "badge-7_1.svg" });
-        else if (bestChannels >= 6)
+        else if (bestChannels >= 5)
             badges.Add(new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "5.1", ResourceFileName = "badge-5_1.svg" });
         else if (bestChannels >= 2)
             badges.Add(new BadgeInfo { Category = BadgeCategory.Audio, BadgeKey = "stereo", ResourceFileName = "badge-stereo.svg" });
@@ -696,7 +800,7 @@ public class QualityDetectionService : IQualityDetectionService
         return badges;
     }
 
-    private static BadgeInfo CreateResolutionBadge(VideoQuality quality)
+    internal static BadgeInfo CreateResolutionBadge(VideoQuality quality)
     {
         return quality switch
         {

@@ -128,7 +128,8 @@ public partial class ImageOverlayMiddleware
 
         var query = context.Request.QueryString.Value ?? string.Empty;
         var tag = context.Request.Query["tag"].FirstOrDefault() ?? item.DateModified.Ticks.ToString();
-        var clientVariant = hideDolbyVision ? "samsung-no-dv" : hideHdrOnWindows ? "windows-sdr" : "default";
+        var clientVariant = (hideDolbyVision ? "samsung-no-dv" : "") + (hideHdrOnWindows ? "_windows-sdr" : "");
+        if (string.IsNullOrEmpty(clientVariant)) clientVariant = "default";
         var imageTag = $"{tag}_{imageType}_{clientVariant}_{query}";
 
         var cachedImage = await cacheService.GetCachedImageAsync(itemId, badgeKey, imageTag).ConfigureAwait(false);
@@ -257,7 +258,7 @@ public partial class ImageOverlayMiddleware
             || string.Equals(badgeKey, "hdr", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static ImageTypeConfig ApplySizeReduction(ImageTypeConfig source, int reduction)
+    internal static ImageTypeConfig ApplySizeReduction(ImageTypeConfig source, int reduction)
     {
         if (reduction <= 0) return source;
 
@@ -278,7 +279,7 @@ public partial class ImageOverlayMiddleware
         return clone;
     }
 
-    private static BadgePanelSettings ClonePanelWithReduction(BadgePanelSettings panel, int reduction)
+    internal static BadgePanelSettings ClonePanelWithReduction(BadgePanelSettings panel, int reduction)
     {
         return new BadgePanelSettings
         {
@@ -290,6 +291,7 @@ public partial class ImageOverlayMiddleware
             SizePercent = Math.Max(1, panel.SizePercent - reduction),
             MarginPercent = panel.MarginPercent,
             Style = panel.Style,
+            IconStyle = panel.IconStyle,
             Order = panel.Order,
             TextBgColor = panel.TextBgColor,
             TextBgOpacity = panel.TextBgOpacity,

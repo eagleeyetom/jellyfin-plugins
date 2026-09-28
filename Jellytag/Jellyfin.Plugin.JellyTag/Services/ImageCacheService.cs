@@ -204,7 +204,7 @@ public class ImageCacheService : IImageCacheService
         return $"{itemId}_{hash}";
     }
 
-    private static string ComputeConfigFingerprint(Configuration.PluginConfiguration config)
+    internal static string ComputeConfigFingerprint(Configuration.PluginConfiguration config)
     {
         var sb = new StringBuilder(256);
         sb.Append(typeof(ImageCacheService).Assembly.GetName().Version?.ToString() ?? "unknown").Append('|');
@@ -213,6 +213,7 @@ public class ImageCacheService : IImageCacheService
         sb.Append(config.HideHdrOnWindowsClients).Append('|');
         sb.Append((int)config.OutputFormat).Append(config.JpegQuality).Append(config.WebPQuality).Append('|');
         sb.Append(config.ThumbnailSameAsPoster).Append('|');
+        sb.Append(config.ThumbnailSizeReduction).Append('|');
         AppendImageTypeFingerprint(sb, config.PosterConfig);
         AppendImageTypeFingerprint(sb, config.ThumbnailConfig);
         if (config.CustomBadgeTexts != null)
