@@ -319,10 +319,6 @@ public class MetadataNotifierService : IHostedService
             if (activeSession != null)
             {
                 session = activeSession;
-                if (session.TranscodingInfo != null)
-                {
-                    break;
-                }
             }
         }
 
