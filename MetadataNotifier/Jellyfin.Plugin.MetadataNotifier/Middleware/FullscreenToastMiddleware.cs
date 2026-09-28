@@ -98,10 +98,17 @@ public class FullscreenToastMiddleware
 
     /// <summary>
     /// Processes the HTTP request. Intercepts <c>index.html</c> GET responses and
-    /// injects the fullscreen toast fix script.
+    /// injects the fullscreen toast fix script when the option is enabled in plugin config.
     /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
+        // Skip entirely when the option is disabled (default).
+        if (Plugin.Instance?.Configuration.EnableFullscreenToastFix != true)
+        {
+            await _next(context).ConfigureAwait(false);
+            return;
+        }
+
         var path = context.Request.Path.Value ?? string.Empty;
 
         // Only intercept the web-client root index.html (served at "/" or "/index.html").

@@ -33,6 +33,7 @@ public class PluginConfiguration : BasePluginConfiguration
         CustomTemplate = string.Empty;
         ExcludedLibraryIds = new List<string>();
         ExcludedUserIds = new List<string>();
+        EnableFullscreenToastFix = false;
     }
 
     /// <summary>
@@ -155,4 +156,24 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the list of excluded user IDs.
     /// </summary>
     public List<string> ExcludedUserIds { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the server should inject a fullscreen toast fix
+    /// script into Jellyfin Web's <c>index.html</c> on every request.
+    /// <para>
+    /// <b>Purpose:</b> In browser clients, HTML5 fullscreen mode displays the video element in a separate
+    /// top layer, hiding Jellyfin's <c>.toastContainer</c> behind the video.
+    /// </para>
+    /// <para>
+    /// <b>Method:</b> When enabled, plugin middleware intercepts <c>/web/index.html</c> HTTP responses
+    /// and injects a script that dynamically moves <c>.toastContainer</c> into the active fullscreen
+    /// element whenever fullscreen playback begins.
+    /// </para>
+    /// <para>
+    /// <b>Recommendation:</b> Recommended to enable only if a web browser client is your main player and
+    /// toasts are hidden in fullscreen. Clients like Samsung Tizen or native TV apps handle toasts natively
+    /// and work fine without this option (leave disabled).
+    /// </para>
+    /// </summary>
+    public bool EnableFullscreenToastFix { get; set; } = false;
 }

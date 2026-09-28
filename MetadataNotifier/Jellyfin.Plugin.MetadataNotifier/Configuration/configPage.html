@@ -193,6 +193,42 @@
                         </details>
                     </div>
 
+                    <!-- Fullscreen Toast Fix -->
+                    <div class="verticalSection">
+                        <details class="meta-section">
+                            <summary>Fullscreen Toast Fix (Web Browser)</summary>
+                            <div class="meta-section-body">
+                                <div class="fieldDescription" style="margin-bottom: 1em; padding: 0.75em 1em; border-left: 3px solid #e6a817; background: rgba(230,168,23,0.08); border-radius: 0 4px 4px 0;">
+                                    ⚠️ <strong>Patches Jellyfin Web's <code>index.html</code> dynamically on HTTP request.</strong><br>
+                                    Disabled by default. Enable only if you experience missing toasts during browser fullscreen playback.
+                                </div>
+                                <div class="fieldDescription" style="margin-bottom: 0.75em;">
+                                    <strong>Purpose:</strong> When watching in a web browser, HTML5 fullscreen mode places the video player in a dedicated top-layer context. Because Jellyfin's notification container (<code>.toastContainer</code>) lives outside that element in the document body, toasts get hidden behind the video during fullscreen playback (or appear only on the first play/page load).
+                                </div>
+                                <div class="fieldDescription" style="margin-bottom: 0.75em;">
+                                    <strong>Method:</strong> When enabled, server middleware intercepts HTTP requests for <code>index.html</code> and injects a lightweight script. The script listens for fullscreen changes and dynamically moves <code>.toastContainer</code> inside the active fullscreen element so notifications stay visible on top of the video player.
+                                </div>
+                                <div class="fieldDescription" style="margin-bottom: 1em;">
+                                    <strong>Recommendation:</strong>
+                                    <ul style="margin: 0.35em 0 0.35em 1.5em; padding: 0;">
+                                        <li><strong>Web Browsers:</strong> Recommended to enable if a browser client (Chrome, Firefox, Edge, Safari) is your primary player and toasts are hidden during fullscreen playback.</li>
+                                        <li><strong>Samsung Tizen &amp; TV Apps:</strong> <em>Not needed.</em> Tizen and native TV clients handle notification layers natively and work fine without this option. If you primarily use Tizen or TV apps, keep this disabled.</li>
+                                        <li>Requires saving and performing a browser hard-refresh (<kbd>Ctrl+Shift+R</kbd> / <kbd>Cmd+Shift+R</kbd>) to reload the web client.</li>
+                                    </ul>
+                                </div>
+                                <div class="checkboxContainer checkboxContainer-withDescription">
+                                    <label class="emby-checkbox-label">
+                                        <input type="checkbox" id="EnableFullscreenToastFix" is="emby-checkbox" />
+                                        <span>Enable fullscreen toast fix for web browser clients</span>
+                                    </label>
+                                    <div class="fieldDescription">
+                                        Injects the toast re-parenting fix into <code>index.html</code>. Leave unchecked if using TV clients (such as Tizen) or if toasts work normally.
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
                     <div style="margin-top: 2em;">
                         <button is="emby-button" type="submit" class="raised button-submit block">Save</button>
                     </div>
@@ -243,6 +279,7 @@
                     document.querySelector('#SuppressHdr10PlusOnLg').checked = config.SuppressHdr10PlusOnLg ?? true;
                     document.querySelector('#DesktopSdrMode').checked = config.DesktopSdrMode ?? false;
                     document.querySelector('#CustomTemplate').value = config.CustomTemplate ?? '';
+                    document.querySelector('#EnableFullscreenToastFix').checked = config.EnableFullscreenToastFix ?? false;
 
                     await loadLibraries(config.ExcludedLibraryIds || []);
                     await loadUsers(config.ExcludedUserIds || []);
@@ -481,6 +518,7 @@
                     config.SuppressHdr10PlusOnLg = document.querySelector('#SuppressHdr10PlusOnLg').checked;
                     config.DesktopSdrMode = document.querySelector('#DesktopSdrMode').checked;
                     config.CustomTemplate = document.querySelector('#CustomTemplate').value.trim();
+                    config.EnableFullscreenToastFix = document.querySelector('#EnableFullscreenToastFix').checked;
 
                     // Collect excluded libraries (unchecked)
                     config.ExcludedLibraryIds = [];
