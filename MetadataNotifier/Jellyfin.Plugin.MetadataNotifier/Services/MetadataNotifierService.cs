@@ -125,7 +125,7 @@ public class MetadataNotifierService : IHostedService
                 _lastActiveAudioTrack[session.Id] = initialAudioIndex.Value;
             }
 
-            session = await WaitForUpdatedSessionAsync(session, cancellationToken).ConfigureAwait(false);
+            session = await WaitForUpdatedSessionAsync(session, config.StartupDelayMs, cancellationToken).ConfigureAwait(false);
 
             var hdrInfo = string.Empty;
             var hdrRule = "disabled";
@@ -306,13 +306,16 @@ public class MetadataNotifierService : IHostedService
         }
     }
 
-    private async Task<SessionInfo> WaitForUpdatedSessionAsync(SessionInfo originalSession, CancellationToken cancellationToken)
+    private const int SessionPollIntervalMs = 250;
+
+    private async Task<SessionInfo> WaitForUpdatedSessionAsync(SessionInfo originalSession, int startupDelayMs, CancellationToken cancellationToken)
     {
         var session = originalSession;
+        var attempts = Math.Max(1, (int)Math.Ceiling(startupDelayMs / (double)SessionPollIntervalMs));
 
-        for (var attempt = 0; attempt < 6; attempt++)
+        for (var attempt = 0; attempt < attempts; attempt++)
         {
-            await Task.Delay(250, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(SessionPollIntervalMs, cancellationToken).ConfigureAwait(false);
 
             var activeSession = _sessionManager.Sessions.FirstOrDefault(
                 candidate => string.Equals(candidate.Id, originalSession.Id, StringComparison.Ordinal));

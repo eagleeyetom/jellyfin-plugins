@@ -14,6 +14,7 @@ public class PluginConfiguration : BasePluginConfiguration
     {
         IsEnabled = true;
         NotificationDurationMs = 5000;
+        StartupDelayMs = 1500;
         ShowSdr = true;
         ShowAudio = true;
         ShowTranscoding = true;
@@ -43,6 +44,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the notification duration in milliseconds.
     /// </summary>
     public int NotificationDurationMs { get; set; }
+
+    /// <summary>
+    /// Gets or sets the delay after playback starts before the toast is sent, allowing transcode info to register.
+    /// </summary>
+    public int StartupDelayMs { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether to show SDR.

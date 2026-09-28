@@ -18,4 +18,9 @@ Sends on-screen toast notifications when playback starts on any Jellyfin client,
 - **Exclusion Lists:** Easily exclude specific media libraries or users from toast notifications.
 - **Fully Configurable:** Customize notification duration, target clients, and displayed information categories.
 
+## Known Limitations
+
+- **Client-side HDR tone-mapping is undetectable.** "Tone-mapped SDR detection" only fires when Jellyfin itself transcodes/tone-maps the video server-side. If Jellyfin Direct Plays or Direct Streams an HDR/Dolby Vision file to a client whose display can't actually render it (e.g. a standard SDR monitor on a Windows/desktop client), the tone-mapping happens invisibly on the client or OS side. The plugin will still report the source format (e.g. Dolby Vision) because that is genuinely what Jellyfin sent.
+- **Toast duration and delivery are client-dependent.** The configured notification duration is sent as a hint (`TimeoutMs`); some clients (e.g. Jellyfin Web, Kodi) use their own fixed display timing and may ignore it. Some clients may not render the message at all.
+
 

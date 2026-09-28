@@ -61,6 +61,17 @@
                             <label class="inputLabel" for="NotificationDurationMs">Notification Duration (ms)</label>
                             <input type="number" id="NotificationDurationMs" min="1000" max="30000" step="500"
                                 is="emby-input" />
+                            <div class="fieldDescription">
+                                Sent to the client as the dismissal timeout. Actual display duration is client-dependent; Jellyfin Web and native clients may use their own toast timing.
+                            </div>
+                        </div>
+                        <div class="inputContainer" style="margin-top: 1em;">
+                            <label class="inputLabel" for="StartupDelayMs">Startup Delay (ms)</label>
+                            <input type="number" id="StartupDelayMs" min="0" max="10000" step="250"
+                                is="emby-input" />
+                            <div class="fieldDescription">
+                                Wait time after playback starts before sending the toast, so transcode info has time to register.
+                            </div>
                         </div>
                     </div>
 
@@ -78,6 +89,9 @@
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressDvOnSamsung" is="emby-checkbox" /><span>Suppress Dolby Vision on Samsung & Android (Fallback to HDR10/HDR10+)</span></label></div>
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressHdr10PlusOnLg" is="emby-checkbox" /><span>Suppress HDR10+ on non-supporting clients (LG, Sony, Amazon, Roku - fallback to HDR10/Dolby Vision)</span></label></div>
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="DesktopSdrMode" is="emby-checkbox" /><span>Tone-mapped SDR detection (when HDR range is unsupported)</span></label></div>
+                                <div class="fieldDescription">
+                                    Only detects server-side tone-mapping. If Jellyfin sends HDR/Dolby Vision directly (no transcode) to a display that can't render it, the client itself does the tone-mapping and this plugin has no way to know — it will still report the source format.
+                                </div>
                             </div>
                         </details>
                         <details class="meta-section">
@@ -208,6 +222,7 @@
                     document.querySelector('#IgnoreAudioMedia').checked = config.IgnoreAudioMedia ?? true;
                     document.querySelector('#NotifyOnAudioTrackChange').checked = config.NotifyOnAudioTrackChange ?? true;
                     document.querySelector('#NotificationDurationMs').value = config.NotificationDurationMs ?? 5000;
+                    document.querySelector('#StartupDelayMs').value = config.StartupDelayMs ?? 1500;
 
                     document.querySelector('#ShowSdr').checked = config.ShowSdr ?? true;
                     document.querySelector('#ShowHdr10Plus').checked = config.ShowHdr10Plus ?? true;
@@ -442,6 +457,7 @@
                     config.IgnoreAudioMedia = document.querySelector('#IgnoreAudioMedia').checked;
                     config.NotifyOnAudioTrackChange = document.querySelector('#NotifyOnAudioTrackChange').checked;
                     config.NotificationDurationMs = parseInt(document.querySelector('#NotificationDurationMs').value, 10) || 5000;
+                    config.StartupDelayMs = parseInt(document.querySelector('#StartupDelayMs').value, 10) || 0;
 
                     config.ShowSdr = document.querySelector('#ShowSdr').checked;
                     config.ShowHdr10Plus = document.querySelector('#ShowHdr10Plus').checked;
