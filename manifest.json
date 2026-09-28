@@ -123,8 +123,8 @@
         "changelog": "Separate audio channel badges into a dedicated panel allowing simultaneous display with brand logos, add brand logos for FLAC, DTS, Dolby Digital, EAC3, AAC, and MPEG-2, add per-badge brand logo toggles in web config, fix selector escaping in config preview, add automatic settings migration, and include full test suite.",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.5.0.0/jellytag-2.5.0.0.zip",
-        "checksum": "00000000000000000000000000000000",
-        "timestamp": "2026-09-28T21:45:00Z"
+        "checksum": "15015E6B081C6FA7BDA08D1DA904357F",
+        "timestamp": "2026-09-28T21:47:15Z"
       },
       {
         "version": "2.4.2.0",
