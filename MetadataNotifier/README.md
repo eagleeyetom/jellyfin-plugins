@@ -1,5 +1,10 @@
 # Metadata Notifier Plugin for Jellyfin
 
+[![Release](https://img.shields.io/github/v/release/eagleeyetom/jellyfin-plugins?filter=metadatanotifier-*&label=release&color=00A4DC)](https://github.com/eagleeyetom/jellyfin-plugins/releases)
+[![Jellyfin](https://img.shields.io/badge/Jellyfin-%E2%89%A512.0.0-00A4DC?logo=jellyfin&logoColor=white)](https://jellyfin.org/)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
+
 <p align="center">
     <img src="https://github.com/eagleeyetom/jellyfin-plugins/raw/test/MetadataNotifier/Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png" alt="Metadata Notifier Logo" width="200" />
 </p>
