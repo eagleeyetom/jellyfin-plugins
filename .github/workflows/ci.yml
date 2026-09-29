@@ -33,4 +33,3 @@ jobs:
         run: |
           dotnet build MetadataNotifier/Jellyfin.Plugin.MetadataNotifier/Jellyfin.Plugin.MetadataNotifier.csproj --configuration Release
           dotnet build Jellytag/Jellyfin.Plugin.JellyTag/Jellyfin.Plugin.JellyTag.csproj --configuration Release
-          dotnet build WatchSync/Jellyfin.Plugin.WatchSync/Jellyfin.Plugin.WatchSync.csproj --configuration Release

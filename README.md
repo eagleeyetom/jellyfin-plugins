@@ -14,26 +14,6 @@ A personal fork of [Atilil/jellyfin-plugins](https://github.com/Atilil/jellyfin-
 
 ## Available Plugins
 
-### WatchSync
-
-<p align="center">
-    <img src="WatchSync/Jellyfin.Plugin.WatchSync/WatchSync.png" />
-</p>
-
-Automatically synchronizes watch history between libraries of different qualities (4K/HD). When a movie is watched in 4K, the HD version is also marked as watched (and vice versa).
-
-**Features:**
-- Automatic sync on playback stop
-- Smart matching via IMDB, TMDB, TVDB
-- Support for movies and TV series
-- Configurable completion threshold
-- Library and user exclusion
-- Full sync scheduled task
-
-[More details](WatchSync/README.md)
-
----
-
 ### JellyTag
 
 <p align="center">
