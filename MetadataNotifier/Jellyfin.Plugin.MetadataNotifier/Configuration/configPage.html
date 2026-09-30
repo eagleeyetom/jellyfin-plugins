@@ -18,7 +18,7 @@
         </style>
         <div data-role="content">
             <div class="content-primary">
-                <form id="MetadataNotifierConfigForm">
+                <form id="MetadataNotifierConfigForm" style="visibility: hidden;">
                     <div class="sectionTitleContainer flex align-items-center">
                         <h2 class="sectionTitle">Metadata Notifier</h2>
                     </div>
@@ -152,7 +152,7 @@
                                 </div>
                                 <div class="fieldDescription" style="margin-bottom: 0.5em; font-weight: bold;">Live Preview</div>
                                 <div id="ToastPreviewContainer" style="position: relative; height: 160px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.2); overflow: hidden; display: flex; align-items: flex-end; justify-content: flex-start; padding: 16px; margin-bottom: 1em;">
-                                    <div id="ToastPreviewElement" style="background: rgba(28, 28, 30, 0.95); color: #fff; padding: 12px 18px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); font-family: sans-serif; font-size: 14px; max-width: 380px; width: 100%; transition: all 0.3s ease;">
+                                    <div id="ToastPreviewElement" style="background: rgba(28, 28, 30, 0.95); color: #fff; padding: 12px 18px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); font-family: sans-serif; font-size: 14px; max-width: 100%; width: max-content; white-space: nowrap; transition: all 0.3s ease;">
                                         <div id="ToastPreviewMessage" style="color: #ccc; font-size: 13px;">Dolby Vision • Dolby Atmos • Direct Play • 45.2 Mbps</div>
                                     </div>
                                 </div>
@@ -238,10 +238,13 @@
 
         <script type="text/javascript">
             const pluginId = 'b7c3e2f1-4a5d-6e7f-8b9c-1a2b3c4d5e6f';
+            let configurationLoadId = 0;
 
             document.querySelector('#MetadataNotifierConfigPage').addEventListener('pageshow', function () {
+                const loadId = ++configurationLoadId;
+                document.querySelector('#MetadataNotifierConfigForm').style.visibility = 'hidden';
                 Dashboard.showLoadingMsg();
-                loadConfiguration();
+                loadConfiguration(loadId);
             });
 
             document.querySelector('#MetadataNotifierConfigForm').addEventListener('submit', function (e) {
@@ -250,9 +253,19 @@
                 return false;
             });
 
-            async function loadConfiguration() {
+            async function getConfigurationWithRetry() {
                 try {
-                    const config = await ApiClient.getPluginConfiguration(pluginId);
+                    return await ApiClient.getPluginConfiguration(pluginId);
+                } catch (error) {
+                    await new Promise(function (resolve) { setTimeout(resolve, 300); });
+                    return ApiClient.getPluginConfiguration(pluginId);
+                }
+            }
+
+            async function loadConfiguration(loadId) {
+                try {
+                    const config = await getConfigurationWithRetry();
+                    if (loadId !== configurationLoadId) return;
 
                     document.querySelector('#IsEnabled').checked = config.IsEnabled ?? true;
                     document.querySelector('#IgnoreAudioMedia').checked = config.IgnoreAudioMedia ?? true;
@@ -283,49 +296,113 @@
 
                     await loadLibraries(config.ExcludedLibraryIds || []);
                     await loadUsers(config.ExcludedUserIds || []);
+                    if (loadId !== configurationLoadId) return;
 
                     updateGeneratedCss();
                     updateToastPreview();
-
-                    Dashboard.hideLoadingMsg();
+                    document.querySelector('#MetadataNotifierConfigForm').style.visibility = '';
                 } catch (error) {
                     console.error('Error loading configuration:', error);
-                    Dashboard.hideLoadingMsg();
+                    if (loadId === configurationLoadId) {
+                        Dashboard.alert({ message: 'Failed to load Metadata Notifier configuration. Please reopen this page.' });
+                    }
+                } finally {
+                    if (loadId === configurationLoadId) Dashboard.hideLoadingMsg();
                 }
             }
 
-            function updateGeneratedCss() {
-                const pos = document.querySelector('#CssToastPosition').value;
-                let cssProps = '';
-                switch (pos) {
-                    case 'bottom-right':
-                        cssProps = 'bottom: 20px !important;\n    right: 20px !important;\n    left: auto !important;\n    top: auto !important;\n    transform: none !important;';
-                        break;
-                    case 'top-right':
-                        cssProps = 'top: 20px !important;\n    right: 20px !important;\n    left: auto !important;\n    bottom: auto !important;\n    transform: none !important;';
-                        break;
-                    case 'top-left':
-                        cssProps = 'top: 20px !important;\n    left: 20px !important;\n    right: auto !important;\n    bottom: auto !important;\n    transform: none !important;';
-                        break;
-                    case 'bottom-center':
-                        cssProps = 'bottom: 20px !important;\n    left: 50% !important;\n    transform: translateX(-50%) !important;\n    right: auto !important;\n    top: auto !important;';
-                        break;
-                    case 'top-center':
-                        cssProps = 'top: 20px !important;\n    left: 50% !important;\n    transform: translateX(-50%) !important;\n    right: auto !important;\n    bottom: auto !important;';
-                        break;
-                    case 'bottom-left':
-                    default:
-                        cssProps = 'bottom: 20px !important;\n    left: 20px !important;\n    right: auto !important;\n    top: auto !important;\n    transform: none !important;';
-                        break;
-                }
+            function updateGeneratedCss(selectedPosition) {
+                const pos = selectedPosition || document.querySelector('#CssToastPosition').value;
+                const positionProperties = {
+                    'bottom-left': [
+                        '    top: auto !important;',
+                        '    bottom: 20px !important;',
+                        '    left: 20px !important;',
+                        '    right: auto !important;',
+                        '    width: calc(100% - 40px) !important;',
+                        '    align-items: flex-start !important;',
+                        '    transform: none !important;'
+                    ],
+                    'bottom-center': [
+                        '    top: auto !important;',
+                        '    bottom: 20px !important;',
+                        '    left: 50% !important;',
+                        '    right: auto !important;',
+                        '    width: calc(100% - 40px) !important;',
+                        '    align-items: center !important;',
+                        '    transform: translateX(-50%) !important;'
+                    ],
+                    'bottom-right': [
+                        '    top: auto !important;',
+                        '    bottom: 20px !important;',
+                        '    left: auto !important;',
+                        '    right: 20px !important;',
+                        '    width: calc(100% - 40px) !important;',
+                        '    align-items: flex-end !important;',
+                        '    transform: none !important;'
+                    ],
+                    'top-left': [
+                        '    top: 20px !important;',
+                        '    bottom: auto !important;',
+                        '    left: 20px !important;',
+                        '    right: auto !important;',
+                        '    width: calc(100% - 40px) !important;',
+                        '    align-items: flex-start !important;',
+                        '    transform: none !important;'
+                    ],
+                    'top-center': [
+                        '    top: 20px !important;',
+                        '    bottom: auto !important;',
+                        '    left: 50% !important;',
+                        '    right: auto !important;',
+                        '    width: calc(100% - 40px) !important;',
+                        '    align-items: center !important;',
+                        '    transform: translateX(-50%) !important;'
+                    ],
+                    'top-right': [
+                        '    top: 20px !important;',
+                        '    bottom: auto !important;',
+                        '    left: auto !important;',
+                        '    right: 20px !important;',
+                        '    width: calc(100% - 40px) !important;',
+                        '    align-items: flex-end !important;',
+                        '    transform: none !important;'
+                    ]
+                };
+                const cssPositionProperties = positionProperties[pos] || positionProperties['bottom-left'];
 
-                const cssCode = `/* Metadata Notifier - Custom Toast Position (${pos}) */\n.toast,\n.paper-toast,\n.toastContainer,\n#toastContainer,\n.emby-toast {\n    position: fixed !important;\n    ${cssProps}\n    margin: 0 !important;\n    max-width: 450px !important;\n    z-index: 999999 !important;\n}`;
+                const cssCode = [
+                    '/* Metadata Notifier - Custom Toast Position (' + pos + ') */',
+                    '.toastContainer,',
+                    '#toastContainer {',
+                    '    position: fixed !important;',
+                    ...cssPositionProperties,
+                    '    display: flex !important;',
+                    '    flex-direction: column !important;',
+                    '    z-index: 999999 !important;',
+                    '}',
+                    '',
+                    '.toastContainer > .toast,',
+                    '.toastContainer > .paper-toast,',
+                    '.toastContainer > .emby-toast,',
+                    '#toastContainer > .toast,',
+                    '#toastContainer > .paper-toast,',
+                    '#toastContainer > .emby-toast {',
+                    '    position: relative !important;',
+                    '    inset: auto !important;',
+                    '    transform: none !important;',
+                    '    margin: 0 !important;',
+                    '    width: max-content !important;',
+                    '    max-width: none !important;',
+                    '    white-space: nowrap !important;',
+                    '}'
+                ].join('\n');
 
                 document.querySelector('#GeneratedCssOutput').value = cssCode;
             }
 
-            document.querySelector('#CssToastPosition').addEventListener('change', function () {
-                updateGeneratedCss();
+            document.querySelector('#CssToastPosition').addEventListener('change', function (event) {
+                updateGeneratedCss(event.currentTarget.value);
                 updateToastPreview();
             });
             document.querySelector('#CopyCssBtn').addEventListener('click', function () {
@@ -343,19 +420,59 @@
                 }
             });
 
+            function blockCssOutputBackNavigation(event) {
+                if (event.key === 'Backspace') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            }
+
+            const generatedCssOutput = document.querySelector('#GeneratedCssOutput');
+            generatedCssOutput.addEventListener('keydown', blockCssOutputBackNavigation);
+            generatedCssOutput.addEventListener('keyup', blockCssOutputBackNavigation);
+
             function updateToastPreview() {
-                const showDv = document.querySelector('#ShowDolbyVision').checked;
-                const showHdr10 = document.querySelector('#ShowHdr10').checked;
                 const showAudio = document.querySelector('#ShowAudio').checked;
                 const showAudioConv = document.querySelector('#ShowAudioConversion').checked;
-                const showPlayback = document.querySelector('#ShowDirectPlay').checked || document.querySelector('#ShowTranscoding').checked;
-                const showBitrate = document.querySelector('#ShowBitrate').checked;
+                const detailedAudio = document.querySelector('#UseDetailedAudioNames').checked;
+                const detailedVideo = document.querySelector('#UseDetailedVideoNames').checked;
                 const customTemplate = document.querySelector('#CustomTemplate').value.trim();
 
-                const hdrInfo = showDv ? 'Dolby Vision' : (showHdr10 ? 'HDR10' : '');
-                const audioInfo = showAudioConv ? 'TrueHD 7.1 ➔ AC3 5.1' : (showAudio ? 'Dolby Atmos' : '');
-                const playbackInfo = showPlayback ? 'Direct Play' : '';
-                const bitrateInfo = showBitrate ? '45.2 Mbps' : '';
+                let hdrInfo = '';
+                if (document.querySelector('#ShowDolbyVision').checked) {
+                    hdrInfo = detailedVideo ? 'Dolby Vision Profile 8.1' : 'Dolby Vision';
+                } else if (document.querySelector('#ShowHdr10Plus').checked) {
+                    hdrInfo = detailedVideo ? 'HDR10+ Profile B' : 'HDR10+';
+                } else if (document.querySelector('#ShowHdr10').checked) {
+                    hdrInfo = detailedVideo ? 'HEVC Main 10 HDR10' : 'HDR10';
+                } else if (document.querySelector('#ShowHlg').checked) {
+                    hdrInfo = 'HLG';
+                } else if (document.querySelector('#ShowSdr').checked) {
+                    hdrInfo = 'SDR';
+                }
+
+                let audioInfo = '';
+                if (showAudio) {
+                    if (showAudioConv) {
+                        audioInfo = detailedAudio
+                            ? 'TRUEHD Atmos 7.1 ➔ AC3 5.1'
+                            : 'Dolby TrueHD Atmos 7.1 ➔ Dolby Digital 5.1';
+                    } else {
+                        audioInfo = detailedAudio ? 'TRUEHD Atmos 7.1' : 'Dolby Atmos';
+                    }
+                }
+
+                let playbackInfo = '';
+                if (document.querySelector('#ShowTranscoding').checked) {
+                    playbackInfo = 'Transcoding (Video)';
+                    if (document.querySelector('#ShowTranscodeReasons').checked) {
+                        playbackInfo += ': Video codec not supported';
+                    }
+                } else if (document.querySelector('#ShowDirectPlay').checked) {
+                    playbackInfo = 'Direct Play';
+                }
+
+                const bitrateInfo = document.querySelector('#ShowBitrate').checked ? '45.2 Mbps' : '';
                 const titleInfo = 'Interstellar (2014)';
 
                 let messageText = '';
