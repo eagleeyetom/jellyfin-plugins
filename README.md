@@ -1,5 +1,11 @@
 # Jellyfin Plugins
 
+[![CI](https://github.com/eagleeyetom/jellyfin-plugins/actions/workflows/ci.yml/badge.svg)](https://github.com/eagleeyetom/jellyfin-plugins/actions/workflows/ci.yml)
+[![Jellyfin](https://img.shields.io/badge/Jellyfin-%E2%89%A512.0.0-00A4DC?logo=jellyfin&logoColor=white)](https://jellyfin.org/)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/eagleeyetom/jellyfin-plugins?logo=github&label=release)](https://github.com/eagleeyetom/jellyfin-plugins/releases)
+
 A personal fork of [Atilil/jellyfin-plugins](https://github.com/Atilil/jellyfin-plugins), maintained for my own media server. This fork contains a small set of personal maintenance changes. It is not an official Jellyfin project and is not affiliated with or endorsed by Jellyfin or the original project.
 
 ## Installation
@@ -15,6 +21,8 @@ A personal fork of [Atilil/jellyfin-plugins](https://github.com/Atilil/jellyfin-
 ## Available Plugins
 
 ### JellyTag
+
+[![JellyTag Release](https://img.shields.io/github/v/release/eagleeyetom/jellyfin-plugins?filter=jellytag-*&label=release&color=00A4DC)](https://github.com/eagleeyetom/jellyfin-plugins/releases)
 
 <p align="center">
     <img src="Jellytag/Jellyfin.Plugin.JellyTag/JellyTag.png" />
@@ -36,6 +44,8 @@ Adds quality badges for resolution, HDR, video codec, audio, languages, and subt
 ---
 
 ### Metadata Notifier
+
+[![Metadata Notifier Release](https://img.shields.io/github/v/release/eagleeyetom/jellyfin-plugins?filter=metadatanotifier-*&label=release&color=00A4DC)](https://github.com/eagleeyetom/jellyfin-plugins/releases)
 
 <p align="center">
     <img src="MetadataNotifier/Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png" width="200" />
