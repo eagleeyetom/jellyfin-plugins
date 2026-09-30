@@ -9,6 +9,12 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
+  ## v1.4.1.0 (2026-09-30)
+  - Generate distinct custom CSS for all six toast positions
+  - Keep generated toast notifications on one line at every screen edge
+  - Update the live preview from the selected metadata display options
+  - Prevent Backspace in the generated CSS field from navigating away from the plugin
+  - Make configuration loading resilient to overlapping page events and transient API failures
   ## v1.4.0.0 (2026-09-28)
   - Add optional Fullscreen Toast Fix for web browsers via HTML script injection middleware
   - Add customizable notification templates supporting {title} variable
