@@ -26,7 +26,7 @@ namespace Jellyfin.Plugin.MetadataNotifier.Services;
 /// </summary>
 public class MetadataNotifierService : IHostedService
 {
-    private readonly record struct HdrDetectionResult(string Value, string Rule);
+    internal readonly record struct HdrDetectionResult(string Value, string Rule);
 
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<MetadataNotifierService> _logger;
@@ -34,12 +34,12 @@ public class MetadataNotifierService : IHostedService
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pendingStartupToasts = new(StringComparer.Ordinal);
     private CancellationTokenSource? _serviceCancellation;
 
-    private static readonly Regex Hdr10PlusPathRegex = new(
-        @"(?:[\.\-_\[\(]HDR10Plus[\.\-_\]\)]|[\.\-_\[\(]HDR10\+[\.\-_\]\)]|\bHDR10Plus\b|\bHDR10\+\b)",
+    internal static readonly Regex Hdr10PlusPathRegex = new(
+        @"(?:[\s\.\-_\[\(]|^)HDR10[\.\-_ ]?(?:\+|Plus)(?=[\s\.\-_\]\)]|$)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    private static readonly Regex DolbyVisionPathRegex = new(
-        @"(?:[\.\-_\[\(](?:DV|DOVI|Dolby[\.\-_]?Vision)[\.\-_\]\)]|\b(?:DV|DOVI|Dolby[\.\-_]?Vision)\b)",
+    internal static readonly Regex DolbyVisionPathRegex = new(
+        @"(?:[\.\-_\[\(](?:DV|DOVI|Dolby[\.\-_ ]?Vision)[\.\-_\]\)]|\b(?:DV|DOVI|Dolby[\.\-_ ]?Vision)\b)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
@@ -548,7 +548,7 @@ public class MetadataNotifierService : IHostedService
         return item.Name ?? "Media Info";
     }
 
-    private static bool IsSamsungClient(SessionInfo session)
+    internal static bool IsSamsungClient(SessionInfo session)
     {
         var client = session.Client ?? string.Empty;
         var deviceName = session.DeviceName ?? string.Empty;
@@ -573,7 +573,7 @@ public class MetadataNotifierService : IHostedService
         return false;
     }
 
-    private static bool IsNonHdr10PlusClient(SessionInfo session)
+    internal static bool IsNonHdr10PlusClient(SessionInfo session)
     {
         var client = session.Client ?? string.Empty;
         var deviceName = session.DeviceName ?? string.Empty;
@@ -602,7 +602,7 @@ public class MetadataNotifierService : IHostedService
             || deviceName.Contains("Toshiba", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsNonDolbyVisionClient(SessionInfo session)
+    internal static bool IsNonDolbyVisionClient(SessionInfo session)
     {
         var client = session.Client ?? string.Empty;
         var deviceName = session.DeviceName ?? string.Empty;
@@ -639,7 +639,7 @@ public class MetadataNotifierService : IHostedService
         return false;
     }
 
-    private static HdrDetectionResult GetHdrInfo(BaseItem item, SessionInfo session, PluginConfiguration config)
+    internal static HdrDetectionResult GetHdrInfo(BaseItem item, SessionInfo session, PluginConfiguration config)
     {
         if (MetadataFormatter.ShouldReportToneMappedSdr(config, session.TranscodingInfo))
         {
@@ -648,6 +648,16 @@ public class MetadataNotifierService : IHostedService
 
         var mediaStreams = GetMediaStreams(item, session);
         var videoStream = mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+        return GetHdrInfo(videoStream, item.Path ?? string.Empty, item.Name ?? string.Empty, session, config);
+    }
+
+    internal static HdrDetectionResult GetHdrInfo(
+        MediaStream? videoStream,
+        string itemPath,
+        string itemName,
+        SessionInfo session,
+        PluginConfiguration config)
+    {
         if (videoStream == null)
         {
             return new(string.Empty, "no-video-stream");
@@ -657,28 +667,25 @@ public class MetadataNotifierService : IHostedService
         var range = videoStream.VideoRange;
         var profile = videoStream.Profile ?? string.Empty;
         var displayTitle = videoStream.DisplayTitle ?? string.Empty;
-        var comment = videoStream.Comment ?? string.Empty;
-        var itemPath = item.Path ?? string.Empty;
-        var itemName = item.Name ?? string.Empty;
 
         bool isNonDvClient = IsNonDolbyVisionClient(session);
         bool isNonHdr10Plus = IsNonHdr10PlusClient(session);
 
-        // Detect HDR10+ via multilayer check: VideoRangeType, stream metadata, or filename
-        bool hasHdr10Plus = IsHdr10Plus(rangeType, profile, displayTitle, comment, itemPath, itemName);
+        // Detect HDR10+ via multilayer check: probe flag, VideoRangeType, stream metadata, or filename
+        bool hasHdr10Plus = IsHdr10Plus(videoStream, itemPath, itemName);
 
-        // Detect Dolby Vision via VideoRangeType, stream metadata, or filename
-        bool hasDolbyVision = IsDolbyVision(rangeType, range, profile, displayTitle, itemPath, itemName);
+        // Detect Dolby Vision via probe profile/flag, VideoRangeType, stream metadata, or filename
+        bool hasDolbyVision = IsDolbyVision(videoStream, itemPath, itemName);
 
         // Non-supporting TVs/clients (e.g. LG, Sony, Amazon, Roku) do not support HDR10+ hardware decoding
         if (hasHdr10Plus && isNonHdr10Plus && config.SuppressHdr10PlusOnLg)
         {
             if (hasDolbyVision && config.ShowDolbyVision)
             {
-                return new(config.UseDetailedVideoNames ? GetDetailedDolbyVisionInfo(profile, displayTitle) : "Dolby Vision", "hdr10plus-client-fallback-dolby-vision");
+                return new(config.UseDetailedVideoNames ? GetDetailedDolbyVisionInfo(videoStream) : "Dolby Vision", "hdr10plus-client-fallback-dolby-vision");
             }
 
-            if (HasHdr10BaseLayer(rangeType, range, profile, displayTitle) && config.ShowHdr10)
+            if (HasHdr10BaseLayer(videoStream) && config.ShowHdr10)
             {
                 return new(config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10", "hdr10plus-client-fallback-hdr10");
             }
@@ -708,7 +715,7 @@ public class MetadataNotifierService : IHostedService
                 }
 
                 // Fall back to HDR10 base layer (Profile 7/8, DOVIWithHDR10, DOVIWithEL, or standard HDR)
-                if (HasHdr10BaseLayer(rangeType, range, profile, displayTitle) && config.ShowHdr10)
+                if (HasHdr10BaseLayer(videoStream) && config.ShowHdr10)
                 {
                     return new(config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10", "dolby-vision-client-fallback-hdr10");
                 }
@@ -730,7 +737,7 @@ public class MetadataNotifierService : IHostedService
 
             if (config.ShowDolbyVision)
             {
-                return new(config.UseDetailedVideoNames ? GetDetailedDolbyVisionInfo(profile, displayTitle) : "Dolby Vision", "dolby-vision");
+                return new(config.UseDetailedVideoNames ? GetDetailedDolbyVisionInfo(videoStream) : "Dolby Vision", "dolby-vision");
             }
         }
 
@@ -763,8 +770,13 @@ public class MetadataNotifierService : IHostedService
         return new(string.Empty, "hidden-by-configuration");
     }
 
-    private static bool HasHdr10BaseLayer(VideoRangeType rangeType, VideoRange range, string profile, string displayTitle)
+    internal static bool HasHdr10BaseLayer(MediaStream videoStream)
     {
+        var rangeType = videoStream.VideoRangeType;
+        var range = videoStream.VideoRange;
+        var profile = videoStream.Profile ?? string.Empty;
+        var displayTitle = videoStream.DisplayTitle ?? string.Empty;
+
         return rangeType is VideoRangeType.HDR10
                 or VideoRangeType.DOVIWithHDR10
                 or VideoRangeType.DOVIWithEL
@@ -775,54 +787,51 @@ public class MetadataNotifierService : IHostedService
             || profile.Contains("dvhe.07", StringComparison.OrdinalIgnoreCase)
             || profile.Contains("dvh1.07", StringComparison.OrdinalIgnoreCase)
             || profile.Contains("Profile 8", StringComparison.OrdinalIgnoreCase)
-            || profile.Contains("Profile 7", StringComparison.OrdinalIgnoreCase);
+            || profile.Contains("Profile 7", StringComparison.OrdinalIgnoreCase)
+            || videoStream.DvProfile is 7 or 8;
     }
 
-    private static bool IsDolbyVision(VideoRangeType rangeType, VideoRange range, string profile, string displayTitle, string itemPath, string itemName)
+    internal static bool IsDolbyVision(MediaStream videoStream, string itemPath, string itemName)
     {
-        return rangeType is VideoRangeType.DOVI
-                or VideoRangeType.DOVIWithHDR10
-                or VideoRangeType.DOVIWithHLG
-                or VideoRangeType.DOVIWithSDR
-                or VideoRangeType.DOVIWithEL
-                or VideoRangeType.DOVIWithHDR10Plus
-                or VideoRangeType.DOVIWithELHDR10Plus
-            || profile.Contains("DOVI", StringComparison.OrdinalIgnoreCase)
-            || profile.Contains("DOLBY VISION", StringComparison.OrdinalIgnoreCase)
-            || displayTitle.Contains("Dolby Vision", StringComparison.OrdinalIgnoreCase)
-            || DolbyVisionPathRegex.IsMatch(displayTitle)
-            || (!string.IsNullOrEmpty(itemPath) && DolbyVisionPathRegex.IsMatch(itemPath))
-            || (!string.IsNullOrEmpty(itemName) && DolbyVisionPathRegex.IsMatch(itemName));
-    }
+        // 1. Jellyfin probe DV profile
+        if (videoStream.DvProfile.HasValue && videoStream.DvProfile.Value > 0)
+        {
+            return true;
+        }
 
-    private static bool IsHdr10Plus(VideoRangeType rangeType, string profile, string displayTitle, string comment, string itemPath, string itemName)
-    {
-        // 1. Jellyfin probe enum
-        if (rangeType is VideoRangeType.HDR10Plus
+        // 2. Jellyfin probe enum
+        var rangeType = videoStream.VideoRangeType;
+        if (rangeType is VideoRangeType.DOVI
+            or VideoRangeType.DOVIWithHDR10
+            or VideoRangeType.DOVIWithHLG
+            or VideoRangeType.DOVIWithSDR
+            or VideoRangeType.DOVIWithEL
             or VideoRangeType.DOVIWithHDR10Plus
             or VideoRangeType.DOVIWithELHDR10Plus)
         {
             return true;
         }
 
-        // 2. Stream metadata
-        var combinedMeta = $"{profile} {displayTitle} {comment}";
-        if (combinedMeta.Contains("HDR10+", StringComparison.OrdinalIgnoreCase)
-            || combinedMeta.Contains("HDR10 PLUS", StringComparison.OrdinalIgnoreCase)
-            || combinedMeta.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase)
-            || combinedMeta.Contains("ST 2094-40", StringComparison.OrdinalIgnoreCase)
-            || combinedMeta.Contains("SMPTE ST 2094", StringComparison.OrdinalIgnoreCase))
+        // 3. Stream metadata
+        var profile = videoStream.Profile ?? string.Empty;
+        var displayTitle = videoStream.DisplayTitle ?? string.Empty;
+        var title = videoStream.Title ?? string.Empty;
+
+        var combinedMeta = $"{profile} {title} {displayTitle}";
+        if (combinedMeta.Contains("DOVI", StringComparison.OrdinalIgnoreCase)
+            || combinedMeta.Contains("DOLBY VISION", StringComparison.OrdinalIgnoreCase)
+            || DolbyVisionPathRegex.IsMatch(combinedMeta))
         {
             return true;
         }
 
-        // 3. File path / release name
-        if (!string.IsNullOrEmpty(itemPath) && Hdr10PlusPathRegex.IsMatch(itemPath))
+        // 4. File path / release name
+        if (!string.IsNullOrEmpty(itemPath) && DolbyVisionPathRegex.IsMatch(itemPath))
         {
             return true;
         }
 
-        if (!string.IsNullOrEmpty(itemName) && Hdr10PlusPathRegex.IsMatch(itemName))
+        if (!string.IsNullOrEmpty(itemName) && DolbyVisionPathRegex.IsMatch(itemName))
         {
             return true;
         }
@@ -830,8 +839,53 @@ public class MetadataNotifierService : IHostedService
         return false;
     }
 
-    private static string GetDetailedDolbyVisionInfo(string profile, string displayTitle)
+    internal static bool IsHdr10Plus(MediaStream videoStream, string itemPath, string itemName)
     {
+        // 1. Jellyfin probe flag
+        if (videoStream.Hdr10PlusPresentFlag == true)
+        {
+            return true;
+        }
+
+        // 2. Jellyfin probe enum
+        var rangeType = videoStream.VideoRangeType;
+        if (rangeType is VideoRangeType.HDR10Plus
+            or VideoRangeType.DOVIWithHDR10Plus
+            or VideoRangeType.DOVIWithELHDR10Plus)
+        {
+            return true;
+        }
+
+        // 3. Stream metadata
+        var combinedMeta = $"{videoStream.Profile} {videoStream.Title} {videoStream.DisplayTitle} {videoStream.Comment}";
+        if (combinedMeta.Contains("HDR10+", StringComparison.OrdinalIgnoreCase)
+            || combinedMeta.Contains("HDR10 PLUS", StringComparison.OrdinalIgnoreCase)
+            || combinedMeta.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase)
+            || combinedMeta.Contains("ST 2094-40", StringComparison.OrdinalIgnoreCase)
+            || combinedMeta.Contains("SMPTE ST 2094", StringComparison.OrdinalIgnoreCase)
+            || Hdr10PlusPathRegex.IsMatch(combinedMeta))
+        {
+            return true;
+        }
+
+        // 4. File path / release name
+        if (!string.IsNullOrEmpty(itemPath) && (itemPath.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) || Hdr10PlusPathRegex.IsMatch(itemPath)))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(itemName) && (itemName.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) || Hdr10PlusPathRegex.IsMatch(itemName)))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string GetDetailedDolbyVisionInfo(MediaStream videoStream)
+    {
+        var profile = videoStream.Profile ?? string.Empty;
+        var displayTitle = videoStream.DisplayTitle ?? string.Empty;
         var combined = $"{profile} {displayTitle}";
 
         if (combined.Contains("dvhe.08.09", StringComparison.OrdinalIgnoreCase)
@@ -852,7 +906,8 @@ public class MetadataNotifierService : IHostedService
 
         if (combined.Contains("dvhe.08", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("dvh1.08", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("Profile 8", StringComparison.OrdinalIgnoreCase))
+            || combined.Contains("Profile 8", StringComparison.OrdinalIgnoreCase)
+            || videoStream.DvProfile == 8)
         {
             return "DV Profile 8";
         }
@@ -867,16 +922,23 @@ public class MetadataNotifierService : IHostedService
 
         if (combined.Contains("dvhe.07", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("dvh1.07", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("Profile 7", StringComparison.OrdinalIgnoreCase))
+            || combined.Contains("Profile 7", StringComparison.OrdinalIgnoreCase)
+            || videoStream.DvProfile == 7)
         {
             return "DV Profile 7";
         }
 
         if (combined.Contains("dvhe.05", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("dvh1.05", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("Profile 5", StringComparison.OrdinalIgnoreCase))
+            || combined.Contains("Profile 5", StringComparison.OrdinalIgnoreCase)
+            || videoStream.DvProfile == 5)
         {
             return "DV Profile 5";
+        }
+
+        if (videoStream.DvProfile.HasValue && videoStream.DvProfile.Value > 0)
+        {
+            return $"DV Profile {videoStream.DvProfile.Value}";
         }
 
         if (!string.IsNullOrEmpty(profile) && !profile.Equals("DOVI", StringComparison.OrdinalIgnoreCase))
