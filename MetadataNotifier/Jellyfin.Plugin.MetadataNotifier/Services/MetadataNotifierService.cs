@@ -746,7 +746,9 @@ public class MetadataNotifierService : IHostedService
             return new(config.UseDetailedVideoNames ? GetDetailedHdr10PlusInfo(profile, displayTitle) : "HDR10+", "hdr10plus");
         }
 
-        if (rangeType == VideoRangeType.HLG || displayTitle.Contains("HLG", StringComparison.OrdinalIgnoreCase))
+        if (rangeType == VideoRangeType.HLG
+            || displayTitle.Contains("HLG", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(videoStream.ColorTransfer, "arib-std-b67", StringComparison.OrdinalIgnoreCase))
         {
             if (config.ShowHlg)
             {
@@ -754,7 +756,10 @@ public class MetadataNotifierService : IHostedService
             }
         }
 
-        if (rangeType == VideoRangeType.HDR10 || range == VideoRange.HDR || displayTitle.Contains("HDR10", StringComparison.OrdinalIgnoreCase))
+        if (rangeType == VideoRangeType.HDR10
+            || range == VideoRange.HDR
+            || displayTitle.Contains("HDR10", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(videoStream.ColorTransfer, "smpte2084", StringComparison.OrdinalIgnoreCase))
         {
             if (config.ShowHdr10)
             {
@@ -772,28 +777,66 @@ public class MetadataNotifierService : IHostedService
 
     internal static bool HasHdr10BaseLayer(MediaStream videoStream)
     {
+        if (videoStream == null)
+        {
+            return false;
+        }
+
+        // Profile 5 has no HDR10 base layer (uses proprietary IPT color space)
+        if (videoStream.DvProfile == 5
+            || (videoStream.Profile != null && (
+                videoStream.Profile.Contains("dvhe.05", StringComparison.OrdinalIgnoreCase)
+                || videoStream.Profile.Contains("dvh1.05", StringComparison.OrdinalIgnoreCase)
+                || videoStream.Profile.Contains("Profile 5", StringComparison.OrdinalIgnoreCase))))
+        {
+            return false;
+        }
+
+        if (videoStream.VideoRangeType is VideoRangeType.DOVIWithSDR or VideoRangeType.DOVIWithHLG)
+        {
+            return false;
+        }
+
         var rangeType = videoStream.VideoRangeType;
         var range = videoStream.VideoRange;
         var profile = videoStream.Profile ?? string.Empty;
         var displayTitle = videoStream.DisplayTitle ?? string.Empty;
 
+        // If it's a Dolby Vision stream, ST 2084 transfer curve alone does not imply an HDR10 base layer
+        bool isDvStream = rangeType == VideoRangeType.DOVI
+            || videoStream.DvProfile > 0
+            || profile.Contains("dv", StringComparison.OrdinalIgnoreCase)
+            || profile.Contains("dovi", StringComparison.OrdinalIgnoreCase);
+
+        if (isDvStream)
+        {
+            return rangeType is VideoRangeType.DOVIWithHDR10
+                    or VideoRangeType.DOVIWithEL
+                    or VideoRangeType.DOVIWithHDR10Plus
+                    or VideoRangeType.DOVIWithELHDR10Plus
+                || videoStream.DvProfile is 7 or 8
+                || profile.Contains("dvhe.08", StringComparison.OrdinalIgnoreCase)
+                || profile.Contains("dvh1.08", StringComparison.OrdinalIgnoreCase)
+                || profile.Contains("dvhe.07", StringComparison.OrdinalIgnoreCase)
+                || profile.Contains("dvh1.07", StringComparison.OrdinalIgnoreCase)
+                || profile.Contains("Profile 8", StringComparison.OrdinalIgnoreCase)
+                || profile.Contains("Profile 7", StringComparison.OrdinalIgnoreCase)
+                || displayTitle.Contains("HDR10", StringComparison.OrdinalIgnoreCase);
+        }
+
         return rangeType is VideoRangeType.HDR10
-                or VideoRangeType.DOVIWithHDR10
-                or VideoRangeType.DOVIWithEL
             || range == VideoRange.HDR
             || string.Equals(videoStream.ColorTransfer, "smpte2084", StringComparison.OrdinalIgnoreCase)
-            || displayTitle.Contains("HDR10", StringComparison.OrdinalIgnoreCase)
-            || profile.Contains("dvhe.08", StringComparison.OrdinalIgnoreCase)
-            || profile.Contains("dvh1.08", StringComparison.OrdinalIgnoreCase)
-            || profile.Contains("dvhe.07", StringComparison.OrdinalIgnoreCase)
-            || profile.Contains("dvh1.07", StringComparison.OrdinalIgnoreCase)
-            || profile.Contains("Profile 8", StringComparison.OrdinalIgnoreCase)
-            || profile.Contains("Profile 7", StringComparison.OrdinalIgnoreCase)
-            || videoStream.DvProfile is 7 or 8;
+            || displayTitle.Contains("HDR10", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static bool IsDolbyVision(MediaStream videoStream, string itemPath, string itemName)
     {
+        if (videoStream == null)
+        {
+            return false;
+        }
+
         // 1. Jellyfin probe DV profile
         if (videoStream.DvProfile.HasValue && videoStream.DvProfile.Value > 0)
         {
@@ -842,6 +885,11 @@ public class MetadataNotifierService : IHostedService
 
     internal static bool IsHdr10Plus(MediaStream videoStream, string itemPath, string itemName)
     {
+        if (videoStream == null)
+        {
+            return false;
+        }
+
         // 1. Jellyfin probe flag
         if (videoStream.Hdr10PlusPresentFlag == true)
         {

@@ -205,4 +205,86 @@ public class MetadataNotifierServiceTests
         Assert.AreEqual("HDR10", result.Value);
         Assert.AreEqual("hdr10", result.Rule);
     }
+
+    [TestMethod]
+    public void GetHdrInfo_Profile5DolbyVision_OnSamsung_DoesNotFallbackToHdr10()
+    {
+        var videoStream = new MediaStream
+        {
+            Type = MediaStreamType.Video,
+            Codec = "hevc",
+            DvProfile = 5,
+            Profile = "Profile 5",
+            ColorTransfer = "smpte2084",
+            ColorSpace = "bt2020nc"
+        };
+
+        var session = CreateSession("Jellyfin for Tizen", "Samsung Smart TV");
+        var config = new PluginConfiguration
+        {
+            ShowHdr10Plus = true,
+            ShowHdr10 = true,
+            ShowDolbyVision = true,
+            SuppressDvOnSamsung = true,
+            ShowSdr = false
+        };
+
+        var result = MetadataNotifierService.GetHdrInfo(videoStream, "/media/movies/Sample.Movie.mkv", "Sample Movie", session, config);
+
+        Assert.AreEqual(string.Empty, result.Value);
+        Assert.AreEqual("dolby-vision-client-fallback-hidden", result.Rule);
+        Assert.IsFalse(MetadataNotifierService.HasHdr10BaseLayer(videoStream));
+    }
+
+    [TestMethod]
+    public void GetHdrInfo_Smpte2084ColorTransfer_DetectedAsHdr10()
+    {
+        var videoStream = new MediaStream
+        {
+            Type = MediaStreamType.Video,
+            ColorTransfer = "smpte2084",
+            ColorSpace = "bt2020nc"
+        };
+
+        var session = CreateSession("Jellyfin Web", "Firefox");
+        var config = new PluginConfiguration
+        {
+            ShowHdr10 = true
+        };
+
+        var result = MetadataNotifierService.GetHdrInfo(videoStream, "/media/movies/Sample.Movie.mkv", "Sample Movie", session, config);
+
+        Assert.AreEqual("HDR10", result.Value);
+        Assert.AreEqual("hdr10", result.Rule);
+    }
+
+    [TestMethod]
+    public void GetHdrInfo_AribStdB67ColorTransfer_DetectedAsHlg()
+    {
+        var videoStream = new MediaStream
+        {
+            Type = MediaStreamType.Video,
+            ColorTransfer = "arib-std-b67"
+        };
+
+        var session = CreateSession("Jellyfin Web", "Firefox");
+        var config = new PluginConfiguration
+        {
+            ShowHlg = true
+        };
+
+        var result = MetadataNotifierService.GetHdrInfo(videoStream, "/media/movies/Sample.Movie.mkv", "Sample Movie", session, config);
+
+        Assert.AreEqual("HLG", result.Value);
+        Assert.AreEqual("hlg", result.Rule);
+    }
+
+    [TestMethod]
+    public void NullMediaStream_GuardsDoNotThrow()
+    {
+        Assert.IsFalse(MetadataNotifierService.IsDolbyVision(null!, string.Empty, string.Empty));
+        Assert.IsFalse(MetadataNotifierService.IsHdr10Plus(null!, string.Empty, string.Empty));
+        Assert.IsFalse(MetadataNotifierService.HasHdr10BaseLayer(null!));
+    }
 }
+
