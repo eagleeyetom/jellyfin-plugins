@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Jellyfin.Plugin.JellyTag.Tests/Jellyfin.Plugin.JellyTag.Tests.csproj" />
+  <Project Path="Jellyfin.Plugin.JellyTag/Jellyfin.Plugin.JellyTag.csproj" />
+</Solution>
