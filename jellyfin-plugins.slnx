@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/Jellytag/">
+    <Project Path="Jellytag/Jellyfin.Plugin.JellyTag.Tests/Jellyfin.Plugin.JellyTag.Tests.csproj" />
+    <Project Path="Jellytag/Jellyfin.Plugin.JellyTag/Jellyfin.Plugin.JellyTag.csproj" />
+  </Folder>
+  <Folder Name="/MetadataNotifier/">
+    <Project Path="MetadataNotifier/Jellyfin.Plugin.MetadataNotifier.Tests/Jellyfin.Plugin.MetadataNotifier.Tests.csproj" />
+    <Project Path="MetadataNotifier/Jellyfin.Plugin.MetadataNotifier/Jellyfin.Plugin.MetadataNotifier.csproj" />
+  </Folder>
+</Solution>
