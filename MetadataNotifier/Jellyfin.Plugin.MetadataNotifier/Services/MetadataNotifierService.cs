@@ -35,7 +35,7 @@ public class MetadataNotifierService : IHostedService
     private CancellationTokenSource? _serviceCancellation;
 
     internal static readonly Regex Hdr10PlusPathRegex = new(
-        @"(?:[\s\.\-_\[\(]|^)HDR10[\.\-_ ]?(?:\+|Plus)(?=[\s\.\-_\]\)]|$)",
+        @"(?:[\\/\s\.\-_\[\(]|^)HDR10[\.\-_ ]?(?:\+|Plus)(?=[\\/\s\.\-_\]\)]|$)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     internal static readonly Regex DolbyVisionPathRegex = new(
@@ -781,6 +781,7 @@ public class MetadataNotifierService : IHostedService
                 or VideoRangeType.DOVIWithHDR10
                 or VideoRangeType.DOVIWithEL
             || range == VideoRange.HDR
+            || string.Equals(videoStream.ColorTransfer, "smpte2084", StringComparison.OrdinalIgnoreCase)
             || displayTitle.Contains("HDR10", StringComparison.OrdinalIgnoreCase)
             || profile.Contains("dvhe.08", StringComparison.OrdinalIgnoreCase)
             || profile.Contains("dvh1.08", StringComparison.OrdinalIgnoreCase)
