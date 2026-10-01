@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Jellyfin.Plugin.MetadataNotifier.Tests/Jellyfin.Plugin.MetadataNotifier.Tests.csproj" />
+  <Project Path="Jellyfin.Plugin.MetadataNotifier/Jellyfin.Plugin.MetadataNotifier.csproj" />
+</Solution>
