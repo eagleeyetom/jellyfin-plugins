@@ -9,6 +9,13 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
+  ## v1.4.2.0 (2026-10-03)
+  - Detect Jellyfin probe Hdr10PlusPresentFlag for HDR10+ media
+  - Improve HDR10+ regex path and filename separator matching
+  - Properly prioritize HDR10+ over HDR10 fallback for hybrid DV/HDR10+ media on Samsung Smart TVs
+  - Accurately prioritize Dolby Vision over HDR10 fallback for hybrid DV/HDR10+ media on LG webOS TVs
+  - Prevent false-positive HDR10 base layer fallback for Dolby Vision Profile 5
+  - Add ColorTransfer probe detection for HDR10 (smpte2084) and HLG (arib-std-b67)
   ## v1.4.1.0 (2026-09-30)
   - Generate distinct custom CSS for all six toast positions
   - Keep generated toast notifications on one line at every screen edge
