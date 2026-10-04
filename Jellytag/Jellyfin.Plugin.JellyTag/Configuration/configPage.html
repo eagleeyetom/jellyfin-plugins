@@ -93,6 +93,13 @@
                             </label>
                             <div class="fieldDescription">Windows clients (Emby Theater, web browser) will not show HDR/DV badges. Useful for SDR-only setups.</div>
                         </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input id="WhiteLogoBackground" type="checkbox" is="emby-checkbox" />
+                                <span>Use white background for brand logos</span>
+                            </label>
+                            <div class="fieldDescription">When unchecked (default), brand logos (Dolby Atmos, TrueHD, DTS:X, Dolby Vision, HDR10+, etc.) use a black background. When checked, brand logos use a white background.</div>
+                        </div>
                         <div id="DebugCountryCodeContainer" class="inputContainer" style="display:none; margin-top:1em;">
                             <label class="inputLabel inputLabelUnfocused" for="DebugCountryCode">Debug Country Code Override</label>
                             <input id="DebugCountryCode" type="text" is="emby-input" placeholder="e.g. fr, jp, de" />
@@ -387,6 +394,15 @@
                 logoBadges.forEach(function(b) {
                     h += chk(k + 'Logo_' + b.key, b.label);
                 });
+                h += '</div>';
+                h += '<div class="inputContainer" style="margin-top:.8em;">';
+                h += '<label class="inputLabel inputLabelUnfocused" for="' + k + 'LogoBg">Panel Logo Background</label>';
+                h += '<select id="' + k + 'LogoBg" is="emby-select">';
+                h += '<option value="">Inherit global setting</option>';
+                h += '<option value="false">Black</option>';
+                h += '<option value="true">White</option>';
+                h += '</select>';
+                h += '<div class="fieldDescription">Choose whether brand logos in this panel have a black or white background.</div>';
                 h += '</div>';
                 h += '</div>'; // LogoSettings
             }
@@ -708,6 +724,14 @@
                         });
                     }
                 });
+
+                var logoBgEl = q(k + 'LogoBg');
+                if (logoBgEl) {
+                    logoBgEl.value = pc.WhiteLogoBackground === true ? 'true' : (pc.WhiteLogoBackground === false ? 'false' : '');
+                    logoBgEl.addEventListener('change', function() {
+                        if (document.getElementById('BadgeGallery')) loadBadgeGallery();
+                    });
+                }
             }
 
             // Text override state
@@ -947,6 +971,10 @@
                 TextCornerRadius: ov.textCornerRadius,
                 EnabledBadges: collectPanelBadges(prefix, panelId),
                 DisabledLogos: disabledLogos,
+                WhiteLogoBackground: (function() {
+                    var v = q(k + 'LogoBg') ? q(k + 'LogoBg').value : '';
+                    return v === 'true' ? true : (v === 'false' ? false : null);
+                })(),
                 BadgeTypeOverrides: ov.overrides
             };
         }
@@ -1000,6 +1028,7 @@
             config.HideDolbyVisionOnSamsungClients = q('HideDolbyVisionOnSamsungClients').checked;
             config.HideDolbyVisionOnFireTvClients = q('HideDolbyVisionOnFireTvClients').checked;
             config.HideHdrOnWindowsClients = q('HideHdrOnWindowsClients').checked;
+            config.WhiteLogoBackground = q('WhiteLogoBackground').checked;
             var debugContainer = document.getElementById('DebugCountryCodeContainer');
             if (debugContainer && debugContainer.style.display === 'none') {
                 config.DebugCountryCode = null;
@@ -1141,7 +1170,8 @@
                     };
                     // Jellyfin rejects ?api_key= on these requests, so the image has to be
                     // fetched with an auth header and handed to the <img> as a blob.
-                    fetch(previewUrl + '?t=' + Date.now() + (logo ? '&logo=true' : ''), {headers:headers})
+                    var isWhitePreview = (q('WhiteLogoBackground') && q('WhiteLogoBackground').checked);
+                    fetch(previewUrl + '?t=' + Date.now() + (logo ? '&logo=true' : '') + (isWhitePreview ? '&white=true' : ''), {headers:headers})
                         .then(function(r) { if (!r.ok) throw new Error(r.status); return r.blob(); })
                         .then(function(blob) {
                             var objectUrl = URL.createObjectURL(blob);
@@ -1212,6 +1242,7 @@
                 q('HideDolbyVisionOnSamsungClients').checked = config.HideDolbyVisionOnSamsungClients === true;
                 q('HideDolbyVisionOnFireTvClients').checked = config.HideDolbyVisionOnFireTvClients === true;
                 q('HideHdrOnWindowsClients').checked = config.HideHdrOnWindowsClients === true;
+                q('WhiteLogoBackground').checked = config.WhiteLogoBackground === true;
                 q('DebugCountryCode').value = config.DebugCountryCode || '';
                 q('ThumbnailSameAsPoster').checked = config.ThumbnailSameAsPoster === true;
                 q('ThumbnailSizeReduction').value = config.ThumbnailSizeReduction != null ? config.ThumbnailSizeReduction : 10;
@@ -1239,6 +1270,9 @@
                 setupAllToggles('Thumb');
                 q('ThumbnailSameAsPoster').addEventListener('change', toggleThumbSameAsPoster);
                 toggleThumbSameAsPoster();
+                q('WhiteLogoBackground').addEventListener('change', function() {
+                    if (document.getElementById('BadgeGallery')) loadBadgeGallery();
+                });
 
                 loadLibraryCheckboxes(config.ExcludedLibraryIds || []);
                 Dashboard.hideLoadingMsg();

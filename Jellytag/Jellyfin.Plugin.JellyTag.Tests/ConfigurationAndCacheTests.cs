@@ -45,6 +45,32 @@ public class ConfigurationAndCacheTests
     }
 
     [TestMethod]
+    public void ComputeConfigFingerprint_ChangesWhenWhiteLogoBackgroundChanges()
+    {
+        var config1 = new PluginConfiguration { WhiteLogoBackground = false };
+        var config2 = new PluginConfiguration { WhiteLogoBackground = true };
+
+        var fp1 = ImageCacheService.ComputeConfigFingerprint(config1);
+        var fp2 = ImageCacheService.ComputeConfigFingerprint(config2);
+
+        Assert.AreNotEqual(fp1, fp2, "Fingerprint should differ when WhiteLogoBackground changes");
+    }
+
+    [TestMethod]
+    public void ComputeConfigFingerprint_ChangesWhenPanelWhiteLogoBackgroundChanges()
+    {
+        var config1 = new PluginConfiguration();
+        config1.PosterConfig.AudioPanel.WhiteLogoBackground = null;
+        var config2 = new PluginConfiguration();
+        config2.PosterConfig.AudioPanel.WhiteLogoBackground = true;
+
+        var fp1 = ImageCacheService.ComputeConfigFingerprint(config1);
+        var fp2 = ImageCacheService.ComputeConfigFingerprint(config2);
+
+        Assert.AreNotEqual(fp1, fp2, "Fingerprint should differ when panel WhiteLogoBackground override changes");
+    }
+
+    [TestMethod]
     public void IsFireTvClient_IdentifiesFireTvHeaders()
     {
         var context1 = new Microsoft.AspNetCore.Http.DefaultHttpContext();

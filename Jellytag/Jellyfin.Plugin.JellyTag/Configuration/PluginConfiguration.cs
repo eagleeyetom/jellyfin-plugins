@@ -120,6 +120,11 @@ public class BadgePanelSettings
     /// Logos disabled in this panel when Style == Logo (falls back to standard badge).
     /// </summary>
     public List<string> DisabledLogos { get; set; } = new();
+
+    /// <summary>
+    /// Background color override for brand logos in this panel (null = inherit global WhiteLogoBackground setting).
+    /// </summary>
+    public bool? WhiteLogoBackground { get; set; }
 }
 
 /// <summary>
@@ -171,6 +176,11 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool HideDolbyVisionOnSamsungClients { get; set; }
 
     public bool HideDolbyVisionOnFireTvClients { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to use a white background for brand logos (default: false, black background).
+    /// </summary>
+    public bool WhiteLogoBackground { get; set; }
 
     public ImageTypeConfig PosterConfig { get; set; }
     public ImageTypeConfig ThumbnailConfig { get; set; }

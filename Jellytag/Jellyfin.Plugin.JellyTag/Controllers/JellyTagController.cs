@@ -367,7 +367,7 @@ public partial class JellyTagController : ControllerBase
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public IActionResult GetBadgePreview(string badgeKey, [FromQuery] bool logo = false)
+    public IActionResult GetBadgePreview(string badgeKey, [FromQuery] bool logo = false, [FromQuery] bool? white = null)
     {
         if (!SafeBadgeKeyRegex().IsMatch(badgeKey))
         {
@@ -376,6 +376,26 @@ public partial class JellyTagController : ControllerBase
 
         // Normalize dots to underscores for file lookup (e.g. "5.1" -> "5_1")
         var fileKey = badgeKey.Replace('.', '_');
+        var isWhite = white ?? Plugin.Instance?.Configuration?.WhiteLogoBackground == true;
+        if (isWhite)
+        {
+            var whiteKey = fileKey + "-white";
+            var whitePrefix = ResolveAssetPrefix(whiteKey, logo);
+            var customDirCheck = !string.IsNullOrEmpty(Plugin.Instance?.DataFolderPath)
+                ? Path.Combine(Plugin.Instance.DataFolderPath, "custom-badges")
+                : null;
+            var hasWhiteCustom = customDirCheck != null && SupportedBadgeExtensions.Any(ext =>
+                System.IO.File.Exists(Path.Combine(customDirCheck, $"{whitePrefix}{whiteKey}{ext}")));
+            var hasWhiteEmbedded = Assembly.GetExecutingAssembly().GetManifestResourceNames().Any(r =>
+                r.EndsWith($"{whitePrefix}{whiteKey}.svg", StringComparison.OrdinalIgnoreCase) ||
+                r.EndsWith($"{whitePrefix}{whiteKey}.png", StringComparison.OrdinalIgnoreCase));
+
+            if (hasWhiteCustom || hasWhiteEmbedded)
+            {
+                fileKey = whiteKey;
+            }
+        }
+
         var prefix = ResolveAssetPrefix(fileKey, logo);
 
         // Check custom badges first: SVG > PNG > JPG > JPEG

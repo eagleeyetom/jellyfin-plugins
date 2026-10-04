@@ -212,6 +212,7 @@ public class ImageCacheService : IImageCacheService
         sb.Append(config.HideDolbyVisionOnSamsungClients).Append('|');
         sb.Append(config.HideDolbyVisionOnFireTvClients).Append('|');
         sb.Append(config.HideHdrOnWindowsClients).Append('|');
+        sb.Append(config.WhiteLogoBackground).Append('|');
         sb.Append((int)config.OutputFormat).Append(config.JpegQuality).Append(config.WebPQuality).Append('|');
         sb.Append(config.ThumbnailSameAsPoster).Append('|');
         sb.Append(config.ThumbnailSizeReduction).Append('|');
@@ -261,6 +262,10 @@ public class ImageCacheService : IImageCacheService
         if (p.DisabledLogos != null && p.DisabledLogos.Count > 0)
         {
             sb.Append(":disLogos:").Append(string.Join(",", p.DisabledLogos));
+        }
+        if (p.WhiteLogoBackground.HasValue)
+        {
+            sb.Append(":whiteLogo:").Append(p.WhiteLogoBackground.Value);
         }
         if (p.BadgeTypeOverrides != null)
         {

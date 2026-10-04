@@ -346,10 +346,32 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     if (!isLogoDisabled)
                     {
                         var logoName = "logo-" + fileKey;
+                        var isWhite = panel.WhiteLogoBackground ?? Plugin.Instance?.Configuration?.WhiteLogoBackground == true;
+                        if (isWhite)
+                        {
+                            var whiteName = fileKey.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+                                ? "logo-" + fileKey[..^4] + "-white.svg"
+                                : "logo-" + fileKey + "-white";
+                            if (_svgCache.ContainsKey(whiteName) || _rasterCache.ContainsKey(whiteName))
+                            {
+                                logoName = whiteName;
+                            }
+                        }
+
                         if (_svgCache.ContainsKey(logoName) || _rasterCache.ContainsKey(logoName))
                         {
                             targetResource = logoName;
                         }
+                    }
+                }
+                else if (panel.WhiteLogoBackground ?? Plugin.Instance?.Configuration?.WhiteLogoBackground == true)
+                {
+                    var whiteBadge = resourceFileName.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+                        ? resourceFileName[..^4] + "-white.svg"
+                        : resourceFileName + "-white";
+                    if (_svgCache.ContainsKey(whiteBadge) || _rasterCache.ContainsKey(whiteBadge))
+                    {
+                        targetResource = whiteBadge;
                     }
                 }
 
