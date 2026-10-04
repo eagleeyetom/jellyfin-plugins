@@ -84,53 +84,91 @@
                     <div class="sectionTitleContainer flex align-items-center">
                         <h2 class="sectionTitle">JellyTag Configuration</h2>
                     </div>
-                    <div class="verticalSection">
-                        <h3 class="sectionTitle">General</h3>
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="Enabled" type="checkbox" is="emby-checkbox" />
-                                <span>Enable JellyTag</span>
-                            </label>
-                        </div>
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="HideDolbyVisionOnSamsungClients" type="checkbox" is="emby-checkbox" />
-                                <span>Hide Dolby Vision badges on Samsung clients</span>
-                            </label>
-                            <div class="fieldDescription">Samsung clients will continue to show HDR10+ when enabled in the HDR panel. Other clients are unaffected.</div>
-                        </div>
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="HideDolbyVisionOnFireTvClients" type="checkbox" is="emby-checkbox" />
-                                <span>Hide Dolby Vision badges on Fire TV clients</span>
-                            </label>
-                            <div class="fieldDescription">Fire TV clients will show HDR10+ (or HDR10) instead of Dolby Vision. Enable if your Fire TV is connected to a Samsung or non-DV display.</div>
-                        </div>
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="HideHdrOnWindowsClients" type="checkbox" is="emby-checkbox" />
-                                <span>Hide HDR badges on Windows clients (SDR only)</span>
-                            </label>
-                            <div class="fieldDescription">Windows clients (Emby Theater, web browser) will not show HDR/DV badges. Useful for SDR-only setups.</div>
-                        </div>
-                        <div id="DebugCountryCodeContainer" class="inputContainer" style="display:none; margin-top:1em;">
-                            <label class="inputLabel inputLabelUnfocused" for="DebugCountryCode">Debug Country Code Override</label>
-                            <input id="DebugCountryCode" type="text" is="emby-input" placeholder="e.g. fr, jp, de" />
-                            <div class="fieldDescription">Manually force country flags for testing (comma-separated country codes, e.g. fr, jp, de).</div>
-                        </div>
-                    </div>
-
-                    <!-- Libraries -->
-                    <details class="jellytag-section">
-                        <summary>Libraries</summary>
+                    <!-- 1. Badge Style & Theme -->
+                    <details class="jellytag-section" id="BadgeThemeSection" open>
+                        <summary>Badge Style & Theme</summary>
                         <div class="jellytag-section-body">
-                            <div class="fieldDescription" style="margin-bottom:1em;">Uncheck a library to disable badge generation for its items.</div>
-                            <div id="LibraryCheckboxes"><em>Loading libraries...</em></div>
+                            <div class="fieldDescription" style="margin-bottom:1.2em;">
+                                Choose the visual appearance of badges across all panels, customize individual badge colors, or upload your own badge images.
+                            </div>
+
+                            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-bottom:1.5em;">
+                                <div class="inputContainer" style="margin-bottom:0;">
+                                    <label class="inputLabel inputLabelUnfocused" for="GlobalBadgeStyle">Default Badge Style</label>
+                                    <select id="GlobalBadgeStyle" is="emby-select">
+                                        <option value="Image">Image Badges (Standard SVG or uploaded graphics)</option>
+                                        <option value="Logo">Brand Logos (Official Dolby, DTS, HDR10+, etc.)</option>
+                                        <option value="Text">Text Badges (Customizable text badges with colors)</option>
+                                    </select>
+                                    <div class="fieldDescription">Applies to all panels. Individual panels can still be overridden in Posters/Thumbnails.</div>
+                                </div>
+                                <div class="inputContainer" style="margin-bottom:0;">
+                                    <label class="inputLabel inputLabelUnfocused" for="GlobalIconStyle">Badge Corner Shape</label>
+                                    <select id="GlobalIconStyle" is="emby-select">
+                                        <option value="Rectangular">Rectangular</option>
+                                        <option value="Square">Square</option>
+                                        <option value="Round">Round</option>
+                                    </select>
+                                    <div class="fieldDescription">Outer shape and corner radius for badges.</div>
+                                </div>
+                            </div>
+
+                            <div id="BrandLogosOptionsCard" style="margin-bottom:1.5em; padding:1em; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1); border-radius:.4em;">
+                                <div style="font-weight:600; font-size:1em; margin-bottom:.6em;">Brand Logo Options</div>
+                                <div class="checkboxContainer checkboxContainer-withDescription">
+                                    <label class="emby-checkbox-label">
+                                        <input id="WhiteLogoBackground" type="checkbox" is="emby-checkbox" />
+                                        <span>Use white background for brand logos</span>
+                                    </label>
+                                    <div class="fieldDescription">When unchecked (default), brand logos (Dolby Atmos, TrueHD, DTS:X, Dolby Vision, HDR10+, etc.) use a black background. When checked, brand logos use a white background.</div>
+                                </div>
+                                <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top:.8em;">
+                                    <label class="emby-checkbox-label">
+                                        <input id="UseOriginalAacLogo" type="checkbox" is="emby-checkbox" />
+                                        <span>Use original square AAC logo</span>
+                                    </label>
+                                    <div class="fieldDescription">When unchecked (default), uses the redesigned horizontal AAC logo matching other audio badges. When checked, uses the original tall square AAC logo.</div>
+                                </div>
+                            </div>
+
+                            <!-- Custom Badge Colors -->
+                            <div style="margin-top:1.5em; border-top:1px solid rgba(255,255,255,0.1); padding-top:1.2em;">
+                                <h3 style="margin-top:0; margin-bottom:0.4em; font-size:1.05em; font-weight:600;">Custom Badge Colors</h3>
+                                <div class="fieldDescription" style="margin-bottom:1em;">
+                                    Choose custom background and text/foreground colors for individual badge elements (e.g. HEVC, 4K, 1080p, DTS:X, etc.). Leave empty to use the default style.
+                                </div>
+                                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:1.2em;">
+                                    <div id="CbcFilterButtons" style="display:flex; gap:6px; flex-wrap:wrap;">
+                                        <button type="button" class="cbc-filter-btn active" data-category="all">All</button>
+                                        <button type="button" class="cbc-filter-btn" data-category="Resolution">Resolution</button>
+                                        <button type="button" class="cbc-filter-btn" data-category="Codecs">Codecs</button>
+                                        <button type="button" class="cbc-filter-btn" data-category="HDR">HDR</button>
+                                        <button type="button" class="cbc-filter-btn" data-category="Audio">Audio</button>
+                                        <button type="button" class="cbc-filter-btn" data-category="Channels">Channels</button>
+                                    </div>
+                                    <div style="flex:1; min-width:180px;">
+                                        <input id="CbcSearchInput" type="text" placeholder="Filter badges..." is="emby-input" style="width:100%; margin:0;" />
+                                    </div>
+                                    <div style="display:flex; gap:8px; align-items:center;">
+                                        <span id="CbcCustomCount" style="font-size:0.85em; opacity:0.75;">0 customized</span>
+                                        <button type="button" id="CbcResetAllBtn" class="raised" is="emby-button" style="font-size:0.85em; padding:0.4em 0.8em; margin:0;"><span>Reset All Colors</span></button>
+                                    </div>
+                                </div>
+                                <div id="CustomBadgeColorsGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;"></div>
+                            </div>
+
+                            <!-- Upload Custom Badges -->
+                            <div style="margin-top:2em; border-top:1px solid rgba(255,255,255,0.1); padding-top:1.5em;">
+                                <h3 style="margin-top:0; margin-bottom:0.4em; font-size:1.05em; font-weight:600;">Upload Custom Badge Images</h3>
+                                <div class="fieldDescription" style="margin-bottom:1em;">Click a badge to upload a custom replacement image (SVG, PNG or JPEG). Click the reset button to revert to the default.</div>
+                                <div id="BadgeGallery" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:12px;"></div>
+                                <input id="CustomBadgeFile" type="file" accept="image/svg+xml,image/png,image/jpeg" style="display:none;" />
+                            </div>
                         </div>
                     </details>
 
-                    <!-- Posters (Primary) -->
-                    <details class="jellytag-section">
+                    <!-- 2. Posters (Primary) -->
+                    <details class="jellytag-section" id="PostersSection">
                         <summary>Posters (Primary)</summary>
                         <div class="jellytag-section-body">
                             <div class="checkboxContainer checkboxContainer-withDescription">
@@ -143,8 +181,8 @@
                         </div>
                     </details>
 
-                    <!-- Thumbnails (Thumb) -->
-                    <details class="jellytag-section">
+                    <!-- 3. Thumbnails (Thumb) -->
+                    <details class="jellytag-section" id="ThumbnailsSection">
                         <summary>Thumbnails (Thumb)</summary>
                         <div class="jellytag-section-body">
                             <div class="checkboxContainer checkboxContainer-withDescription">
@@ -171,128 +209,142 @@
                         </div>
                     </details>
 
-                    <!-- Badge Appearance & Customization -->
-                    <details class="jellytag-section" id="BadgeAppearanceSection">
-                        <summary>Badge Appearance & Customization</summary>
+                    <!-- 4. Labels & Flags -->
+                    <details class="jellytag-section" id="LabelsFlagsSection">
+                        <summary>Labels & Flags</summary>
                         <div class="jellytag-section-body">
-                            <h3 style="margin-top:0.2em; margin-bottom:0.5em; font-size:1.05em; font-weight:600;">Colors & Logos</h3>
-                            <div class="fieldDescription" style="margin-bottom:1em;">
-                                Choose custom background and text/foreground colors for individual badge elements (e.g. HEVC, 4K, 1080p, DTS:X, etc.). Leave empty to use the default style.
-                            </div>
-                            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom:1.2em;">
+                            <details class="jellytag-sub" open>
+                                <summary>Custom Badge Text</summary>
+                                <div class="jellytag-sub-body">
+                                    <div class="fieldDescription" style="margin-bottom:1em;">Override the display text for any badge. Leave empty to use the default text.</div>
+                                    <div class="jellytag-grid" id="CustomBadgeTextsGrid">
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_4k">4K</label><input id="cbt_4k" data-badge-key="4k" type="text" placeholder="4K" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_1080p">1080p</label><input id="cbt_1080p" data-badge-key="1080p" type="text" placeholder="1080p" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_720p">720p</label><input id="cbt_720p" data-badge-key="720p" type="text" placeholder="720p" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_sd">SD</label><input id="cbt_sd" data-badge-key="sd" type="text" placeholder="SD" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hdr10">HDR10</label><input id="cbt_hdr10" data-badge-key="hdr10" type="text" placeholder="HDR10" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hdr10plus">HDR10+</label><input id="cbt_hdr10plus" data-badge-key="hdr10plus" type="text" placeholder="HDR10+" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dv">Dolby Vision</label><input id="cbt_dv" data-badge-key="dv" type="text" placeholder="DV" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hlg">HLG</label><input id="cbt_hlg" data-badge-key="hlg" type="text" placeholder="HLG" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hdr">HDR (generic)</label><input id="cbt_hdr" data-badge-key="hdr" type="text" placeholder="HDR" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_atmos">Dolby Atmos</label><input id="cbt_atmos" data-badge-key="atmos" type="text" placeholder="ATMOS" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dtsx">DTS:X</label><input id="cbt_dtsx" data-badge-key="dtsx" type="text" placeholder="DTS:X" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_truehd">TrueHD</label><input id="cbt_truehd" data-badge-key="truehd" type="text" placeholder="TrueHD" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dtshdma">DTS-HD MA</label><input id="cbt_dtshdma" data-badge-key="dtshdma" type="text" placeholder="DTS-HD MA" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_opus">Opus</label><input id="cbt_opus" data-badge-key="opus" type="text" placeholder="OPUS" is="emby-input" /></div>
+
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_7_1">7.1</label><input id="cbt_7_1" data-badge-key="7.1" type="text" placeholder="7.1" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_5_1">5.1</label><input id="cbt_5_1" data-badge-key="5.1" type="text" placeholder="5.1" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_stereo">Stereo</label><input id="cbt_stereo" data-badge-key="stereo" type="text" placeholder="STEREO" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_mono">Mono</label><input id="cbt_mono" data-badge-key="mono" type="text" placeholder="MONO" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_3d">3D</label><input id="cbt_3d" data-badge-key="3d" type="text" placeholder="3D" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_h264">H.264</label><input id="cbt_h264" data-badge-key="h264" type="text" placeholder="H.264" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hevc">HEVC</label><input id="cbt_hevc" data-badge-key="hevc" type="text" placeholder="HEVC" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_av1">AV1</label><input id="cbt_av1" data-badge-key="av1" type="text" placeholder="AV1" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_vp9">VP9</label><input id="cbt_vp9" data-badge-key="vp9" type="text" placeholder="VP9" is="emby-input" /></div>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <details class="jellytag-sub">
+                                <summary>Language Flags</summary>
+                                <div class="jellytag-sub-body">
+                                    <div class="fieldDescription" style="margin-bottom:1em;">
+                                        Most languages are spoken in more than one country, so the flag shown is a choice rather than a fact.
+                                        Pick the flag you prefer for each language below. Files tagged with a region (for example <code>pt-BR</code>)
+                                        always use that region's flag and ignore these settings.
+                                    </div>
+                                    <div class="jellytag-grid" id="LanguageFlagGrid"></div>
+                                    <div style="margin-top:1.5em;">
+                                        <div class="fieldDescription" style="margin-bottom:0.5em;">Add another language. Use an ISO 639-1 code (for example <code>sv</code>) and a flag code (for example <code>fi</code>).</div>
+                                        <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+                                            <div class="inputContainer" style="margin-bottom:0;"><label class="inputLabel inputLabelUnfocused" for="LangFlagNewLang">Language code</label><input id="LangFlagNewLang" type="text" maxlength="3" placeholder="sv" is="emby-input" /></div>
+                                            <div class="inputContainer" style="margin-bottom:0;"><label class="inputLabel inputLabelUnfocused" for="LangFlagNewFlag">Flag code</label><input id="LangFlagNewFlag" type="text" maxlength="8" placeholder="fi" is="emby-input" /></div>
+                                            <button is="emby-button" type="button" class="raised" id="LangFlagAddBtn" style="margin-bottom:0;"><span>Add</span></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+                    </details>
+
+                    <!-- 5. General & System Settings -->
+                    <details class="jellytag-section" id="GeneralSettingsSection">
+                        <summary>General & System Settings</summary>
+                        <div class="jellytag-section-body">
+                            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom:1.5em; padding-bottom:1em; border-bottom:1px solid rgba(255,255,255,0.1);">
                                 <label class="emby-checkbox-label">
-                                    <input id="WhiteLogoBackground" type="checkbox" is="emby-checkbox" />
-                                    <span>Use white background for brand logos</span>
+                                    <input id="Enabled" type="checkbox" is="emby-checkbox" />
+                                    <span style="font-size:1.15em; font-weight:600;">Enable JellyTag</span>
                                 </label>
-                                <div class="fieldDescription">When unchecked (default), brand logos (Dolby Atmos, TrueHD, DTS:X, Dolby Vision, HDR10+, etc.) use a black background. When checked, brand logos use a white background.</div>
+                                <div class="fieldDescription">Master toggle for the JellyTag badge overlay plugin.</div>
                             </div>
-                            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:1.2em;">
-                                <div id="CbcFilterButtons" style="display:flex; gap:6px; flex-wrap:wrap;">
-                                    <button type="button" class="cbc-filter-btn active" data-category="all">All</button>
-                                    <button type="button" class="cbc-filter-btn" data-category="Resolution">Resolution</button>
-                                    <button type="button" class="cbc-filter-btn" data-category="Codecs">Codecs</button>
-                                    <button type="button" class="cbc-filter-btn" data-category="HDR">HDR</button>
-                                    <button type="button" class="cbc-filter-btn" data-category="Audio">Audio</button>
-                                    <button type="button" class="cbc-filter-btn" data-category="Channels">Channels</button>
+
+                            <details class="jellytag-sub" open>
+                                <summary>Client Compatibility</summary>
+                                <div class="jellytag-sub-body">
+                                    <div class="checkboxContainer checkboxContainer-withDescription">
+                                        <label class="emby-checkbox-label">
+                                            <input id="HideDolbyVisionOnSamsungClients" type="checkbox" is="emby-checkbox" />
+                                            <span>Hide Dolby Vision badges on Samsung clients</span>
+                                        </label>
+                                        <div class="fieldDescription">Samsung clients will continue to show HDR10+ when enabled in the HDR panel. Other clients are unaffected.</div>
+                                    </div>
+                                    <div class="checkboxContainer checkboxContainer-withDescription">
+                                        <label class="emby-checkbox-label">
+                                            <input id="HideDolbyVisionOnFireTvClients" type="checkbox" is="emby-checkbox" />
+                                            <span>Hide Dolby Vision badges on Fire TV clients</span>
+                                        </label>
+                                        <div class="fieldDescription">Fire TV clients will show HDR10+ (or HDR10) instead of Dolby Vision. Enable if your Fire TV is connected to a Samsung or non-DV display.</div>
+                                    </div>
+                                    <div class="checkboxContainer checkboxContainer-withDescription">
+                                        <label class="emby-checkbox-label">
+                                            <input id="HideHdrOnWindowsClients" type="checkbox" is="emby-checkbox" />
+                                            <span>Hide HDR badges on Windows clients (SDR only)</span>
+                                        </label>
+                                        <div class="fieldDescription">Windows clients (Emby Theater, web browser) will not show HDR/DV badges. Useful for SDR-only setups.</div>
+                                    </div>
+                                    <div id="DebugCountryCodeContainer" class="inputContainer" style="display:none; margin-top:1em;">
+                                        <label class="inputLabel inputLabelUnfocused" for="DebugCountryCode">Debug Country Code Override</label>
+                                        <input id="DebugCountryCode" type="text" is="emby-input" placeholder="e.g. fr, jp, de" />
+                                        <div class="fieldDescription">Manually force country flags for testing (comma-separated country codes, e.g. fr, jp, de).</div>
+                                    </div>
                                 </div>
-                                <div style="flex:1; min-width:180px;">
-                                    <input id="CbcSearchInput" type="text" placeholder="Filter badges..." is="emby-input" style="width:100%; margin:0;" />
+                            </details>
+
+                            <details class="jellytag-sub">
+                                <summary>Libraries</summary>
+                                <div class="jellytag-section-body">
+                                    <div class="fieldDescription" style="margin-bottom:1em;">Uncheck a library to disable badge generation for its items.</div>
+                                    <div id="LibraryCheckboxes"><em>Loading libraries...</em></div>
                                 </div>
-                                <div style="display:flex; gap:8px; align-items:center;">
-                                    <span id="CbcCustomCount" style="font-size:0.85em; opacity:0.75;">0 customized</span>
-                                    <button type="button" id="CbcResetAllBtn" class="raised" is="emby-button" style="font-size:0.85em; padding:0.4em 0.8em; margin:0;"><span>Reset All Colors</span></button>
+                            </details>
+
+                            <details class="jellytag-sub">
+                                <summary>Performance & Cache</summary>
+                                <div class="jellytag-sub-body">
+                                    <div class="inputContainer">
+                                        <label class="inputLabel inputLabelUnfocused" for="CacheDurationHours">Cache Duration (hours)</label>
+                                        <input id="CacheDurationHours" type="number" min="1" max="720" step="1" is="emby-input" />
+                                    </div>
+                                    <div class="inputContainer">
+                                        <label class="inputLabel inputLabelUnfocused" for="OutputFormat">Output Format</label>
+                                        <select id="OutputFormat" is="emby-select">
+                                            <option value="Jpeg">JPEG</option>
+                                            <option value="WebP">WebP (experimental)</option>
+                                        </select>
+                                    </div>
+                                    <div id="JpegQualityContainer" class="inputContainer">
+                                        <label class="inputLabel inputLabelUnfocused" for="JpegQuality">JPEG Quality</label>
+                                        <input id="JpegQuality" type="number" min="1" max="100" step="1" is="emby-input" />
+                                    </div>
+                                    <div id="WebPQualityContainer" class="inputContainer" style="display:none;">
+                                        <label class="inputLabel inputLabelUnfocused" for="WebPQuality">WebP Quality</label>
+                                        <input id="WebPQuality" type="number" min="1" max="100" step="1" is="emby-input" />
+                                    </div>
+                                    <div id="CacheStatsInfo" class="fieldDescription" style="margin-top:.5em;"></div>
                                 </div>
-                            </div>
-                            <div id="CustomBadgeColorsGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;"></div>
-
-                            <div style="margin-top:2em; border-top:1px solid rgba(255,255,255,0.1); padding-top:1.5em;">
-                                <h3 style="margin-top:0; margin-bottom:0.5em; font-size:1.05em; font-weight:600;">Upload Custom Badge Images</h3>
-                                <div class="fieldDescription" style="margin-bottom:1em;">Click a badge to upload a custom replacement (SVG, PNG or JPEG). Click the reset button to revert to the default.</div>
-                                <div id="BadgeGallery" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:12px;"></div>
-                                <input id="CustomBadgeFile" type="file" accept="image/svg+xml,image/png,image/jpeg" style="display:none;" />
-                            </div>
-                        </div>
-                    </details>
-
-                    <!-- Custom Badge Text -->
-                    <details class="jellytag-section">
-                        <summary>Custom Badge Text</summary>
-                        <div class="jellytag-section-body">
-                            <div class="fieldDescription" style="margin-bottom:1em;">Override the display text for any badge. Leave empty to use the default text.</div>
-                            <div class="jellytag-grid" id="CustomBadgeTextsGrid">
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_4k">4K</label><input id="cbt_4k" data-badge-key="4k" type="text" placeholder="4K" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_1080p">1080p</label><input id="cbt_1080p" data-badge-key="1080p" type="text" placeholder="1080p" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_720p">720p</label><input id="cbt_720p" data-badge-key="720p" type="text" placeholder="720p" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_sd">SD</label><input id="cbt_sd" data-badge-key="sd" type="text" placeholder="SD" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hdr10">HDR10</label><input id="cbt_hdr10" data-badge-key="hdr10" type="text" placeholder="HDR10" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hdr10plus">HDR10+</label><input id="cbt_hdr10plus" data-badge-key="hdr10plus" type="text" placeholder="HDR10+" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dv">Dolby Vision</label><input id="cbt_dv" data-badge-key="dv" type="text" placeholder="DV" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hlg">HLG</label><input id="cbt_hlg" data-badge-key="hlg" type="text" placeholder="HLG" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hdr">HDR (generic)</label><input id="cbt_hdr" data-badge-key="hdr" type="text" placeholder="HDR" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_atmos">Dolby Atmos</label><input id="cbt_atmos" data-badge-key="atmos" type="text" placeholder="ATMOS" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dtsx">DTS:X</label><input id="cbt_dtsx" data-badge-key="dtsx" type="text" placeholder="DTS:X" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_truehd">TrueHD</label><input id="cbt_truehd" data-badge-key="truehd" type="text" placeholder="TrueHD" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dtshdma">DTS-HD MA</label><input id="cbt_dtshdma" data-badge-key="dtshdma" type="text" placeholder="DTS-HD MA" is="emby-input" /></div>
-                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_opus">Opus</label><input id="cbt_opus" data-badge-key="opus" type="text" placeholder="OPUS" is="emby-input" /></div>
-
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_7_1">7.1</label><input id="cbt_7_1" data-badge-key="7.1" type="text" placeholder="7.1" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_5_1">5.1</label><input id="cbt_5_1" data-badge-key="5.1" type="text" placeholder="5.1" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_stereo">Stereo</label><input id="cbt_stereo" data-badge-key="stereo" type="text" placeholder="STEREO" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_mono">Mono</label><input id="cbt_mono" data-badge-key="mono" type="text" placeholder="MONO" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_3d">3D</label><input id="cbt_3d" data-badge-key="3d" type="text" placeholder="3D" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_h264">H.264</label><input id="cbt_h264" data-badge-key="h264" type="text" placeholder="H.264" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hevc">HEVC</label><input id="cbt_hevc" data-badge-key="hevc" type="text" placeholder="HEVC" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_av1">AV1</label><input id="cbt_av1" data-badge-key="av1" type="text" placeholder="AV1" is="emby-input" /></div>
-                                <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_vp9">VP9</label><input id="cbt_vp9" data-badge-key="vp9" type="text" placeholder="VP9" is="emby-input" /></div>
-                            </div>
-                        </div>
-                    </details>
-
-                    <!-- Language Flags -->
-                    <details class="jellytag-section">
-                        <summary>Language Flags</summary>
-                        <div class="jellytag-section-body">
-                            <div class="fieldDescription" style="margin-bottom:1em;">
-                                Most languages are spoken in more than one country, so the flag shown is a choice rather than a fact.
-                                Pick the flag you prefer for each language below. Files tagged with a region (for example <code>pt-BR</code>)
-                                always use that region's flag and ignore these settings.
-                            </div>
-                            <div class="jellytag-grid" id="LanguageFlagGrid"></div>
-                            <div style="margin-top:1.5em;">
-                                <div class="fieldDescription" style="margin-bottom:0.5em;">Add another language. Use an ISO 639-1 code (for example <code>sv</code>) and a flag code (for example <code>fi</code>).</div>
-                                <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-                                    <div class="inputContainer" style="margin-bottom:0;"><label class="inputLabel inputLabelUnfocused" for="LangFlagNewLang">Language code</label><input id="LangFlagNewLang" type="text" maxlength="3" placeholder="sv" is="emby-input" /></div>
-                                    <div class="inputContainer" style="margin-bottom:0;"><label class="inputLabel inputLabelUnfocused" for="LangFlagNewFlag">Flag code</label><input id="LangFlagNewFlag" type="text" maxlength="8" placeholder="fi" is="emby-input" /></div>
-                                    <button is="emby-button" type="button" class="raised" id="LangFlagAddBtn" style="margin-bottom:0;"><span>Add</span></button>
-                                </div>
-                            </div>
-                        </div>
-                    </details>
-
-                    <!-- Performance -->
-                    <details class="jellytag-section">
-                        <summary>Performance</summary>
-                        <div class="jellytag-section-body">
-                            <div class="inputContainer">
-                                <label class="inputLabel inputLabelUnfocused" for="CacheDurationHours">Cache Duration (hours)</label>
-                                <input id="CacheDurationHours" type="number" min="1" max="720" step="1" is="emby-input" />
-                            </div>
-                            <div class="inputContainer">
-                                <label class="inputLabel inputLabelUnfocused" for="OutputFormat">Output Format</label>
-                                <select id="OutputFormat" is="emby-select">
-                                    <option value="Jpeg">JPEG</option>
-                                    <option value="WebP">WebP (experimental)</option>
-                                </select>
-                            </div>
-                            <div id="JpegQualityContainer" class="inputContainer">
-                                <label class="inputLabel inputLabelUnfocused" for="JpegQuality">JPEG Quality</label>
-                                <input id="JpegQuality" type="number" min="1" max="100" step="1" is="emby-input" />
-                            </div>
-                            <div id="WebPQualityContainer" class="inputContainer" style="display:none;">
-                                <label class="inputLabel inputLabelUnfocused" for="WebPQuality">WebP Quality</label>
-                                <input id="WebPQuality" type="number" min="1" max="100" step="1" is="emby-input" />
-                            </div>
-                            <div id="CacheStatsInfo" class="fieldDescription" style="margin-top:.5em;"></div>
+                            </details>
                         </div>
                     </details>
 
@@ -428,6 +480,7 @@
             var styleOpts = logoBadges.length > 0
                 ? [{v:'Image',l:'Image'},{v:'Text',l:'Text'},{v:'Logo',l:'Brand Logo'}]
                 : [{v:'Image',l:'Image'},{v:'Text',l:'Text'}];
+            h += '<details class="jellytag-sub" style="margin-top:1em;"><summary>Panel Style Overrides</summary><div class="jellytag-sub-body">';
             h += sel(k + 'Style', 'Badge Style', styleOpts);
             h += sel(k + 'IconStyle', 'Icon Style', [{v:'Rectangular',l:'Rectangular'},{v:'Square',l:'Square'},{v:'Round',l:'Round'}]);
 
@@ -471,6 +524,7 @@
             h += colorOnly(k + 'TextColor', 'Text Color');
             h += num(k + 'CornerRadius', 'Corner Radius (%)', 0, 50, 1);
             h += '</div>'; // TextSettings
+            h += '</div></details>'; // Panel Style Overrides
 
             h += '</div>'; // Settings
             h += '</div></details>';
@@ -488,6 +542,7 @@
             h += '<div id="' + k + 'GapWrap">' + num(k + 'Gap', 'Gap between badges (%)', 0, 50, 1) + '</div>';
             h += num(k + 'Size', 'Badge Size (%)', 0, 100, 1);
             h += num(k + 'Margin', 'Margin (%)', 0, 20, 0.5);
+            h += '<details class="jellytag-sub" style="margin-top:1em;"><summary>Panel Style Overrides</summary><div class="jellytag-sub-body">';
             h += sel(k + 'Style', 'Badge Style', [{v:'Image',l:'Image'},{v:'Text',l:'Text'}]);
             h += sel(k + 'IconStyle', 'Icon Style', [{v:'Rectangular',l:'Rectangular'},{v:'Square',l:'Square'},{v:'Round',l:'Round'}]);
             h += '<div id="' + k + 'TextSettings" class="jellytag-text-box hidden">';
@@ -495,6 +550,7 @@
             h += colorOnly(k + 'TextColor', 'Text Color');
             h += num(k + 'CornerRadius', 'Corner Radius (%)', 0, 50, 1);
             h += '</div>';
+            h += '</div></details>';
             // VOST
             h += '<div style="margin-top:1em;">';
             h += chk(k + 'Vost', 'Show VOST* indicator', 'Show VOST* badge for languages that have subtitles but no matching audio track.');
@@ -1579,6 +1635,13 @@
                 loadImageTypeConfig('Poster', config.PosterConfig || {});
                 loadImageTypeConfig('Thumb', config.ThumbnailConfig || {});
 
+                // Initialize Global Badge Style & Icon Shape selectors
+                var pRes = (config.PosterConfig && config.PosterConfig.ResolutionPanel) || {};
+                var pAudio = (config.PosterConfig && config.PosterConfig.AudioPanel) || {};
+                var pStyle = (pAudio.Style === 'Logo' || pRes.Style === 'Logo') ? 'Logo' : ((pAudio.Style === 'Text' || pRes.Style === 'Text') ? 'Text' : 'Image');
+                if (q('GlobalBadgeStyle')) q('GlobalBadgeStyle').value = pStyle;
+                if (q('GlobalIconStyle')) q('GlobalIconStyle').value = pRes.IconStyle || 'Rectangular';
+
                 // Custom Badge Texts
                 var cbtInputs = document.querySelectorAll('#CustomBadgeTextsGrid input[data-badge-key]');
                 var cbtList = config.CustomBadgeTexts || [];
@@ -1630,6 +1693,46 @@
                             q('UseOriginalAacLogo').checked = this.checked;
                             q('UseOriginalAacLogo').dispatchEvent(new Event('change'));
                         }
+                    });
+                }
+
+                if (q('GlobalBadgeStyle')) {
+                    q('GlobalBadgeStyle').addEventListener('change', function() {
+                        var val = this.value;
+                        ['Poster', 'Thumb'].forEach(function(pfx) {
+                            ['Res','Hdr','Codec','Audio','Channel'].forEach(function(pid) {
+                                var el = q(pfx + pid + 'Style');
+                                if (el) {
+                                    var hasLogo = false;
+                                    for (var i = 0; i < el.options.length; i++) {
+                                        if (el.options[i].value === 'Logo') { hasLogo = true; break; }
+                                    }
+                                    el.value = (val === 'Logo' && !hasLogo) ? 'Image' : val;
+                                    el.dispatchEvent(new Event('change'));
+                                }
+                            });
+                            var langEl = q(pfx + 'LangStyle');
+                            if (langEl) {
+                                langEl.value = (val === 'Logo') ? 'Image' : val;
+                                langEl.dispatchEvent(new Event('change'));
+                            }
+                        });
+                        if (document.getElementById('BadgeGallery')) loadBadgeGallery();
+                        if (document.getElementById('CustomBadgeColorsGrid')) renderCustomBadgeColorsGrid();
+                    });
+                }
+                if (q('GlobalIconStyle')) {
+                    q('GlobalIconStyle').addEventListener('change', function() {
+                        var val = this.value;
+                        ['Poster', 'Thumb'].forEach(function(pfx) {
+                            ['Res','Hdr','Codec','Audio','Channel','Lang'].forEach(function(pid) {
+                                var el = q(pfx + pid + 'IconStyle');
+                                if (el) {
+                                    el.value = val;
+                                    el.dispatchEvent(new Event('change'));
+                                }
+                            });
+                        });
                     });
                 }
 
