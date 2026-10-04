@@ -427,5 +427,42 @@ public class MetadataNotifierServiceTests
         Assert.IsFalse(MetadataNotifierService.IsHdr10Plus(null!, string.Empty, string.Empty));
         Assert.IsFalse(MetadataNotifierService.HasHdr10BaseLayer(null!));
     }
+
+    [TestMethod]
+    public void NonHdr10PlusClient_LgWordBoundaryCheck()
+    {
+        // Whole word "LG" matches
+        Assert.IsTrue(MetadataNotifierService.IsNonHdr10PlusClient(CreateSession("Jellyfin Web", "LG TV")));
+        Assert.IsTrue(MetadataNotifierService.IsNonHdr10PlusClient(CreateSession("LG webOS", "Living Room TV")));
+
+        // Substrings containing "lg" must not match
+        Assert.IsFalse(MetadataNotifierService.IsNonHdr10PlusClient(CreateSession("Jellyfin Web", "Olga's Phone")));
+        Assert.IsFalse(MetadataNotifierService.IsNonHdr10PlusClient(CreateSession("Belgium Browser", "Desktop")));
+    }
+
+    [TestMethod]
+    public void DetailedDolbyVision_DoesNotFalseTriggerOnUnrelatedNumbers()
+    {
+        var videoStream = new MediaStream
+        {
+            Type = MediaStreamType.Video,
+            Codec = "hevc",
+            Profile = "4K HEVC 8.1 Mbps bitrate",
+            DvProfile = null
+        };
+
+        var session = CreateSession("Jellyfin Web", "PC");
+        var config = new PluginConfiguration
+        {
+            ShowDolbyVision = true,
+            UseDetailedVideoNames = true
+        };
+
+        var result = MetadataNotifierService.GetHdrInfo(videoStream, "/media/movies/Movie.DV.mkv", "Movie", session, config);
+
+        // Should NOT false-trigger on "8.1" to return "DV Profile 8.1"
+        Assert.AreNotEqual("DV Profile 8.1", result.Value);
+        Assert.AreEqual("Dolby Vision (4K HEVC 8.1 Mbps bitrate)", result.Value);
+    }
 }
 

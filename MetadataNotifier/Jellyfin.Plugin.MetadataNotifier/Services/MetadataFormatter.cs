@@ -5,11 +5,16 @@ using MediaBrowser.Model.Session;
 
 namespace Jellyfin.Plugin.MetadataNotifier.Services;
 
-internal static class MetadataFormatter
+internal static partial class MetadataFormatter
 {
-    private static readonly Regex MonoChannelRegex = new(
-        @"\b(?:mono|1(?:\.0)?\s*(?:ch|channels?))\b",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    [GeneratedRegex(@"\b(?:mono|1(?:\.0)?\s*(?:ch|channels?))\b", RegexOptions.IgnoreCase)]
+    private static partial Regex MonoChannelRegex();
+
+    [GeneratedRegex(@"(?:\s*[•|]\s*|\s+-\s+)+")]
+    private static partial Regex TemplateSeparatorRegex();
+
+    [GeneratedRegex(@"(\B[A-Z])")]
+    private static partial Regex CamelCaseRegex();
 
     internal static string BuildMessageText(
         PluginConfiguration config,
@@ -29,7 +34,7 @@ internal static class MetadataFormatter
                 .Replace("{bitrate}", bitrateInfo, StringComparison.OrdinalIgnoreCase)
                 .Replace("{title}", header, StringComparison.OrdinalIgnoreCase);
 
-            formatted = Regex.Replace(formatted, @"(?:\s*[•|]\s*|\s+-\s+)+", " • ")
+            formatted = TemplateSeparatorRegex().Replace(formatted, " • ")
                 .Trim()
                 .Trim('•', '|')
                 .Trim();
@@ -85,7 +90,7 @@ internal static class MetadataFormatter
         }
 
         var channelMetadata = $"{audioStream.Title} {audioStream.DisplayTitle}";
-        if (MonoChannelRegex.IsMatch(channelMetadata))
+        if (MonoChannelRegex().IsMatch(channelMetadata))
         {
             return "Mono";
         }
@@ -157,7 +162,7 @@ internal static class MetadataFormatter
             TranscodeReason.AudioProfileNotSupported => "Audio profile not supported",
             TranscodeReason.AnamorphicVideoNotSupported => "Anamorphic video not supported",
             TranscodeReason.InterlacedVideoNotSupported => "Interlaced video not supported",
-            _ => Regex.Replace(reason.ToString(), "(\\B[A-Z])", " $1")
+            _ => CamelCaseRegex().Replace(reason.ToString(), " $1")
         };
     }
 

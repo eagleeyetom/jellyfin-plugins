@@ -24,7 +24,7 @@ namespace Jellyfin.Plugin.MetadataNotifier.Services;
 /// <summary>
 /// Background service that listens for playback events and sends media info toast notifications.
 /// </summary>
-public class MetadataNotifierService : IHostedService
+public partial class MetadataNotifierService : IHostedService
 {
     internal readonly record struct HdrDetectionResult(string Value, string Rule);
 
@@ -34,13 +34,27 @@ public class MetadataNotifierService : IHostedService
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pendingStartupToasts = new(StringComparer.Ordinal);
     private CancellationTokenSource? _serviceCancellation;
 
-    internal static readonly Regex Hdr10PlusPathRegex = new(
-        @"(?:[\\/\s\.\-_\[\(]|^)HDR10[\.\-_ ]?(?:\+|Plus)(?=[\\/\s\.\-_\]\)]|$)",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    [GeneratedRegex(@"(?:[\\/\s\.\-_\[\(]|^)HDR10[\.\-_ ]?(?:\+|Plus)(?=[\\/\s\.\-_\]\)]|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex CreateHdr10PlusPathRegex();
 
-    internal static readonly Regex DolbyVisionPathRegex = new(
-        @"(?:[\.\-_\[\(](?:DV|DOVI|Dolby[\.\-_ ]?Vision)[\.\-_\]\)]|\b(?:DV|DOVI|Dolby[\.\-_ ]?Vision)\b)",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    [GeneratedRegex(@"(?:[\.\-_\[\(](?:DV|DOVI|Dolby[\.\-_ ]?Vision)[\.\-_\]\)]|\b(?:DV|DOVI|Dolby[\.\-_ ]?Vision)\b)", RegexOptions.IgnoreCase)]
+    private static partial Regex CreateDolbyVisionPathRegex();
+
+    [GeneratedRegex(@"\bLG\b", RegexOptions.IgnoreCase)]
+    private static partial Regex LgWordRegex();
+
+    [GeneratedRegex(@"(?:Profile|dvhe|dvh1)[\s\.]*8\.1\b", RegexOptions.IgnoreCase)]
+    private static partial Regex Profile81Regex();
+
+    [GeneratedRegex(@"(?:Profile|dvhe|dvh1)[\s\.]*8\.4\b", RegexOptions.IgnoreCase)]
+    private static partial Regex Profile84Regex();
+
+    [GeneratedRegex(@"(?:Profile|dvhe|dvh1)[\s\.]*7\.6\b", RegexOptions.IgnoreCase)]
+    private static partial Regex Profile76Regex();
+
+    internal static Regex Hdr10PlusPathRegex => CreateHdr10PlusPathRegex();
+
+    internal static Regex DolbyVisionPathRegex => CreateDolbyVisionPathRegex();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MetadataNotifierService"/> class.
@@ -186,11 +200,27 @@ public class MetadataNotifierService : IHostedService
                 _lastActiveAudioTrack[session.Id] = postDelayAudioIndex;
             }
 
+            MediaSourceInfo? activeSource = null;
+            IReadOnlyList<MediaStream>? mediaStreams = null;
+            MediaStream? videoStream = null;
+            MediaStream? activeAudioStream = null;
+
+            bool needStreams = config.ShowSdr || config.ShowHdr10Plus || config.ShowHdr10 || config.ShowDolbyVision || config.ShowHlg || config.ShowAudio || config.ShowBitrate;
+            if (needStreams)
+            {
+                activeSource = GetActiveMediaSource(item, session);
+                mediaStreams = GetMediaStreams(item, session, activeSource);
+                videoStream = mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+                activeAudioStream = GetActiveAudioStream(mediaStreams, session.PlayState?.AudioStreamIndex);
+            }
+
             var hdrInfo = string.Empty;
             var hdrRule = "disabled";
             if (config.ShowSdr || config.ShowHdr10Plus || config.ShowHdr10 || config.ShowDolbyVision || config.ShowHlg)
             {
-                var hdrResult = GetHdrInfo(item, session, config);
+                var hdrResult = MetadataFormatter.ShouldReportToneMappedSdr(config, session.TranscodingInfo)
+                    ? new HdrDetectionResult(config.ShowSdr ? "SDR" : string.Empty, "unsupported-hdr-transcode")
+                    : GetHdrInfo(videoStream, item.Path ?? string.Empty, item.Name ?? string.Empty, session, config);
                 hdrInfo = hdrResult.Value;
                 hdrRule = hdrResult.Rule;
             }
@@ -198,7 +228,7 @@ public class MetadataNotifierService : IHostedService
             var audioInfo = string.Empty;
             if (config.ShowAudio)
             {
-                audioInfo = GetAudioInfo(item, session, config);
+                audioInfo = GetAudioInfo(activeAudioStream, session, config);
             }
 
             var playbackInfo = string.Empty;
@@ -231,7 +261,7 @@ public class MetadataNotifierService : IHostedService
             var bitrateInfo = string.Empty;
             if (config.ShowBitrate)
             {
-                bitrateInfo = GetBitrateInfo(item, session);
+                bitrateInfo = GetBitrateInfo(item, session, activeSource, mediaStreams, activeAudioStream);
             }
 
             var header = GetNotificationHeader(item);
@@ -302,6 +332,37 @@ public class MetadataNotifierService : IHostedService
 
     private void OnPlaybackProgress(object? sender, PlaybackProgressEventArgs e)
     {
+        var session = e.Session;
+        if (session == null || !session.IsActive)
+        {
+            return;
+        }
+
+        var config = Plugin.Instance?.Configuration;
+        if (config == null || !config.IsEnabled || !config.NotifyOnAudioTrackChange)
+        {
+            return;
+        }
+
+        int? currentAudioIndex = session.PlayState?.AudioStreamIndex;
+        if (!currentAudioIndex.HasValue)
+        {
+            return;
+        }
+
+        if (_lastActiveAudioTrack.TryGetValue(session.Id, out var previousIndex))
+        {
+            if (previousIndex == currentAudioIndex.Value)
+            {
+                return;
+            }
+        }
+        else
+        {
+            _lastActiveAudioTrack[session.Id] = currentAudioIndex.Value;
+            return;
+        }
+
         _ = HandlePlaybackProgressAsync(e, _serviceCancellation?.Token ?? CancellationToken.None);
     }
 
@@ -321,6 +382,14 @@ public class MetadataNotifierService : IHostedService
                 return;
             }
 
+            int? currentAudioIndex = session.PlayState?.AudioStreamIndex;
+            if (!currentAudioIndex.HasValue)
+            {
+                return;
+            }
+
+            _lastActiveAudioTrack[session.Id] = currentAudioIndex.Value;
+
             if (IsUserExcluded(session, config))
             {
                 return;
@@ -332,30 +401,16 @@ public class MetadataNotifierService : IHostedService
                 return;
             }
 
-            int? currentAudioIndex = session.PlayState?.AudioStreamIndex;
-            if (!currentAudioIndex.HasValue)
+            var mediaStreams = GetMediaStreams(item, session);
+            var activeAudioStream = GetActiveAudioStream(mediaStreams, currentAudioIndex.Value);
+            var audioInfo = GetAudioInfo(activeAudioStream, session, config);
+            if (string.IsNullOrEmpty(audioInfo))
             {
                 return;
             }
 
-            if (!_lastActiveAudioTrack.TryGetValue(session.Id, out var previousIndex))
-            {
-                _lastActiveAudioTrack[session.Id] = currentAudioIndex.Value;
-                return;
-            }
-
-            if (previousIndex != currentAudioIndex.Value)
-            {
-                _lastActiveAudioTrack[session.Id] = currentAudioIndex.Value;
-
-                var audioInfo = GetAudioInfo(item, session, config);
-                if (string.IsNullOrEmpty(audioInfo))
-                {
-                    return;
-                }
-
-                var header = GetNotificationHeader(item);
-                var toastText = $"Audio: {audioInfo}";
+            var header = GetNotificationHeader(item);
+            var toastText = $"Audio: {audioInfo}";
 
                 _logger.LogInformation(
                     "Audio track changed in session {SessionId} ({Client}): {Text}",
@@ -370,12 +425,11 @@ public class MetadataNotifierService : IHostedService
                     TimeoutMs = config.NotificationDurationMs
                 };
 
-                await _sessionManager.SendMessageCommand(
-                    session.Id,
-                    session.Id,
-                    messageCommand,
-                    cancellationToken).ConfigureAwait(false);
-            }
+            await _sessionManager.SendMessageCommand(
+                session.Id,
+                session.Id,
+                messageCommand,
+                cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -592,7 +646,7 @@ public class MetadataNotifierService : IHostedService
         var deviceName = session.DeviceName ?? string.Empty;
 
         return client.Contains("webOS", StringComparison.OrdinalIgnoreCase)
-            || client.Contains("LG", StringComparison.OrdinalIgnoreCase)
+            || LgWordRegex().IsMatch(client)
             || client.Contains("Sony", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Bravia", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Roku", StringComparison.OrdinalIgnoreCase)
@@ -600,7 +654,7 @@ public class MetadataNotifierService : IHostedService
             || client.Contains("Sharp", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Toshiba", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("webOS", StringComparison.OrdinalIgnoreCase)
-            || deviceName.Contains("LG", StringComparison.OrdinalIgnoreCase)
+            || LgWordRegex().IsMatch(deviceName)
             || deviceName.Contains("Sony", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Bravia", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Roku", StringComparison.OrdinalIgnoreCase)
@@ -611,9 +665,6 @@ public class MetadataNotifierService : IHostedService
 
     internal static bool IsNonDolbyVisionClient(SessionInfo session, PluginConfiguration? config = null)
     {
-        var client = session.Client ?? string.Empty;
-        var deviceName = session.DeviceName ?? string.Empty;
-
         if (IsSamsungClient(session))
         {
             return true;
@@ -623,6 +674,9 @@ public class MetadataNotifierService : IHostedService
         {
             return true;
         }
+
+        var client = session.Client ?? string.Empty;
+        var deviceName = session.DeviceName ?? string.Empty;
 
         // Check if client is Android
         bool isAndroid = client.Contains("Android", StringComparison.OrdinalIgnoreCase)
@@ -638,7 +692,6 @@ public class MetadataNotifierService : IHostedService
                 || deviceName.Contains("AFT", StringComparison.OrdinalIgnoreCase)
                 || deviceName.Contains("Fire", StringComparison.OrdinalIgnoreCase)
                 || deviceName.Contains("BRAVIA", StringComparison.OrdinalIgnoreCase)
-                || deviceName.Contains("Google TV", StringComparison.OrdinalIgnoreCase)
                 || deviceName.Contains("TV", StringComparison.OrdinalIgnoreCase)
                 || deviceName.Contains("Box", StringComparison.OrdinalIgnoreCase);
 
@@ -699,7 +752,7 @@ public class MetadataNotifierService : IHostedService
 
             if (HasHdr10BaseLayer(videoStream) && config.ShowHdr10)
             {
-                return new(config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10", "hdr10plus-client-fallback-hdr10");
+                return new(config.UseDetailedVideoNames ? GetDetailedHdr10Info() : "HDR10", "hdr10plus-client-fallback-hdr10");
             }
 
             if ((rangeType == VideoRangeType.DOVIWithHLG || rangeType == VideoRangeType.HLG || displayTitle.Contains("HLG", StringComparison.OrdinalIgnoreCase)) && config.ShowHlg)
@@ -729,7 +782,7 @@ public class MetadataNotifierService : IHostedService
                 // Fall back to HDR10 base layer (Profile 7/8, DOVIWithHDR10, DOVIWithEL, or standard HDR)
                 if (HasHdr10BaseLayer(videoStream) && config.ShowHdr10)
                 {
-                    return new(config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10", "dolby-vision-client-fallback-hdr10");
+                    return new(config.UseDetailedVideoNames ? GetDetailedHdr10Info() : "HDR10", "dolby-vision-client-fallback-hdr10");
                 }
 
                 // Fall back to HLG if present
@@ -775,7 +828,7 @@ public class MetadataNotifierService : IHostedService
         {
             if (config.ShowHdr10)
             {
-                return new(config.UseDetailedVideoNames ? GetDetailedHdr10Info(profile, displayTitle) : "HDR10", "hdr10");
+                return new(config.UseDetailedVideoNames ? GetDetailedHdr10Info() : "HDR10", "hdr10");
             }
         }
 
@@ -787,7 +840,7 @@ public class MetadataNotifierService : IHostedService
         return new(string.Empty, "hidden-by-configuration");
     }
 
-    internal static bool HasHdr10BaseLayer(MediaStream videoStream)
+    internal static bool HasHdr10BaseLayer(MediaStream? videoStream)
     {
         if (videoStream == null)
         {
@@ -842,7 +895,7 @@ public class MetadataNotifierService : IHostedService
             || displayTitle.Contains("HDR10", StringComparison.OrdinalIgnoreCase);
     }
 
-    internal static bool IsDolbyVision(MediaStream videoStream, string itemPath, string itemName)
+    internal static bool IsDolbyVision(MediaStream? videoStream, string itemPath, string itemName)
     {
         if (videoStream == null)
         {
@@ -895,7 +948,7 @@ public class MetadataNotifierService : IHostedService
         return false;
     }
 
-    internal static bool IsHdr10Plus(MediaStream videoStream, string itemPath, string itemName)
+    internal static bool IsHdr10Plus(MediaStream? videoStream, string itemPath, string itemName)
     {
         if (videoStream == null)
         {
@@ -952,7 +1005,7 @@ public class MetadataNotifierService : IHostedService
         if (combined.Contains("dvhe.08.09", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("dvh1.08.09", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("Profile 8.1", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("8.1", StringComparison.OrdinalIgnoreCase))
+            || Profile81Regex().IsMatch(combined))
         {
             return "DV Profile 8.1";
         }
@@ -960,7 +1013,7 @@ public class MetadataNotifierService : IHostedService
         if (combined.Contains("dvhe.08.06", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("dvh1.08.06", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("Profile 8.4", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("8.4", StringComparison.OrdinalIgnoreCase))
+            || Profile84Regex().IsMatch(combined))
         {
             return "DV Profile 8.4";
         }
@@ -976,7 +1029,7 @@ public class MetadataNotifierService : IHostedService
         if (combined.Contains("dvhe.07.06", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("dvh1.07.06", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("Profile 7.6", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("7.6", StringComparison.OrdinalIgnoreCase))
+            || Profile76Regex().IsMatch(combined))
         {
             return "DV Profile 7.6";
         }
@@ -1021,16 +1074,19 @@ public class MetadataNotifierService : IHostedService
         return "HDR10+ (SMPTE ST 2094-40)";
     }
 
-    private static string GetDetailedHdr10Info(string profile, string displayTitle)
+    private static string GetDetailedHdr10Info()
     {
         return "HDR10 (SMPTE ST 2084)";
     }
 
-    private static MediaStream? GetActiveAudioStream(BaseItem item, SessionInfo session)
+    internal static MediaStream? GetActiveAudioStream(BaseItem item, SessionInfo session)
     {
         var mediaStreams = GetMediaStreams(item, session);
-        int? targetAudioIndex = session.PlayState?.AudioStreamIndex;
+        return GetActiveAudioStream(mediaStreams, session.PlayState?.AudioStreamIndex);
+    }
 
+    internal static MediaStream? GetActiveAudioStream(IReadOnlyList<MediaStream> mediaStreams, int? targetAudioIndex)
+    {
         if (targetAudioIndex.HasValue)
         {
             var activeStream = mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Audio && s.Index == targetAudioIndex.Value);
@@ -1044,9 +1100,9 @@ public class MetadataNotifierService : IHostedService
             ?? mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Audio);
     }
 
-    private static IReadOnlyList<MediaStream> GetMediaStreams(BaseItem item, SessionInfo session)
+    internal static IReadOnlyList<MediaStream> GetMediaStreams(BaseItem item, SessionInfo session, MediaSourceInfo? activeSource = null)
     {
-        var activeSource = GetActiveMediaSource(item, session);
+        activeSource ??= GetActiveMediaSource(item, session);
         if (activeSource?.MediaStreams is { Count: > 0 } mediaStreams)
         {
             return mediaStreams;
@@ -1055,7 +1111,7 @@ public class MetadataNotifierService : IHostedService
         return item.GetMediaStreams();
     }
 
-    private static MediaSourceInfo? GetActiveMediaSource(BaseItem item, SessionInfo session)
+    internal static MediaSourceInfo? GetActiveMediaSource(BaseItem item, SessionInfo session)
     {
         if (item is not IHasMediaSources hasMediaSources)
         {
@@ -1074,9 +1130,14 @@ public class MetadataNotifierService : IHostedService
             : mediaSources.FirstOrDefault(source => string.Equals(source.Id, mediaSourceId, StringComparison.Ordinal));
     }
 
-    private static string GetAudioInfo(BaseItem item, SessionInfo session, PluginConfiguration config)
+    internal static string GetAudioInfo(BaseItem item, SessionInfo session, PluginConfiguration config)
     {
         var audioStream = GetActiveAudioStream(item, session);
+        return GetAudioInfo(audioStream, session, config);
+    }
+
+    internal static string GetAudioInfo(MediaStream? audioStream, SessionInfo session, PluginConfiguration config)
+    {
         if (audioStream == null)
         {
             return string.Empty;
@@ -1145,7 +1206,12 @@ public class MetadataNotifierService : IHostedService
         return displayAudio;
     }
 
-    private static string GetBitrateInfo(BaseItem item, SessionInfo session)
+    internal static string GetBitrateInfo(
+        BaseItem item,
+        SessionInfo session,
+        MediaSourceInfo? activeSource = null,
+        IReadOnlyList<MediaStream>? mediaStreams = null,
+        MediaStream? activeAudioStream = null)
     {
         // 1. Check transcoding bitrate first if actively transcoding
         if (session.TranscodingInfo?.Bitrate > 0)
@@ -1154,7 +1220,7 @@ public class MetadataNotifierService : IHostedService
         }
 
         // 2. Try container / media source total bitrate
-        var activeSource = GetActiveMediaSource(item, session);
+        activeSource ??= GetActiveMediaSource(item, session);
         if (activeSource?.Bitrate is int totalBitrate && totalBitrate > 0)
         {
             return MetadataFormatter.FormatBitrate(totalBitrate);
@@ -1166,17 +1232,16 @@ public class MetadataNotifierService : IHostedService
         }
 
         // 3. Fall back to summing video stream and active audio stream
-        var mediaStreams = GetMediaStreams(item, session);
+        mediaStreams ??= GetMediaStreams(item, session, activeSource);
         var videoStream = mediaStreams.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+        activeAudioStream ??= GetActiveAudioStream(mediaStreams, session.PlayState?.AudioStreamIndex);
         if (videoStream?.BitRate is int videoBitrate && videoBitrate > 0)
         {
-            var audioStream = GetActiveAudioStream(item, session);
-            long totalBps = videoBitrate + (audioStream?.BitRate ?? 0);
+            long totalBps = videoBitrate + (activeAudioStream?.BitRate ?? 0);
             return MetadataFormatter.FormatBitrate(totalBps);
         }
 
-        var fallbackAudio = GetActiveAudioStream(item, session);
-        if (fallbackAudio?.BitRate is int audioOnlyBitrate && audioOnlyBitrate > 0)
+        if (activeAudioStream?.BitRate is int audioOnlyBitrate && audioOnlyBitrate > 0)
         {
             return MetadataFormatter.FormatBitrate(audioOnlyBitrate);
         }

@@ -12,55 +12,32 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public PluginConfiguration()
     {
-        IsEnabled = true;
-        NotificationDurationMs = 5000;
-        StartupDelayMs = 1500;
-        ShowSdr = true;
-        ShowAudio = true;
-        ShowTranscoding = true;
-        ShowDirectPlay = true;
-        ShowBitrate = true;
-        ShowHdr10Plus = true;
-        ShowHdr10 = true;
-        ShowDolbyVision = true;
-        ShowHlg = true;
-        SuppressDvOnSamsung = true;
-        SuppressDvOnFireTv = false;
-        SuppressHdr10PlusOnLg = true;
-        ShowTranscodeReasons = true;
-        ShowAudioConversion = true;
-        NotifyOnAudioTrackChange = true;
-        IgnoreAudioMedia = true;
-        CustomTemplate = string.Empty;
-        ExcludedLibraryIds = new List<string>();
-        ExcludedUserIds = new List<string>();
-        EnableFullscreenToastFix = false;
     }
 
     /// <summary>
     /// Gets or sets a value indicating whether the plugin is globally enabled.
     /// </summary>
-    public bool IsEnabled { get; set; }
+    public bool IsEnabled { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the notification duration in milliseconds.
     /// </summary>
-    public int NotificationDurationMs { get; set; }
+    public int NotificationDurationMs { get; set; } = 5000;
 
     /// <summary>
     /// Gets or sets the delay after playback starts before the toast is sent, allowing transcode info to register.
     /// </summary>
-    public int StartupDelayMs { get; set; }
+    public int StartupDelayMs { get; set; } = 1500;
 
     /// <summary>
     /// Gets or sets a value indicating whether to show SDR.
     /// </summary>
-    public bool ShowSdr { get; set; }
+    public bool ShowSdr { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether to display audio codec info.
     /// </summary>
-    public bool ShowAudio { get; set; }
+    public bool ShowAudio { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether to use detailed/technical video names.
@@ -75,52 +52,52 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>
     /// Gets or sets a value indicating whether to display transcoding info.
     /// </summary>
-    public bool ShowTranscoding { get; set; }
+    public bool ShowTranscoding { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether to display Direct Play info.
     /// </summary>
-    public bool ShowDirectPlay { get; set; }
+    public bool ShowDirectPlay { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether to display bitrate info.
     /// </summary>
-    public bool ShowBitrate { get; set; }
+    public bool ShowBitrate { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether to show HDR10+.
     /// </summary>
-    public bool ShowHdr10Plus { get; set; }
+    public bool ShowHdr10Plus { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether to show HDR10.
     /// </summary>
-    public bool ShowHdr10 { get; set; }
+    public bool ShowHdr10 { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether to show Dolby Vision.
     /// </summary>
-    public bool ShowDolbyVision { get; set; }
+    public bool ShowDolbyVision { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether to show HLG.
     /// </summary>
-    public bool ShowHlg { get; set; }
+    public bool ShowHlg { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether to suppress Dolby Vision on Samsung devices.
     /// </summary>
-    public bool SuppressDvOnSamsung { get; set; }
+    public bool SuppressDvOnSamsung { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether to suppress Dolby Vision on Fire TV devices (e.g. when connected to a Samsung or non-DV TV).
     /// </summary>
-    public bool SuppressDvOnFireTv { get; set; }
+    public bool SuppressDvOnFireTv { get; set; } = false;
 
     /// <summary>
     /// Gets or sets a value indicating whether to suppress HDR10+ on non-supporting clients (e.g. LG, Sony).
     /// </summary>
-    public bool SuppressHdr10PlusOnLg { get; set; }
+    public bool SuppressHdr10PlusOnLg { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether to show transcode reasons when transcoding occurs.

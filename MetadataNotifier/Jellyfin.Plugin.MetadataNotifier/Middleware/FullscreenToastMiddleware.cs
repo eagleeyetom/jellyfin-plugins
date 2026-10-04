@@ -123,6 +123,9 @@ public class FullscreenToastMiddleware
             return;
         }
 
+        // Strip Accept-Encoding so downstream response compression does not compress index.html before we can inject our script.
+        context.Request.Headers.Remove("Accept-Encoding");
+
         // Buffer the original response so we can manipulate it.
         var originalBody = context.Response.Body;
         using var buffered = new MemoryStream();
@@ -132,9 +135,15 @@ public class FullscreenToastMiddleware
         {
             await _next(context).ConfigureAwait(false);
 
-            // Only patch HTML responses.
+            // Only patch successful (200 OK), uncompressed HTML responses.
             var contentType = context.Response.ContentType ?? string.Empty;
-            if (!contentType.Contains("text/html", System.StringComparison.OrdinalIgnoreCase))
+            var hasEncoding = !string.IsNullOrEmpty(context.Response.Headers.ContentEncoding)
+                || context.Response.Headers.ContainsKey("Content-Encoding");
+
+            if (context.Response.StatusCode != 200
+                || hasEncoding
+                || buffered.Length == 0
+                || !contentType.Contains("text/html", System.StringComparison.OrdinalIgnoreCase))
             {
                 buffered.Seek(0, SeekOrigin.Begin);
                 await buffered.CopyToAsync(originalBody).ConfigureAwait(false);
