@@ -316,7 +316,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         }
     }
 
-    private async Task PrepareBadgeGroup(
+    internal async Task PrepareBadgeGroup(
         List<BadgeInfo> badges, int sizePercent, int imageWidth, bool useTextStyle,
         List<SKSizeI> sizes, List<SKBitmap> sourceBitmaps, List<BadgeInfo> filtered, List<SKBitmap> ownedBitmaps,
         BadgePanelSettings panel)
@@ -477,7 +477,9 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     {
                         ownedBitmaps.Add(processed);
                     }
+
                     var badgeHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(processed.Height * ((double)badgeWidth / processed.Width)));
+
                     sourceBitmaps.Add(processed);
                     filtered.Add(badgeInfo);
                     sizes.Add(new SKSizeI(badgeWidth, badgeHeight));
@@ -648,6 +650,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                         {
                             customBadge = TrimTransparent(customBadge);
                             _rasterCache[svgFileName] = customBadge;
+                            _rasterCache[pngFileName] = customBadge;
                             _logger.LogDebug("Loaded custom PNG badge: {FileName}", pngFileName);
                             continue;
                         }
@@ -718,6 +721,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                         {
                             badge = TrimTransparent(badge);
                             _rasterCache[svgFileName] = badge;
+                            _rasterCache[pngFileName] = badge;
                             _logger.LogDebug("Loaded embedded PNG fallback: {FileName}", pngFileName);
                         }
                     }

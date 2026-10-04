@@ -466,4 +466,105 @@ public class ConfigurationAndCacheTests
             Assert.AreEqual("image/webp", ImageOverlayService.DetectImageContentType(ms));
         }
     }
+
+    [TestMethod]
+    public async Task PrepareBadgeGroup_WithLogoStyle_FitsHorizontallyByBadgeWidth()
+    {
+        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<ImageOverlayService>.Instance;
+        using var service = new ImageOverlayService(logger);
+
+        var panel = new BadgePanelSettings
+        {
+            Style = BadgeStyle.Logo,
+            IconStyle = BadgeIconStyle.Rectangular,
+            SizePercent = 15
+        };
+
+        var badges = new List<BadgeInfo>
+        {
+            new() { Category = BadgeCategory.Audio, BadgeKey = "atmos", ResourceFileName = "badge-atmos.svg" },
+            new() { Category = BadgeCategory.Audio, BadgeKey = "truehd", ResourceFileName = "badge-truehd.svg" },
+            new() { Category = BadgeCategory.Audio, BadgeKey = "dts", ResourceFileName = "badge-dts.svg" },
+            new() { Category = BadgeCategory.Hdr, BadgeKey = "dv", ResourceFileName = "badge-dv.svg" },
+            new() { Category = BadgeCategory.VideoCodec, BadgeKey = "h264", ResourceFileName = "badge-h264.svg" },
+            new() { Category = BadgeCategory.VideoCodec, BadgeKey = "av1", ResourceFileName = "badge-av1.svg" },
+            new() { Category = BadgeCategory.Audio, BadgeKey = "opus", ResourceFileName = "badge-opus.svg" },
+            new() { Category = BadgeCategory.Audio, BadgeKey = "dtsx", ResourceFileName = "badge-dtsx.svg" }
+        };
+
+        var sizes = new List<SkiaSharp.SKSizeI>();
+        var sourceBitmaps = new List<SkiaSharp.SKBitmap>();
+        var filtered = new List<BadgeInfo>();
+        var ownedBitmaps = new List<SkiaSharp.SKBitmap>();
+
+        const int imageWidth = 1000;
+        const int expectedBadgeWidth = 150; // 1000 * 0.15
+
+        try
+        {
+            await service.PrepareBadgeGroup(badges, panel.SizePercent, imageWidth, false, sizes, sourceBitmaps, filtered, ownedBitmaps, panel);
+
+            Assert.AreEqual(8, sizes.Count, "All 8 badges should be processed");
+            Assert.AreEqual(8, filtered.Count);
+
+            // All logos fit horizontally, matching expectedBadgeWidth
+            foreach (var size in sizes)
+            {
+                Assert.AreEqual(expectedBadgeWidth, size.Width, "Each logo width should fit horizontally to badgeWidth");
+                Assert.IsTrue(size.Height > 0, "Height must be greater than 0");
+            }
+
+            // Compact/squarish logos (H264) will have higher height than wide logos (Atmos, TrueHD)
+            var atmosSize = sizes[0];
+            var truehdSize = sizes[1];
+            var h264Size = sizes[4];
+
+            Assert.IsTrue(h264Size.Height > atmosSize.Height, $"H.264 height ({h264Size.Height}) should be taller than Atmos height ({atmosSize.Height})");
+            Assert.IsTrue(h264Size.Height > truehdSize.Height, $"H.264 height ({h264Size.Height}) should be taller than TrueHD height ({truehdSize.Height})");
+        }
+        finally
+        {
+            foreach (var b in ownedBitmaps) b.Dispose();
+        }
+    }
+
+    [TestMethod]
+    public async Task PrepareBadgeGroup_WithSquareIconStyle_PreservesSquareDimensions()
+    {
+        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<ImageOverlayService>.Instance;
+        using var service = new ImageOverlayService(logger);
+
+        var panel = new BadgePanelSettings
+        {
+            Style = BadgeStyle.Logo,
+            IconStyle = BadgeIconStyle.Square,
+            SizePercent = 15
+        };
+
+        var badges = new List<BadgeInfo>
+        {
+            new() { Category = BadgeCategory.Audio, BadgeKey = "atmos", ResourceFileName = "badge-atmos.svg" }
+        };
+
+        var sizes = new List<SkiaSharp.SKSizeI>();
+        var sourceBitmaps = new List<SkiaSharp.SKBitmap>();
+        var filtered = new List<BadgeInfo>();
+        var ownedBitmaps = new List<SkiaSharp.SKBitmap>();
+
+        const int imageWidth = 1000;
+        const int expectedSide = 150; // 1000 * 0.15
+
+        try
+        {
+            await service.PrepareBadgeGroup(badges, panel.SizePercent, imageWidth, false, sizes, sourceBitmaps, filtered, ownedBitmaps, panel);
+
+            Assert.AreEqual(1, sizes.Count);
+            Assert.AreEqual(expectedSide, sizes[0].Width);
+            Assert.AreEqual(expectedSide, sizes[0].Height);
+        }
+        finally
+        {
+            foreach (var b in ownedBitmaps) b.Dispose();
+        }
+    }
 }
