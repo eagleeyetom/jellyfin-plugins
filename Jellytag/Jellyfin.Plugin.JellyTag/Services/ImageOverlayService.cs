@@ -853,8 +853,12 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
     /// </summary>
     private static (string bg, string text, byte opacity, int cornerRadius) ResolveBadgeStyle(BadgeInfo badge, BadgePanelSettings panel, ImageTypeConfig imageConfig)
     {
-        var bgColor = panel.TextBgColor ?? "#000000";
-        var textColor = panel.TextColor ?? "#FFFFFF";
+        var isWhite = panel.WhiteLogoBackground ?? Plugin.Instance?.Configuration?.WhiteLogoBackground == true;
+        var defaultBg = isWhite ? "#FFFFFF" : "#000000";
+        var defaultText = isWhite ? "#000000" : "#FFFFFF";
+
+        var bgColor = string.IsNullOrEmpty(panel.TextBgColor) || (panel.TextBgColor == "#000000" && isWhite) ? defaultBg : panel.TextBgColor;
+        var textColor = string.IsNullOrEmpty(panel.TextColor) || (panel.TextColor == "#FFFFFF" && isWhite) ? defaultText : panel.TextColor;
         var opacity = (byte)Math.Clamp(panel.TextBgOpacity, 0, 255);
         var cornerRadius = Math.Clamp(panel.TextCornerRadius, 0, 50);
 
