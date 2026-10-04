@@ -84,8 +84,88 @@
                     <div class="sectionTitleContainer flex align-items-center">
                         <h2 class="sectionTitle">JellyTag Configuration</h2>
                     </div>
-                    <!-- 1. Badge Style & Theme -->
-                    <details class="jellytag-section" id="BadgeThemeSection" open>
+                    <!-- 1. General -->
+                    <details class="jellytag-section" id="GeneralSettingsSection" open>
+                        <summary>General</summary>
+                        <div class="jellytag-section-body">
+                            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom:1.5em; padding-bottom:1em; border-bottom:1px solid rgba(255,255,255,0.1);">
+                                <label class="emby-checkbox-label">
+                                    <input id="Enabled" type="checkbox" is="emby-checkbox" />
+                                    <span style="font-size:1.15em; font-weight:600;">Enable JellyTag</span>
+                                </label>
+                                <div class="fieldDescription">Master toggle for the JellyTag badge overlay plugin.</div>
+                            </div>
+
+                            <details class="jellytag-sub" open>
+                                <summary>Client Compatibility</summary>
+                                <div class="jellytag-sub-body">
+                                    <div class="checkboxContainer checkboxContainer-withDescription">
+                                        <label class="emby-checkbox-label">
+                                            <input id="HideDolbyVisionOnSamsungClients" type="checkbox" is="emby-checkbox" />
+                                            <span>Hide Dolby Vision badges on Samsung clients</span>
+                                        </label>
+                                        <div class="fieldDescription">Samsung clients will continue to show HDR10+ when enabled in the HDR panel. Other clients are unaffected.</div>
+                                    </div>
+                                    <div class="checkboxContainer checkboxContainer-withDescription">
+                                        <label class="emby-checkbox-label">
+                                            <input id="HideDolbyVisionOnFireTvClients" type="checkbox" is="emby-checkbox" />
+                                            <span>Hide Dolby Vision badges on Fire TV clients</span>
+                                        </label>
+                                        <div class="fieldDescription">Fire TV clients will show HDR10+ (or HDR10) instead of Dolby Vision. Enable if your Fire TV is connected to a Samsung or non-DV display.</div>
+                                    </div>
+                                    <div class="checkboxContainer checkboxContainer-withDescription">
+                                        <label class="emby-checkbox-label">
+                                            <input id="HideHdrOnWindowsClients" type="checkbox" is="emby-checkbox" />
+                                            <span>Hide HDR badges on Windows clients (SDR only)</span>
+                                        </label>
+                                        <div class="fieldDescription">Windows clients (Emby Theater, web browser) will not show HDR/DV badges. Useful for SDR-only setups.</div>
+                                    </div>
+                                    <div id="DebugCountryCodeContainer" class="inputContainer" style="display:none; margin-top:1em;">
+                                        <label class="inputLabel inputLabelUnfocused" for="DebugCountryCode">Debug Country Code Override</label>
+                                        <input id="DebugCountryCode" type="text" is="emby-input" placeholder="e.g. fr, jp, de" />
+                                        <div class="fieldDescription">Manually force country flags for testing (comma-separated country codes, e.g. fr, jp, de).</div>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <details class="jellytag-sub">
+                                <summary>Libraries</summary>
+                                <div class="jellytag-section-body">
+                                    <div class="fieldDescription" style="margin-bottom:1em;">Uncheck a library to disable badge generation for its items.</div>
+                                    <div id="LibraryCheckboxes"><em>Loading libraries...</em></div>
+                                </div>
+                            </details>
+
+                            <details class="jellytag-sub">
+                                <summary>Performance & Cache</summary>
+                                <div class="jellytag-sub-body">
+                                    <div class="inputContainer">
+                                        <label class="inputLabel inputLabelUnfocused" for="CacheDurationHours">Cache Duration (hours)</label>
+                                        <input id="CacheDurationHours" type="number" min="1" max="720" step="1" is="emby-input" />
+                                    </div>
+                                    <div class="inputContainer">
+                                        <label class="inputLabel inputLabelUnfocused" for="OutputFormat">Output Format</label>
+                                        <select id="OutputFormat" is="emby-select">
+                                            <option value="Jpeg">JPEG</option>
+                                            <option value="WebP">WebP (experimental)</option>
+                                        </select>
+                                    </div>
+                                    <div id="JpegQualityContainer" class="inputContainer">
+                                        <label class="inputLabel inputLabelUnfocused" for="JpegQuality">JPEG Quality</label>
+                                        <input id="JpegQuality" type="number" min="1" max="100" step="1" is="emby-input" />
+                                    </div>
+                                    <div id="WebPQualityContainer" class="inputContainer" style="display:none;">
+                                        <label class="inputLabel inputLabelUnfocused" for="WebPQuality">WebP Quality</label>
+                                        <input id="WebPQuality" type="number" min="1" max="100" step="1" is="emby-input" />
+                                    </div>
+                                    <div id="CacheStatsInfo" class="fieldDescription" style="margin-top:.5em;"></div>
+                                </div>
+                            </details>
+                        </div>
+                    </details>
+
+                    <!-- 2. Badge Style & Theme -->
+                    <details class="jellytag-section" id="BadgeThemeSection">
                         <summary>Badge Style & Theme</summary>
                         <div class="jellytag-section-body">
                             <div class="fieldDescription" style="margin-bottom:1.2em;">
@@ -167,7 +247,7 @@
                         </div>
                     </details>
 
-                    <!-- 2. Posters (Primary) -->
+                    <!-- 3. Posters (Primary) -->
                     <details class="jellytag-section" id="PostersSection">
                         <summary>Posters (Primary)</summary>
                         <div class="jellytag-section-body">
@@ -181,7 +261,7 @@
                         </div>
                     </details>
 
-                    <!-- 3. Thumbnails (Thumb) -->
+                    <!-- 4. Thumbnails (Thumb) -->
                     <details class="jellytag-section" id="ThumbnailsSection">
                         <summary>Thumbnails (Thumb)</summary>
                         <div class="jellytag-section-body">
@@ -209,7 +289,7 @@
                         </div>
                     </details>
 
-                    <!-- 4. Labels & Flags -->
+                    <!-- 5. Labels & Flags -->
                     <details class="jellytag-section" id="LabelsFlagsSection">
                         <summary>Labels & Flags</summary>
                         <div class="jellytag-section-body">
@@ -263,86 +343,6 @@
                                             <button is="emby-button" type="button" class="raised" id="LangFlagAddBtn" style="margin-bottom:0;"><span>Add</span></button>
                                         </div>
                                     </div>
-                                </div>
-                            </details>
-                        </div>
-                    </details>
-
-                    <!-- 5. General & System Settings -->
-                    <details class="jellytag-section" id="GeneralSettingsSection">
-                        <summary>General & System Settings</summary>
-                        <div class="jellytag-section-body">
-                            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom:1.5em; padding-bottom:1em; border-bottom:1px solid rgba(255,255,255,0.1);">
-                                <label class="emby-checkbox-label">
-                                    <input id="Enabled" type="checkbox" is="emby-checkbox" />
-                                    <span style="font-size:1.15em; font-weight:600;">Enable JellyTag</span>
-                                </label>
-                                <div class="fieldDescription">Master toggle for the JellyTag badge overlay plugin.</div>
-                            </div>
-
-                            <details class="jellytag-sub" open>
-                                <summary>Client Compatibility</summary>
-                                <div class="jellytag-sub-body">
-                                    <div class="checkboxContainer checkboxContainer-withDescription">
-                                        <label class="emby-checkbox-label">
-                                            <input id="HideDolbyVisionOnSamsungClients" type="checkbox" is="emby-checkbox" />
-                                            <span>Hide Dolby Vision badges on Samsung clients</span>
-                                        </label>
-                                        <div class="fieldDescription">Samsung clients will continue to show HDR10+ when enabled in the HDR panel. Other clients are unaffected.</div>
-                                    </div>
-                                    <div class="checkboxContainer checkboxContainer-withDescription">
-                                        <label class="emby-checkbox-label">
-                                            <input id="HideDolbyVisionOnFireTvClients" type="checkbox" is="emby-checkbox" />
-                                            <span>Hide Dolby Vision badges on Fire TV clients</span>
-                                        </label>
-                                        <div class="fieldDescription">Fire TV clients will show HDR10+ (or HDR10) instead of Dolby Vision. Enable if your Fire TV is connected to a Samsung or non-DV display.</div>
-                                    </div>
-                                    <div class="checkboxContainer checkboxContainer-withDescription">
-                                        <label class="emby-checkbox-label">
-                                            <input id="HideHdrOnWindowsClients" type="checkbox" is="emby-checkbox" />
-                                            <span>Hide HDR badges on Windows clients (SDR only)</span>
-                                        </label>
-                                        <div class="fieldDescription">Windows clients (Emby Theater, web browser) will not show HDR/DV badges. Useful for SDR-only setups.</div>
-                                    </div>
-                                    <div id="DebugCountryCodeContainer" class="inputContainer" style="display:none; margin-top:1em;">
-                                        <label class="inputLabel inputLabelUnfocused" for="DebugCountryCode">Debug Country Code Override</label>
-                                        <input id="DebugCountryCode" type="text" is="emby-input" placeholder="e.g. fr, jp, de" />
-                                        <div class="fieldDescription">Manually force country flags for testing (comma-separated country codes, e.g. fr, jp, de).</div>
-                                    </div>
-                                </div>
-                            </details>
-
-                            <details class="jellytag-sub">
-                                <summary>Libraries</summary>
-                                <div class="jellytag-section-body">
-                                    <div class="fieldDescription" style="margin-bottom:1em;">Uncheck a library to disable badge generation for its items.</div>
-                                    <div id="LibraryCheckboxes"><em>Loading libraries...</em></div>
-                                </div>
-                            </details>
-
-                            <details class="jellytag-sub">
-                                <summary>Performance & Cache</summary>
-                                <div class="jellytag-sub-body">
-                                    <div class="inputContainer">
-                                        <label class="inputLabel inputLabelUnfocused" for="CacheDurationHours">Cache Duration (hours)</label>
-                                        <input id="CacheDurationHours" type="number" min="1" max="720" step="1" is="emby-input" />
-                                    </div>
-                                    <div class="inputContainer">
-                                        <label class="inputLabel inputLabelUnfocused" for="OutputFormat">Output Format</label>
-                                        <select id="OutputFormat" is="emby-select">
-                                            <option value="Jpeg">JPEG</option>
-                                            <option value="WebP">WebP (experimental)</option>
-                                        </select>
-                                    </div>
-                                    <div id="JpegQualityContainer" class="inputContainer">
-                                        <label class="inputLabel inputLabelUnfocused" for="JpegQuality">JPEG Quality</label>
-                                        <input id="JpegQuality" type="number" min="1" max="100" step="1" is="emby-input" />
-                                    </div>
-                                    <div id="WebPQualityContainer" class="inputContainer" style="display:none;">
-                                        <label class="inputLabel inputLabelUnfocused" for="WebPQuality">WebP Quality</label>
-                                        <input id="WebPQuality" type="number" min="1" max="100" step="1" is="emby-input" />
-                                    </div>
-                                    <div id="CacheStatsInfo" class="fieldDescription" style="margin-top:.5em;"></div>
                                 </div>
                             </details>
                         </div>
