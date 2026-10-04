@@ -22,6 +22,7 @@ Sends on-screen toast notifications when playback starts on any Jellyfin client,
 - **Custom Notification Template:** Customize the order and layout of notification items with flexible template variables.
 - **Exclusion Lists:** Easily exclude specific media libraries or users from toast notifications.
 - **Optional Browser Fullscreen Toast Fix:** In web browsers, HTML5 fullscreen mode can hide standard toast notifications behind the video element. An optional server setting dynamically patches `index.html` on HTTP requests to keep toasts visible in fullscreen on web browsers. (Disabled by default; not needed for Samsung Tizen or native TV clients which display toasts natively).
+- **Config Export/Import & Reset:** Easily backup and restore your configuration as JSON, or reset all settings to defaults with a single click.
 - **Fully Configurable:** Customize notification duration, target clients, and displayed information categories.
 
 ## Known Limitations

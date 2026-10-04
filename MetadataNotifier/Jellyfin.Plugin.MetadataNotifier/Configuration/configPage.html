@@ -230,8 +230,12 @@
                         </details>
                     </div>
 
-                    <div style="margin-top: 2em;">
-                        <button is="emby-button" type="submit" class="raised button-submit block">Save</button>
+                    <div class="verticalSection" style="margin-top: 2em;">
+                        <button is="emby-button" type="submit" class="raised button-submit block" style="width: 100%;">Save</button>
+                        <button id="ExportConfig" type="button" is="emby-button" class="raised block" style="width: 100%; margin-top: .5em;">Export Config</button>
+                        <button id="ImportConfigBtn" type="button" is="emby-button" class="raised block" style="width: 100%; margin-top: .5em;">Import Config</button>
+                        <input id="ImportConfigFile" type="file" accept="application/json,.json" style="display: none;" />
+                        <button id="ResetAllSettings" type="button" is="emby-button" class="raised block" style="background: #888; width: 100%; margin-top: .5em;">Reset All Settings to Default</button>
                     </div>
                 </form>
             </div>
@@ -665,6 +669,169 @@
                     Dashboard.alert('Error saving configuration');
                 }
             }
+
+            // Export configuration
+            document.querySelector('#ExportConfig').addEventListener('click', function () {
+                var token = ApiClient.accessToken();
+                var headers = {};
+                if (token) headers['Authorization'] = 'MediaBrowser Token="' + token + '"';
+
+                Dashboard.showLoadingMsg();
+                fetch(ApiClient.getUrl('MetadataNotifier/ExportConfig'), { headers: headers })
+                    .then(function (response) {
+                        if (!response.ok) {
+                            return ApiClient.getPluginConfiguration(pluginId).then(function (cfg) {
+                                return new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+                            });
+                        }
+                        return response.blob();
+                    })
+                    .then(function (blob) {
+                        Dashboard.hideLoadingMsg();
+                        var url = window.URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'metadata-notifier-config.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        a.remove();
+                    })
+                    .catch(function (err) {
+                        ApiClient.getPluginConfiguration(pluginId).then(function (cfg) {
+                            Dashboard.hideLoadingMsg();
+                            var blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+                            var url = window.URL.createObjectURL(blob);
+                            var a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'metadata-notifier-config.json';
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            a.remove();
+                        }).catch(function () {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert('Failed to export configuration: ' + (err.message || err));
+                        });
+                    });
+            });
+
+            // Import configuration
+            document.querySelector('#ImportConfigBtn').addEventListener('click', function () {
+                document.querySelector('#ImportConfigFile').click();
+            });
+
+            document.querySelector('#ImportConfigFile').addEventListener('change', function () {
+                var fi = this;
+                var file = fi.files[0];
+                if (!file) return;
+
+                if (confirm('Import this configuration? Current settings will be overwritten.')) {
+                    Dashboard.showLoadingMsg();
+                    var fd = new FormData();
+                    fd.append('file', file);
+
+                    fetch(ApiClient.getUrl('MetadataNotifier/ImportConfig'), {
+                        method: 'POST',
+                        headers: { 'Authorization': 'MediaBrowser Token="' + ApiClient.accessToken() + '"' },
+                        body: fd
+                    }).then(function (r) {
+                        Dashboard.hideLoadingMsg();
+                        fi.value = '';
+                        if (r.ok) {
+                            Dashboard.alert('Configuration imported. Reloading...');
+                            window.location.reload();
+                        } else {
+                            fallbackImport(file);
+                        }
+                    }).catch(function () {
+                        fallbackImport(file);
+                    });
+                } else {
+                    fi.value = '';
+                }
+
+                function fallbackImport(f) {
+                    var reader = new FileReader();
+                    reader.onload = function (e) {
+                        try {
+                            var json = JSON.parse(e.target.result);
+                            ApiClient.updatePluginConfiguration(pluginId, json).then(function () {
+                                Dashboard.hideLoadingMsg();
+                                fi.value = '';
+                                Dashboard.alert('Configuration imported. Reloading...');
+                                window.location.reload();
+                            }).catch(function (err) {
+                                Dashboard.hideLoadingMsg();
+                                fi.value = '';
+                                Dashboard.alert('Failed to import configuration: ' + (err.message || err));
+                            });
+                        } catch (err) {
+                            Dashboard.hideLoadingMsg();
+                            fi.value = '';
+                            Dashboard.alert('Invalid JSON file format.');
+                        }
+                    };
+                    reader.onerror = function () {
+                        Dashboard.hideLoadingMsg();
+                        fi.value = '';
+                        Dashboard.alert('Failed to read configuration file.');
+                    };
+                    reader.readAsText(f);
+                }
+            });
+
+            // Reset all settings to default
+            document.querySelector('#ResetAllSettings').addEventListener('click', function () {
+                if (confirm('Reset ALL settings to their default values? This cannot be undone.')) {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.ajax({
+                        type: 'POST',
+                        url: ApiClient.getUrl('MetadataNotifier/ResetConfig')
+                    }).then(function () {
+                        Dashboard.hideLoadingMsg();
+                        Dashboard.alert('Settings reset. Reloading...');
+                        window.location.reload();
+                    }).catch(function () {
+                        var defaultConfig = {
+                            IsEnabled: true,
+                            NotificationDurationMs: 5000,
+                            StartupDelayMs: 1500,
+                            ShowSdr: true,
+                            ShowAudio: true,
+                            ShowTranscoding: true,
+                            ShowDirectPlay: true,
+                            ShowBitrate: true,
+                            ShowHdr10Plus: true,
+                            ShowHdr10: true,
+                            ShowDolbyVision: true,
+                            ShowHlg: true,
+                            SuppressDvOnSamsung: true,
+                            SuppressDvOnFireTv: false,
+                            SuppressHdr10PlusOnLg: true,
+                            ShowTranscodeReasons: true,
+                            ShowAudioConversion: true,
+                            NotifyOnAudioTrackChange: true,
+                            IgnoreAudioMedia: true,
+                            UseDetailedVideoNames: false,
+                            UseDetailedAudioNames: false,
+                            DesktopSdrMode: false,
+                            CustomTemplate: '',
+                            ExcludedLibraryIds: [],
+                            ExcludedUserIds: [],
+                            EnableFullscreenToastFix: false
+                        };
+                        ApiClient.updatePluginConfiguration(pluginId, defaultConfig).then(function () {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert('Settings reset. Reloading...');
+                            window.location.reload();
+                        }).catch(function (err) {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert('Failed to reset settings: ' + (err.message || err));
+                        });
+                    });
+                }
+            });
         </script>
     </div>
 </body>
