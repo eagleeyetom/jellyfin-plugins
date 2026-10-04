@@ -1,6 +1,6 @@
 name: "JellyTag"
 guid: "f4a2e8c1-9b3d-4f7a-b6c5-2d8e1a3f9b04"
-version: "2.5.0.0"
+version: "2.6.0.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 owner: "JellyTag"
@@ -19,6 +19,16 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.JellyTag.dll"
 changelog: |
+  ## v2.6.0.0 (2026-10-04)
+  - Overhaul configuration menu into 5 streamlined accordion sections with General settings first
+  - Add global Badge Style selector (Image, Brand Logo, Text) and corner shape controls (Rectangular, Square, Round)
+  - Compensate for client-side 2:3 card cropping on TVDB poster aspect ratios with safe-area calculations
+  - Add custom badge colors section with category filters and search for per-element recoloring
+  - Add option to use white background for brand logos
+  - Redesign AAC logo to horizontal layout matching other audio badges with toggle for original square logo
+  - Crop excess whitespace from H.264 logo badges and implement horizontal logo fitting
+  - Add option to hide Dolby Vision badges on Fire TV clients
+  - Dual-key index raster cache and optimize badge caching performance
   ## v2.5.0.0 (2026-09-28)
   - Separate Audio Channel Badges (7.1, 5.1, Stereo, Mono) into a dedicated panel with independent positioning, styling, ordering, and badge selection
   - Allow displaying audio codec brand logos (e.g. Dolby Digital, DTS, Atmos) and channel numbers simultaneously without one hiding the other under ShowMode=Highest

@@ -35,7 +35,7 @@ cat > "$OUTPUT_DIR/meta.json" << EOF
     "owner": "eagleeyetom",
     "category": "General",
     "version": "$VERSION",
-    "targetAbi": "10.11.0.0"
+    "targetAbi": "12.0.0.0"
 }
 EOF
 
