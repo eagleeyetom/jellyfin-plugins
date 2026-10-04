@@ -171,6 +171,49 @@
                         </div>
                     </details>
 
+                    <!-- Badge Appearance & Customization -->
+                    <details class="jellytag-section" id="BadgeAppearanceSection">
+                        <summary>Badge Appearance & Customization</summary>
+                        <div class="jellytag-section-body">
+                            <h3 style="margin-top:0.2em; margin-bottom:0.5em; font-size:1.05em; font-weight:600;">Colors & Logos</h3>
+                            <div class="fieldDescription" style="margin-bottom:1em;">
+                                Choose custom background and text/foreground colors for individual badge elements (e.g. HEVC, 4K, 1080p, DTS:X, etc.). Leave empty to use the default style.
+                            </div>
+                            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom:1.2em;">
+                                <label class="emby-checkbox-label">
+                                    <input id="WhiteLogoBackground" type="checkbox" is="emby-checkbox" />
+                                    <span>Use white background for brand logos</span>
+                                </label>
+                                <div class="fieldDescription">When unchecked (default), brand logos (Dolby Atmos, TrueHD, DTS:X, Dolby Vision, HDR10+, etc.) use a black background. When checked, brand logos use a white background.</div>
+                            </div>
+                            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:1.2em;">
+                                <div id="CbcFilterButtons" style="display:flex; gap:6px; flex-wrap:wrap;">
+                                    <button type="button" class="cbc-filter-btn active" data-category="all">All</button>
+                                    <button type="button" class="cbc-filter-btn" data-category="Resolution">Resolution</button>
+                                    <button type="button" class="cbc-filter-btn" data-category="Codecs">Codecs</button>
+                                    <button type="button" class="cbc-filter-btn" data-category="HDR">HDR</button>
+                                    <button type="button" class="cbc-filter-btn" data-category="Audio">Audio</button>
+                                    <button type="button" class="cbc-filter-btn" data-category="Channels">Channels</button>
+                                </div>
+                                <div style="flex:1; min-width:180px;">
+                                    <input id="CbcSearchInput" type="text" placeholder="Filter badges..." is="emby-input" style="width:100%; margin:0;" />
+                                </div>
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <span id="CbcCustomCount" style="font-size:0.85em; opacity:0.75;">0 customized</span>
+                                    <button type="button" id="CbcResetAllBtn" class="raised" is="emby-button" style="font-size:0.85em; padding:0.4em 0.8em; margin:0;"><span>Reset All Colors</span></button>
+                                </div>
+                            </div>
+                            <div id="CustomBadgeColorsGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;"></div>
+
+                            <div style="margin-top:2em; border-top:1px solid rgba(255,255,255,0.1); padding-top:1.5em;">
+                                <h3 style="margin-top:0; margin-bottom:0.5em; font-size:1.05em; font-weight:600;">Upload Custom Badge Images</h3>
+                                <div class="fieldDescription" style="margin-bottom:1em;">Click a badge to upload a custom replacement (SVG, PNG or JPEG). Click the reset button to revert to the default.</div>
+                                <div id="BadgeGallery" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:12px;"></div>
+                                <input id="CustomBadgeFile" type="file" accept="image/svg+xml,image/png,image/jpeg" style="display:none;" />
+                            </div>
+                        </div>
+                    </details>
+
                     <!-- Custom Badge Text -->
                     <details class="jellytag-section">
                         <summary>Custom Badge Text</summary>
@@ -205,41 +248,6 @@
                         </div>
                     </details>
 
-                    <!-- Custom Badge Colors -->
-                    <details class="jellytag-section" id="CustomBadgeColorsSection">
-                        <summary>Custom Badge Colors</summary>
-                        <div class="jellytag-section-body">
-                            <div class="fieldDescription" style="margin-bottom:1em;">
-                                Choose custom background and text/foreground colors for individual badge elements (e.g. HEVC, 4K, 1080p, DTS:X, etc.). Leave empty to use the default style.
-                            </div>
-                            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom:1.2em;">
-                                <label class="emby-checkbox-label">
-                                    <input id="WhiteLogoBackground" type="checkbox" is="emby-checkbox" />
-                                    <span>Use white background for brand logos</span>
-                                </label>
-                                <div class="fieldDescription">When unchecked (default), brand logos (Dolby Atmos, TrueHD, DTS:X, Dolby Vision, HDR10+, etc.) use a black background. When checked, brand logos use a white background.</div>
-                            </div>
-                            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:1.2em;">
-                                <div id="CbcFilterButtons" style="display:flex; gap:6px; flex-wrap:wrap;">
-                                    <button type="button" class="cbc-filter-btn active" data-category="all">All</button>
-                                    <button type="button" class="cbc-filter-btn" data-category="Resolution">Resolution</button>
-                                    <button type="button" class="cbc-filter-btn" data-category="Codecs">Codecs</button>
-                                    <button type="button" class="cbc-filter-btn" data-category="HDR">HDR</button>
-                                    <button type="button" class="cbc-filter-btn" data-category="Audio">Audio</button>
-                                    <button type="button" class="cbc-filter-btn" data-category="Channels">Channels</button>
-                                </div>
-                                <div style="flex:1; min-width:180px;">
-                                    <input id="CbcSearchInput" type="text" placeholder="Filter badges..." is="emby-input" style="width:100%; margin:0;" />
-                                </div>
-                                <div style="display:flex; gap:8px; align-items:center;">
-                                    <span id="CbcCustomCount" style="font-size:0.85em; opacity:0.75;">0 customized</span>
-                                    <button type="button" id="CbcResetAllBtn" class="raised" is="emby-button" style="font-size:0.85em; padding:0.4em 0.8em; margin:0;"><span>Reset All Colors</span></button>
-                                </div>
-                            </div>
-                            <div id="CustomBadgeColorsGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;"></div>
-                        </div>
-                    </details>
-
                     <!-- Language Flags -->
                     <details class="jellytag-section">
                         <summary>Language Flags</summary>
@@ -258,16 +266,6 @@
                                     <button is="emby-button" type="button" class="raised" id="LangFlagAddBtn" style="margin-bottom:0;"><span>Add</span></button>
                                 </div>
                             </div>
-                        </div>
-                    </details>
-
-                    <!-- Custom Badges -->
-                    <details class="jellytag-section">
-                        <summary>Custom Badges</summary>
-                        <div class="jellytag-section-body">
-                            <div class="fieldDescription" style="margin-bottom: 1em;">Click a badge to upload a custom replacement (SVG, PNG or JPEG). Click the reset button to revert to the default.</div>
-                            <div id="BadgeGallery" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:12px;"></div>
-                            <input id="CustomBadgeFile" type="file" accept="image/svg+xml,image/png,image/jpeg" style="display:none;" />
                         </div>
                     </details>
 
