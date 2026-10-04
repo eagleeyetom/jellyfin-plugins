@@ -25,6 +25,7 @@ public class PluginConfiguration : BasePluginConfiguration
         ShowDolbyVision = true;
         ShowHlg = true;
         SuppressDvOnSamsung = true;
+        SuppressDvOnFireTv = false;
         SuppressHdr10PlusOnLg = true;
         ShowTranscodeReasons = true;
         ShowAudioConversion = true;
@@ -110,6 +111,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets a value indicating whether to suppress Dolby Vision on Samsung devices.
     /// </summary>
     public bool SuppressDvOnSamsung { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to suppress Dolby Vision on Fire TV devices (e.g. when connected to a Samsung or non-DV TV).
+    /// </summary>
+    public bool SuppressDvOnFireTv { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether to suppress HDR10+ on non-supporting clients (e.g. LG, Sony).

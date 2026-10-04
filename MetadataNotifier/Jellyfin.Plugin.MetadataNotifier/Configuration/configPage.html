@@ -87,7 +87,8 @@
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowDolbyVision" is="emby-checkbox" /><span>Show Dolby Vision</span></label></div>
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowHlg" is="emby-checkbox" /><span>Show HLG</span></label></div>
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressDvOnSamsung" is="emby-checkbox" /><span>Suppress Dolby Vision on Samsung & Android (Fallback to HDR10/HDR10+)</span></label></div>
-                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressHdr10PlusOnLg" is="emby-checkbox" /><span>Suppress HDR10+ on non-supporting clients (LG, Sony, Amazon, Roku - fallback to HDR10/Dolby Vision)</span></label></div>
+                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressDvOnFireTv" is="emby-checkbox" /><span>Suppress Dolby Vision on Fire TV (for Samsung & non-DV displays)</span></label></div>
+                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressHdr10PlusOnLg" is="emby-checkbox" /><span>Suppress HDR10+ on non-supporting clients (LG, Sony, Roku - fallback to HDR10/Dolby Vision)</span></label></div>
                                 <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="DesktopSdrMode" is="emby-checkbox" /><span>Tone-mapped SDR detection (when HDR range is unsupported)</span></label></div>
                                 <div class="fieldDescription">
                                     Only detects server-side tone-mapping. If Jellyfin sends HDR/Dolby Vision directly (no transcode) to a display that can't render it, the client itself does the tone-mapping and this plugin has no way to know — it will still report the source format.
@@ -289,6 +290,7 @@
                     document.querySelector('#UseDetailedVideoNames').checked = config.UseDetailedVideoNames ?? false;
                     document.querySelector('#UseDetailedAudioNames').checked = config.UseDetailedAudioNames ?? false;
                     document.querySelector('#SuppressDvOnSamsung').checked = config.SuppressDvOnSamsung ?? true;
+                    document.querySelector('#SuppressDvOnFireTv').checked = config.SuppressDvOnFireTv ?? false;
                     document.querySelector('#SuppressHdr10PlusOnLg').checked = config.SuppressHdr10PlusOnLg ?? true;
                     document.querySelector('#DesktopSdrMode').checked = config.DesktopSdrMode ?? false;
                     document.querySelector('#CustomTemplate').value = config.CustomTemplate ?? '';
@@ -632,6 +634,7 @@
                     config.UseDetailedVideoNames = document.querySelector('#UseDetailedVideoNames').checked;
                     config.UseDetailedAudioNames = document.querySelector('#UseDetailedAudioNames').checked;
                     config.SuppressDvOnSamsung = document.querySelector('#SuppressDvOnSamsung').checked;
+                    config.SuppressDvOnFireTv = document.querySelector('#SuppressDvOnFireTv').checked;
                     config.SuppressHdr10PlusOnLg = document.querySelector('#SuppressHdr10PlusOnLg').checked;
                     config.DesktopSdrMode = document.querySelector('#DesktopSdrMode').checked;
                     config.CustomTemplate = document.querySelector('#CustomTemplate').value.trim();

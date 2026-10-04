@@ -280,6 +280,147 @@ public class MetadataNotifierServiceTests
     }
 
     [TestMethod]
+    public void FireTv_IdentifiedCorrectly()
+    {
+        Assert.IsTrue(MetadataNotifierService.IsFireTvClient(CreateSession("Jellyfin for Android TV", "Fire TV Stick 4K")));
+        Assert.IsTrue(MetadataNotifierService.IsFireTvClient(CreateSession("Jellyfin for Android TV", "AFTMM")));
+        Assert.IsTrue(MetadataNotifierService.IsFireTvClient(CreateSession("Fire TV Client", "Living Room")));
+        Assert.IsTrue(MetadataNotifierService.IsFireTvClient(CreateSession("Android TV", "Amazon FireTV")));
+        Assert.IsFalse(MetadataNotifierService.IsFireTvClient(CreateSession("Jellyfin for Android TV", "Nvidia Shield")));
+    }
+
+    [TestMethod]
+    public void FireTv_IsNotNonHdr10PlusClient()
+    {
+        var fireTvSession = CreateSession("Jellyfin for Android TV", "Fire TV Stick 4K");
+        var aftSession = CreateSession("Jellyfin for Android TV", "AFTMM");
+
+        Assert.IsFalse(MetadataNotifierService.IsNonHdr10PlusClient(fireTvSession));
+        Assert.IsFalse(MetadataNotifierService.IsNonHdr10PlusClient(aftSession));
+    }
+
+    [TestMethod]
+    public void FireTv_Hdr10PlusMedia_ReportsHdr10Plus_EvenWhenSuppressHdr10PlusOnLgEnabled()
+    {
+        var videoStream = new MediaStream
+        {
+            Type = MediaStreamType.Video,
+            Codec = "hevc",
+            Profile = "Main 10",
+            Hdr10PlusPresentFlag = true,
+            ColorTransfer = "smpte2084",
+            ColorPrimaries = "bt2020",
+            ColorSpace = "bt2020nc"
+        };
+
+        var session = CreateSession("Jellyfin for Android TV", "Fire TV Stick 4K Max");
+        var config = new PluginConfiguration
+        {
+            ShowHdr10Plus = true,
+            ShowHdr10 = true,
+            SuppressHdr10PlusOnLg = true
+        };
+
+        var result = MetadataNotifierService.GetHdrInfo(videoStream, "/media/movies/Movie.mkv", "Movie", session, config);
+
+        Assert.AreEqual("HDR10+", result.Value);
+        Assert.AreEqual("hdr10plus", result.Rule);
+    }
+
+    [TestMethod]
+    public void FireTv_DualDvAndHdr10Plus_WhenSuppressDvOnFireTvDisabled_ReportsDolbyVision()
+    {
+        var videoStream = new MediaStream
+        {
+            Type = MediaStreamType.Video,
+            Codec = "hevc",
+            Profile = "Main 10",
+            DvProfile = 8,
+            Hdr10PlusPresentFlag = true,
+            ColorTransfer = "smpte2084",
+            ColorPrimaries = "bt2020",
+            ColorSpace = "bt2020nc"
+        };
+
+        var session = CreateSession("Jellyfin for Android TV", "Fire TV Stick 4K Max");
+        var config = new PluginConfiguration
+        {
+            ShowDolbyVision = true,
+            ShowHdr10Plus = true,
+            ShowHdr10 = true,
+            SuppressDvOnSamsung = true,
+            SuppressDvOnFireTv = false
+        };
+
+        var result = MetadataNotifierService.GetHdrInfo(videoStream, "/media/movies/Movie.mkv", "Movie", session, config);
+
+        Assert.AreEqual("Dolby Vision", result.Value);
+        Assert.AreEqual("dolby-vision", result.Rule);
+    }
+
+    [TestMethod]
+    public void FireTv_DualDvAndHdr10Plus_WhenSuppressDvOnFireTvEnabled_FallsBackToHdr10Plus()
+    {
+        var videoStream = new MediaStream
+        {
+            Type = MediaStreamType.Video,
+            Codec = "hevc",
+            Profile = "Main 10",
+            DvProfile = 8,
+            Hdr10PlusPresentFlag = true,
+            ColorTransfer = "smpte2084",
+            ColorPrimaries = "bt2020",
+            ColorSpace = "bt2020nc"
+        };
+
+        var session = CreateSession("Jellyfin for Android TV", "Fire TV Stick 4K Max");
+        var config = new PluginConfiguration
+        {
+            ShowDolbyVision = true,
+            ShowHdr10Plus = true,
+            ShowHdr10 = true,
+            SuppressDvOnSamsung = true,
+            SuppressDvOnFireTv = true
+        };
+
+        var result = MetadataNotifierService.GetHdrInfo(videoStream, "/media/movies/Movie.mkv", "Movie", session, config);
+
+        Assert.AreEqual("HDR10+", result.Value);
+        Assert.AreEqual("dolby-vision-client-fallback-hdr10plus", result.Rule);
+    }
+
+    [TestMethod]
+    public void FireTv_DvProfile8Only_WhenSuppressDvOnFireTvEnabled_FallsBackToHdr10()
+    {
+        var videoStream = new MediaStream
+        {
+            Type = MediaStreamType.Video,
+            Codec = "hevc",
+            Profile = "Main 10",
+            DvProfile = 8,
+            Hdr10PlusPresentFlag = false,
+            ColorTransfer = "smpte2084",
+            ColorPrimaries = "bt2020",
+            ColorSpace = "bt2020nc"
+        };
+
+        var session = CreateSession("Jellyfin for Android TV", "Fire TV Stick 4K");
+        var config = new PluginConfiguration
+        {
+            ShowDolbyVision = true,
+            ShowHdr10Plus = true,
+            ShowHdr10 = true,
+            SuppressDvOnSamsung = true,
+            SuppressDvOnFireTv = true
+        };
+
+        var result = MetadataNotifierService.GetHdrInfo(videoStream, "/media/movies/Movie.mkv", "Movie", session, config);
+
+        Assert.AreEqual("HDR10", result.Value);
+        Assert.AreEqual("dolby-vision-client-fallback-hdr10", result.Rule);
+    }
+
+    [TestMethod]
     public void NullMediaStream_GuardsDoNotThrow()
     {
         Assert.IsFalse(MetadataNotifierService.IsDolbyVision(null!, string.Empty, string.Empty));

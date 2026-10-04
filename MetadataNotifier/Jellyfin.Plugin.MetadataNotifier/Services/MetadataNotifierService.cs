@@ -573,6 +573,19 @@ public class MetadataNotifierService : IHostedService
         return false;
     }
 
+    internal static bool IsFireTvClient(SessionInfo session)
+    {
+        var client = session.Client ?? string.Empty;
+        var deviceName = session.DeviceName ?? string.Empty;
+
+        return client.Contains("Fire", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("AFT", StringComparison.OrdinalIgnoreCase)
+            || client.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Fire", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("AFT", StringComparison.OrdinalIgnoreCase)
+            || deviceName.Contains("Amazon", StringComparison.OrdinalIgnoreCase);
+    }
+
     internal static bool IsNonHdr10PlusClient(SessionInfo session)
     {
         var client = session.Client ?? string.Empty;
@@ -582,9 +595,6 @@ public class MetadataNotifierService : IHostedService
             || client.Contains("LG", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Sony", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Bravia", StringComparison.OrdinalIgnoreCase)
-            || client.Contains("Fire", StringComparison.OrdinalIgnoreCase)
-            || client.Contains("AFT", StringComparison.OrdinalIgnoreCase)
-            || client.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Roku", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Shield", StringComparison.OrdinalIgnoreCase)
             || client.Contains("Sharp", StringComparison.OrdinalIgnoreCase)
@@ -593,21 +603,23 @@ public class MetadataNotifierService : IHostedService
             || deviceName.Contains("LG", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Sony", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Bravia", StringComparison.OrdinalIgnoreCase)
-            || deviceName.Contains("Fire", StringComparison.OrdinalIgnoreCase)
-            || deviceName.Contains("AFT", StringComparison.OrdinalIgnoreCase)
-            || deviceName.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Roku", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Shield", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Sharp", StringComparison.OrdinalIgnoreCase)
             || deviceName.Contains("Toshiba", StringComparison.OrdinalIgnoreCase);
     }
 
-    internal static bool IsNonDolbyVisionClient(SessionInfo session)
+    internal static bool IsNonDolbyVisionClient(SessionInfo session, PluginConfiguration? config = null)
     {
         var client = session.Client ?? string.Empty;
         var deviceName = session.DeviceName ?? string.Empty;
 
         if (IsSamsungClient(session))
+        {
+            return true;
+        }
+
+        if (config?.SuppressDvOnFireTv == true && IsFireTvClient(session))
         {
             return true;
         }
@@ -668,7 +680,7 @@ public class MetadataNotifierService : IHostedService
         var profile = videoStream.Profile ?? string.Empty;
         var displayTitle = videoStream.DisplayTitle ?? string.Empty;
 
-        bool isNonDvClient = IsNonDolbyVisionClient(session);
+        bool isNonDvClient = IsNonDolbyVisionClient(session, config);
         bool isNonHdr10Plus = IsNonHdr10PlusClient(session);
 
         // Detect HDR10+ via multilayer check: probe flag, VideoRangeType, stream metadata, or filename
@@ -677,7 +689,7 @@ public class MetadataNotifierService : IHostedService
         // Detect Dolby Vision via probe profile/flag, VideoRangeType, stream metadata, or filename
         bool hasDolbyVision = IsDolbyVision(videoStream, itemPath, itemName);
 
-        // Non-supporting TVs/clients (e.g. LG, Sony, Amazon, Roku) do not support HDR10+ hardware decoding
+        // Non-supporting TVs/clients (e.g. LG, Sony, Roku) do not support HDR10+ hardware decoding
         if (hasHdr10Plus && isNonHdr10Plus && config.SuppressHdr10PlusOnLg)
         {
             if (hasDolbyVision && config.ShowDolbyVision)
