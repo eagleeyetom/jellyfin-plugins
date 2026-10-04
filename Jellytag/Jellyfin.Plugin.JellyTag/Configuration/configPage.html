@@ -81,6 +81,13 @@
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
+                                <input id="HideDolbyVisionOnFireTvClients" type="checkbox" is="emby-checkbox" />
+                                <span>Hide Dolby Vision badges on Fire TV clients</span>
+                            </label>
+                            <div class="fieldDescription">Fire TV clients will show HDR10+ (or HDR10) instead of Dolby Vision. Enable if your Fire TV is connected to a Samsung or non-DV display.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
                                 <input id="HideHdrOnWindowsClients" type="checkbox" is="emby-checkbox" />
                                 <span>Hide HDR badges on Windows clients (SDR only)</span>
                             </label>
@@ -991,6 +998,7 @@
         function collectConfigFromForm(config) {
             config.Enabled = q('Enabled').checked;
             config.HideDolbyVisionOnSamsungClients = q('HideDolbyVisionOnSamsungClients').checked;
+            config.HideDolbyVisionOnFireTvClients = q('HideDolbyVisionOnFireTvClients').checked;
             config.HideHdrOnWindowsClients = q('HideHdrOnWindowsClients').checked;
             var debugContainer = document.getElementById('DebugCountryCodeContainer');
             if (debugContainer && debugContainer.style.display === 'none') {
@@ -1202,6 +1210,7 @@
             ApiClient.getPluginConfiguration(JellyTagConfig.pluginUniqueId).then(function(config) {
                 q('Enabled').checked = config.Enabled;
                 q('HideDolbyVisionOnSamsungClients').checked = config.HideDolbyVisionOnSamsungClients === true;
+                q('HideDolbyVisionOnFireTvClients').checked = config.HideDolbyVisionOnFireTvClients === true;
                 q('HideHdrOnWindowsClients').checked = config.HideHdrOnWindowsClients === true;
                 q('DebugCountryCode').value = config.DebugCountryCode || '';
                 q('ThumbnailSameAsPoster').checked = config.ThumbnailSameAsPoster === true;

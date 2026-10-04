@@ -33,6 +33,43 @@ public class ConfigurationAndCacheTests
     }
 
     [TestMethod]
+    public void ComputeConfigFingerprint_ChangesWhenFireTvSettingsChange()
+    {
+        var config1 = new PluginConfiguration { HideDolbyVisionOnFireTvClients = false };
+        var config2 = new PluginConfiguration { HideDolbyVisionOnFireTvClients = true };
+
+        var fp1 = ImageCacheService.ComputeConfigFingerprint(config1);
+        var fp2 = ImageCacheService.ComputeConfigFingerprint(config2);
+
+        Assert.AreNotEqual(fp1, fp2, "Fingerprint should differ when Fire TV client filtering changes");
+    }
+
+    [TestMethod]
+    public void IsFireTvClient_IdentifiesFireTvHeaders()
+    {
+        var context1 = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context1.Request.Headers["X-Emby-Device-Name"] = "Fire TV Stick 4K";
+        Assert.IsTrue(ImageOverlayMiddleware.IsFireTvClient(context1));
+
+        var context2 = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context2.Request.Headers["X-Emby-Device-Name"] = "AFTMM";
+        Assert.IsTrue(ImageOverlayMiddleware.IsFireTvClient(context2));
+
+        var context3 = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context3.Request.Headers["X-Emby-Client"] = "Fire TV Client";
+        Assert.IsTrue(ImageOverlayMiddleware.IsFireTvClient(context3));
+
+        var context4 = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context4.Request.Headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 11; AFTSO Build/...)";
+        Assert.IsTrue(ImageOverlayMiddleware.IsFireTvClient(context4));
+
+        var context5 = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context5.Request.Headers["X-Emby-Device-Name"] = "Nvidia Shield";
+        context5.Request.Headers["X-Emby-Client"] = "Jellyfin for Android TV";
+        Assert.IsFalse(ImageOverlayMiddleware.IsFireTvClient(context5));
+    }
+
+    [TestMethod]
     public void ClonePanelWithReduction_PreservesIconStyleAndProperties()
     {
         var original = new BadgePanelSettings

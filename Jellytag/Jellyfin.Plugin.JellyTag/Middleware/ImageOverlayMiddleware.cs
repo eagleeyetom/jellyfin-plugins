@@ -106,7 +106,10 @@ public partial class ImageOverlayMiddleware
         _logger.LogDebug("DetectAllBadges for {Item}: {Count} badges found: {Badges}",
             item.Name, allBadges.Count, string.Join(", ", allBadges.Select(b => $"{b.Category}:{b.BadgeKey}")));
 
-        var hideDolbyVision = config.HideDolbyVisionOnSamsungClients && IsSamsungClient(context);
+        var isSamsung = IsSamsungClient(context);
+        var isFireTv = IsFireTvClient(context);
+        var hideDolbyVision = (config.HideDolbyVisionOnSamsungClients && isSamsung)
+            || (config.HideDolbyVisionOnFireTvClients && isFireTv);
         var hideHdrOnWindows = config.HideHdrOnWindowsClients && IsWindowsClient(context);
         var visibleBadges = allBadges
             .Where(b => overlayService.ShouldShowBadge(b, imageConfig))
@@ -128,7 +131,8 @@ public partial class ImageOverlayMiddleware
 
         var query = context.Request.QueryString.Value ?? string.Empty;
         var tag = context.Request.Query["tag"].FirstOrDefault() ?? item.DateModified.Ticks.ToString();
-        var clientVariant = (hideDolbyVision ? "samsung-no-dv" : "") + (hideHdrOnWindows ? "_windows-sdr" : "");
+        var dvVariant = hideDolbyVision ? (isSamsung ? "samsung-no-dv" : "firetv-no-dv") : "";
+        var clientVariant = dvVariant + (hideHdrOnWindows ? "_windows-sdr" : "");
         if (string.IsNullOrEmpty(clientVariant)) clientVariant = "default";
         var imageTag = $"{tag}_{imageType}_{clientVariant}_{query}";
 
@@ -218,7 +222,7 @@ public partial class ImageOverlayMiddleware
         };
     }
 
-    private static bool IsSamsungClient(HttpContext context)
+    internal static bool IsSamsungClient(HttpContext context)
     {
         var client = context.Request.Headers["X-Emby-Client"].ToString();
         var deviceName = context.Request.Headers["X-Emby-Device-Name"].ToString();
@@ -228,13 +232,30 @@ public partial class ImageOverlayMiddleware
             || ContainsSamsungIndicator(userAgent);
     }
 
-    private static bool ContainsSamsungIndicator(string value)
+    internal static bool ContainsSamsungIndicator(string value)
     {
         return value.Contains("Samsung", StringComparison.OrdinalIgnoreCase)
             || value.Contains("Tizen", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsWindowsClient(HttpContext context)
+    internal static bool IsFireTvClient(HttpContext context)
+    {
+        var client = context.Request.Headers["X-Emby-Client"].ToString();
+        var deviceName = context.Request.Headers["X-Emby-Device-Name"].ToString();
+        var userAgent = context.Request.Headers.UserAgent.ToString();
+        return ContainsFireTvIndicator(client)
+            || ContainsFireTvIndicator(deviceName)
+            || ContainsFireTvIndicator(userAgent);
+    }
+
+    internal static bool ContainsFireTvIndicator(string value)
+    {
+        return value.Contains("Fire", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("AFT", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Amazon", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static bool IsWindowsClient(HttpContext context)
     {
         var client = context.Request.Headers["X-Emby-Client"].ToString();
         var deviceName = context.Request.Headers["X-Emby-Device-Name"].ToString();
@@ -244,7 +265,7 @@ public partial class ImageOverlayMiddleware
             || ContainsWindowsIndicator(userAgent);
     }
 
-    private static bool ContainsWindowsIndicator(string value)
+    internal static bool ContainsWindowsIndicator(string value)
     {
         return value.Contains("Windows", StringComparison.OrdinalIgnoreCase);
     }

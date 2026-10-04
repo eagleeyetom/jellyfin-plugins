@@ -210,6 +210,7 @@ public class ImageCacheService : IImageCacheService
         sb.Append(typeof(ImageCacheService).Assembly.GetName().Version?.ToString() ?? "unknown").Append('|');
         sb.Append(config.Enabled).Append('|');
         sb.Append(config.HideDolbyVisionOnSamsungClients).Append('|');
+        sb.Append(config.HideDolbyVisionOnFireTvClients).Append('|');
         sb.Append(config.HideHdrOnWindowsClients).Append('|');
         sb.Append((int)config.OutputFormat).Append(config.JpegQuality).Append(config.WebPQuality).Append('|');
         sb.Append(config.ThumbnailSameAsPoster).Append('|');
