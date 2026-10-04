@@ -85,7 +85,7 @@ jobs:
         run: |
           package_dir="$RUNNER_TEMP/jellytag-package"
           mkdir -p "$package_dir"
-          cp "$RUNNER_TEMP/jellytag-publish"/* "$package_dir"/
+          cp "$RUNNER_TEMP/jellytag-publish"/*.dll "$package_dir"/
           find "$package_dir" -type f -exec touch -d '2000-01-01 00:00:00 UTC' {} +
           zip_path="$RUNNER_TEMP/jellytag-${{ steps.release.outputs.version }}.zip"
           (cd "$package_dir" && find . -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort | zip -j -X "$zip_path" -@)

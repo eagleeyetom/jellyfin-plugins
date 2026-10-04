@@ -16,8 +16,6 @@ dotnet publish (Join-Path $PluginDir "Jellyfin.Plugin.MetadataNotifier.csproj") 
 Write-Host "Copying files and creating ZIP package..." -ForegroundColor Yellow
 $DllPath = Join-Path $PublishOut "Jellyfin.Plugin.MetadataNotifier.dll"
 Copy-Item $DllPath $OutputDir
-$PngPath = Join-Path $PluginDir "MetadataNotifier.png"
-if (Test-Path $PngPath) { Copy-Item $PngPath $OutputDir }
 
 $Version = (dotnet msbuild (Join-Path $PluginDir "Jellyfin.Plugin.MetadataNotifier.csproj") -getProperty:Version).Trim()
 if (-not $Version) { $Version = "1.3.1.0" }
