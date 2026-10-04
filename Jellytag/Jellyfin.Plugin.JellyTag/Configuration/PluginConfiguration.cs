@@ -164,6 +164,7 @@ public class PluginConfiguration : BasePluginConfiguration
         ExcludedLibraryIds = new List<string>();
 
         CustomBadgeTexts = new List<BadgeTextOverride>();
+        CustomBadgeColors = new List<BadgeTypeStyleOverride>();
         LanguageFlagOverrides = new List<LanguageFlagOverride>();
         CacheDurationHours = 24;
         JpegQuality = 90;
@@ -198,6 +199,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public List<string> ExcludedLibraryIds { get; set; }
 
     public List<BadgeTextOverride> CustomBadgeTexts { get; set; }
+    public List<BadgeTypeStyleOverride> CustomBadgeColors { get; set; }
 
     /// <summary>
     /// Overrides the default country flag used for a language.

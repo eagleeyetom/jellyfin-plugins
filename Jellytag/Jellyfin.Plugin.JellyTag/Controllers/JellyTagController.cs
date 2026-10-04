@@ -367,12 +367,18 @@ public partial class JellyTagController : ControllerBase
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public IActionResult GetBadgePreview(string badgeKey, [FromQuery] bool logo = false, [FromQuery] bool? white = null)
+    public IActionResult GetBadgePreview(string badgeKey, [FromQuery] bool logo = false, [FromQuery] bool? white = null, [FromQuery] string? bgColor = null, [FromQuery] string? textColor = null)
     {
         if (!SafeBadgeKeyRegex().IsMatch(badgeKey))
         {
             return BadRequest("Invalid badge key");
         }
+
+        var effectiveBg = bgColor ?? Plugin.Instance?.Configuration?.CustomBadgeColors?
+            .FirstOrDefault(c => string.Equals(c.BadgeKey, badgeKey, StringComparison.OrdinalIgnoreCase))?.BgColor;
+        var effectiveText = textColor ?? Plugin.Instance?.Configuration?.CustomBadgeColors?
+            .FirstOrDefault(c => string.Equals(c.BadgeKey, badgeKey, StringComparison.OrdinalIgnoreCase))?.TextColor;
+        var hasColorOverride = !string.IsNullOrEmpty(effectiveBg) || !string.IsNullOrEmpty(effectiveText);
 
         // Normalize dots to underscores for file lookup (e.g. "5.1" -> "5_1")
         var fileKey = badgeKey.Replace('.', '_');
@@ -408,6 +414,13 @@ public partial class JellyTagController : ControllerBase
                 var customPath = Path.Combine(customDir, $"{prefix}{fileKey}{ext}");
                 if (System.IO.File.Exists(customPath))
                 {
+                    if (ext == ".svg" && hasColorOverride)
+                    {
+                        var rawSvg = System.IO.File.ReadAllBytes(customPath);
+                        var recolored = ImageOverlayService.RecolorSvg(rawSvg, effectiveBg, effectiveText, badgeKey);
+                        return File(recolored, "image/svg+xml");
+                    }
+
                     var ct = ext switch
                     {
                         ".svg" => "image/svg+xml",
@@ -423,15 +436,35 @@ public partial class JellyTagController : ControllerBase
         var assembly = Assembly.GetExecutingAssembly();
         var resourceNames = assembly.GetManifestResourceNames();
 
+        // If recoloring is requested, prefer SVG even if logo resolved to PNG (e.g. badge-dtsx.svg)
+        var targetSvgPrefix = prefix;
+        var targetSvgFileKey = fileKey;
+        if (hasColorOverride)
+        {
+            var svgExists = resourceNames.Any(r => r.EndsWith($"{prefix}{fileKey}.svg", StringComparison.OrdinalIgnoreCase));
+            if (!svgExists)
+            {
+                targetSvgPrefix = "badge-";
+                targetSvgFileKey = badgeKey.Replace('.', '_');
+            }
+        }
+
         // Try SVG first
         var svgResourceName = resourceNames
-            .FirstOrDefault(r => r.EndsWith($"{prefix}{fileKey}.svg", StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(r => r.EndsWith($"{targetSvgPrefix}{targetSvgFileKey}.svg", StringComparison.OrdinalIgnoreCase));
         if (svgResourceName != null)
         {
-            var stream = assembly.GetManifestResourceStream(svgResourceName);
+            using var stream = assembly.GetManifestResourceStream(svgResourceName);
             if (stream != null)
             {
-                return File(stream, "image/svg+xml");
+                using var ms = new MemoryStream();
+                stream.CopyTo(ms);
+                var svgBytes = ms.ToArray();
+                if (hasColorOverride)
+                {
+                    svgBytes = ImageOverlayService.RecolorSvg(svgBytes, effectiveBg, effectiveText, badgeKey);
+                }
+                return File(svgBytes, "image/svg+xml");
             }
         }
 

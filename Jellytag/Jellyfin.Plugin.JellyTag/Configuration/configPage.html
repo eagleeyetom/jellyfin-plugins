@@ -51,7 +51,27 @@
             .jellytag-preview-panel .preview-img.poster { aspect-ratio: 2/3; object-fit: cover; max-height: 440px; }
             .jellytag-preview-panel .preview-img.thumb { aspect-ratio: 16/9; object-fit: cover; }
             .jellytag-preview-panel .preview-spinner { display: none; text-align: center; color: #aaa; padding: .5em 0; font-size: .9em; }
-            .jellytag-preview-panel .preview-error { display: none; color: #e57373; font-size: .85em; margin-top: .5em; }
+            .cbc-filter-btn { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15); color: #fff; border-radius: 14px; padding: 4px 12px; cursor: pointer; font-size: 0.85em; transition: background .2s, border-color .2s; }
+            .cbc-filter-btn:hover { background: rgba(0,164,220,.4); }
+            .cbc-filter-btn.active { background: #00a4dc; border-color: #00a4dc; font-weight: 600; }
+            .jellytag-color-card { display: flex; flex-direction: column; gap: 8px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.12); border-radius: .4em; padding: .8em; transition: border-color .2s, background .2s; position: relative; }
+            .jellytag-color-card.active-custom { border-color: #00a4dc; background: rgba(0,164,220,.06); }
+            .jellytag-color-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+            .jellytag-color-card-title { font-weight: 600; font-size: 0.95em; }
+            .jellytag-color-card-cat { font-size: 0.72em; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.04em; background: rgba(255,255,255,.08); padding: 2px 6px; border-radius: 4px; }
+            .jellytag-color-preview-box { display: flex; align-items: center; justify-content: center; min-height: 52px; background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1); border-radius: 4px; padding: 4px 8px; }
+            .jellytag-color-preview-box img { max-height: 44px; max-width: 100%; object-fit: contain; }
+            .jellytag-color-preview-fallback { font-size: 0.8em; color: rgba(255,255,255,0.6); }
+            .jellytag-color-controls { display: flex; flex-direction: column; gap: 6px; }
+            .jellytag-color-row { display: flex; align-items: center; gap: 6px; }
+            .jellytag-color-row label { flex: 1; font-size: 0.82em; opacity: 0.85; margin: 0; }
+            .jellytag-color-row input[type="color"] { width: 30px; height: 30px; padding: 0; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; background: none; cursor: pointer; flex-shrink: 0; }
+            .jellytag-color-row input[type="text"] { width: 75px; font-family: monospace; font-size: 0.82em; text-transform: uppercase; padding: 4px 6px; text-align: center; }
+            .jellytag-color-clear-btn { background: rgba(255,255,255,0.1); border: none; border-radius: 4px; color: #aaa; cursor: pointer; font-size: 0.85em; width: 24px; height: 26px; line-height: 24px; text-align: center; padding: 0; flex-shrink: 0; }
+            .jellytag-color-clear-btn:hover { background: rgba(255,0,0,0.3); color: #fff; }
+            .jellytag-color-card-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
+            .jellytag-color-reset-card-btn { background: transparent; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 0.78em; padding: 2px 8px; }
+            .jellytag-color-reset-card-btn:hover { border-color: #ff5252; color: #ff5252; }
             @media (max-width: 1000px) {
                 .jellytag-config-layout { margin-right: 0; }
                 .jellytag-preview-panel { position: static; width: 100%; max-width: 100%; max-height: none; margin-bottom: 1em; }
@@ -189,6 +209,34 @@
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_av1">AV1</label><input id="cbt_av1" data-badge-key="av1" type="text" placeholder="AV1" is="emby-input" /></div>
                                 <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_vp9">VP9</label><input id="cbt_vp9" data-badge-key="vp9" type="text" placeholder="VP9" is="emby-input" /></div>
                             </div>
+                        </div>
+                    </details>
+
+                    <!-- Custom Badge Colors -->
+                    <details class="jellytag-section" id="CustomBadgeColorsSection">
+                        <summary>Custom Badge Colors</summary>
+                        <div class="jellytag-section-body">
+                            <div class="fieldDescription" style="margin-bottom:1em;">
+                                Choose custom background and text/foreground colors for individual badge elements (e.g. HEVC, 4K, 1080p, DTS:X, etc.). Leave empty to use the default style.
+                            </div>
+                            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:1.2em;">
+                                <div id="CbcFilterButtons" style="display:flex; gap:6px; flex-wrap:wrap;">
+                                    <button type="button" class="cbc-filter-btn active" data-category="all">All</button>
+                                    <button type="button" class="cbc-filter-btn" data-category="Resolution">Resolution</button>
+                                    <button type="button" class="cbc-filter-btn" data-category="Codecs">Codecs</button>
+                                    <button type="button" class="cbc-filter-btn" data-category="HDR">HDR</button>
+                                    <button type="button" class="cbc-filter-btn" data-category="Audio">Audio</button>
+                                    <button type="button" class="cbc-filter-btn" data-category="Channels">Channels</button>
+                                </div>
+                                <div style="flex:1; min-width:180px;">
+                                    <input id="CbcSearchInput" type="text" placeholder="Filter badges..." is="emby-input" style="width:100%; margin:0;" />
+                                </div>
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <span id="CbcCustomCount" style="font-size:0.85em; opacity:0.75;">0 customized</span>
+                                    <button type="button" id="CbcResetAllBtn" class="raised" is="emby-button" style="font-size:0.85em; padding:0.4em 0.8em; margin:0;"><span>Reset All Colors</span></button>
+                                </div>
+                            </div>
+                            <div id="CustomBadgeColorsGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;"></div>
                         </div>
                     </details>
 
@@ -1061,6 +1109,16 @@
             });
             config.CustomBadgeTexts = saveCbt;
 
+            // Custom Badge Colors
+            var saveCbc = [];
+            Object.keys(customBadgeColorsState).forEach(function(k) {
+                var s = customBadgeColorsState[k];
+                if (s && (s.bg || s.text)) {
+                    saveCbc.push({ BadgeKey: k, BgColor: s.bg || null, TextColor: s.text || null });
+                }
+            });
+            config.CustomBadgeColors = saveCbc;
+
             config.LanguageFlagOverrides = collectLanguageFlagOverrides();
 
             config.CacheDurationHours = parseInt(q('CacheDurationHours').value, 10);
@@ -1117,14 +1175,271 @@
             return excluded;
         }
 
-        // ===== Badge Gallery =====
+        // ===== Badge Definitions & Custom Badge Colors =====
         var allBadgeKeys = [
-            {key:'4k',label:'4K'},{key:'1080p',label:'1080p'},{key:'720p',label:'720p'},{key:'sd',label:'SD'},
-            {key:'hdr10',label:'HDR10'},{key:'hdr10plus',label:'HDR10+'},{key:'dv',label:'Dolby Vision'},{key:'hlg',label:'HLG'},{key:'hdr',label:'Generic HDR'},{key:'3d',label:'3D'},
-            {key:'atmos',label:'Atmos'},{key:'dtsx',label:'DTS:X'},{key:'truehd',label:'TrueHD'},{key:'dtshdma',label:'DTS-HD MA'},{key:'flac',label:'FLAC'},{key:'dts',label:'DTS'},{key:'eac3',label:'E-AC-3'},{key:'opus',label:'Opus'},{key:'ac3',label:'AC3'},{key:'aac',label:'AAC'},
-            {key:'7.1',label:'7.1'},{key:'5.1',label:'5.1'},{key:'stereo',label:'Stereo'},{key:'mono',label:'Mono'},
-            {key:'h264',label:'H.264'},{key:'hevc',label:'HEVC'},{key:'av1',label:'AV1'},{key:'vp9',label:'VP9'},{key:'mpeg2',label:'MPEG-2'},{key:'vc1',label:'VC-1'}
+            {key:'4k',label:'4K',category:'Resolution'},
+            {key:'1080p',label:'1080p',category:'Resolution'},
+            {key:'720p',label:'720p',category:'Resolution'},
+            {key:'sd',label:'SD',category:'Resolution'},
+            {key:'hdr10',label:'HDR10',category:'HDR'},
+            {key:'hdr10plus',label:'HDR10+',category:'HDR'},
+            {key:'dv',label:'Dolby Vision',category:'HDR'},
+            {key:'hlg',label:'HLG',category:'HDR'},
+            {key:'hdr',label:'Generic HDR',category:'HDR'},
+            {key:'3d',label:'3D',category:'Resolution'},
+            {key:'h264',label:'H.264',category:'Codecs'},
+            {key:'hevc',label:'HEVC',category:'Codecs'},
+            {key:'av1',label:'AV1',category:'Codecs'},
+            {key:'vp9',label:'VP9',category:'Codecs'},
+            {key:'mpeg2',label:'MPEG-2',category:'Codecs'},
+            {key:'vc1',label:'VC-1',category:'Codecs'},
+            {key:'atmos',label:'Dolby Atmos',category:'Audio'},
+            {key:'dtsx',label:'DTS:X',category:'Audio'},
+            {key:'truehd',label:'TrueHD',category:'Audio'},
+            {key:'dtshdma',label:'DTS-HD MA',category:'Audio'},
+            {key:'flac',label:'FLAC',category:'Audio'},
+            {key:'dts',label:'DTS',category:'Audio'},
+            {key:'eac3',label:'E-AC-3',category:'Audio'},
+            {key:'opus',label:'Opus',category:'Audio'},
+            {key:'ac3',label:'AC3',category:'Audio'},
+            {key:'aac',label:'AAC',category:'Audio'},
+            {key:'7.1',label:'7.1',category:'Channels'},
+            {key:'5.1',label:'5.1',category:'Channels'},
+            {key:'stereo',label:'Stereo',category:'Channels'},
+            {key:'mono',label:'Mono',category:'Channels'}
         ];
+
+        var customBadgeColorsState = {};
+        var currentCbcFilterCategory = 'all';
+
+        function updateCbcCounter() {
+            var count = 0;
+            Object.keys(customBadgeColorsState).forEach(function(k) {
+                var s = customBadgeColorsState[k];
+                if (s && (s.bg || s.text)) count++;
+            });
+            var el = document.getElementById('CbcCustomCount');
+            if (el) el.textContent = count + ' customized';
+        }
+
+        function updateBadgeColorPreview(badgeKey) {
+            var safeKey = badgeKey.replace('.', '_');
+            var img = document.getElementById('cbc_preview_' + safeKey);
+            if (!img) return;
+            var token = ApiClient.accessToken();
+            var headers = {}; if (token) headers['Authorization'] = 'MediaBrowser Token="' + token + '"';
+            var state = customBadgeColorsState[badgeKey] || {};
+            var isWhitePreview = (q('WhiteLogoBackground') && q('WhiteLogoBackground').checked);
+            var url = ApiClient.getUrl('JellyTag/BadgePreview/' + badgeKey) + '?t=' + Date.now();
+            if (isWhitePreview) url += '&white=true';
+            if (state.bg) url += '&bgColor=' + encodeURIComponent(state.bg);
+            if (state.text) url += '&textColor=' + encodeURIComponent(state.text);
+
+            fetch(url, { headers: headers })
+                .then(function(r) { if (!r.ok) throw new Error(r.status); return r.blob(); })
+                .then(function(blob) {
+                    var objectUrl = URL.createObjectURL(blob);
+                    img.onload = function() { URL.revokeObjectURL(objectUrl); };
+                    img.src = objectUrl;
+                })
+                .catch(function(err) {
+                    console.warn('[JellyTag] Preview error for', badgeKey, err);
+                });
+        }
+
+        function filterCustomBadgeCards() {
+            var searchVal = (document.getElementById('CbcSearchInput') ? document.getElementById('CbcSearchInput').value : '').toLowerCase().trim();
+            var cards = document.querySelectorAll('#CustomBadgeColorsGrid .jellytag-color-card');
+            cards.forEach(function(card) {
+                var cat = card.getAttribute('data-category') || '';
+                var key = card.getAttribute('data-badge-key') || '';
+                var title = card.querySelector('.jellytag-color-card-title')?.textContent || '';
+
+                var isCatMatch = currentCbcFilterCategory === 'all' || cat.toLowerCase() === currentCbcFilterCategory.toLowerCase();
+                var isSearchMatch = !searchVal || title.toLowerCase().indexOf(searchVal) >= 0 || key.toLowerCase().indexOf(searchVal) >= 0;
+
+                card.style.display = (isCatMatch && isSearchMatch) ? 'flex' : 'none';
+            });
+        }
+
+        function renderCustomBadgeColorsGrid() {
+            var grid = document.getElementById('CustomBadgeColorsGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            var searchVal = (document.getElementById('CbcSearchInput') ? document.getElementById('CbcSearchInput').value : '').toLowerCase().trim();
+
+            allBadgeKeys.forEach(function(b) {
+                var safeKey = b.key.replace('.', '_');
+                var state = customBadgeColorsState[b.key] || { bg: null, text: null };
+                var hasCustom = !!(state.bg || state.text);
+
+                var isCategoryMatch = currentCbcFilterCategory === 'all' || b.category.toLowerCase() === currentCbcFilterCategory.toLowerCase();
+                var isSearchMatch = !searchVal || b.label.toLowerCase().indexOf(searchVal) >= 0 || b.key.toLowerCase().indexOf(searchVal) >= 0;
+
+                var card = document.createElement('div');
+                card.className = 'jellytag-color-card' + (hasCustom ? ' active-custom' : '');
+                card.setAttribute('data-badge-key', b.key);
+                card.setAttribute('data-category', b.category);
+                if (!isCategoryMatch || !isSearchMatch) {
+                    card.style.display = 'none';
+                }
+
+                var header = document.createElement('div');
+                header.className = 'jellytag-color-card-header';
+                header.innerHTML = '<span class="jellytag-color-card-title">' + b.label + '</span><span class="jellytag-color-card-cat">' + b.category + '</span>';
+                card.appendChild(header);
+
+                var previewBox = document.createElement('div');
+                previewBox.className = 'jellytag-color-preview-box';
+                var previewImg = document.createElement('img');
+                previewImg.id = 'cbc_preview_' + safeKey;
+                previewImg.alt = b.label;
+                previewImg.onerror = function() {
+                    var fb = document.createElement('span');
+                    fb.className = 'jellytag-color-preview-fallback';
+                    fb.textContent = b.label;
+                    previewImg.replaceWith(fb);
+                };
+                previewBox.appendChild(previewImg);
+                card.appendChild(previewBox);
+
+                var controls = document.createElement('div');
+                controls.className = 'jellytag-color-controls';
+
+                // Background Color row
+                var bgRow = document.createElement('div');
+                bgRow.className = 'jellytag-color-row';
+                var bgPickerVal = state.bg || '#000000';
+                var bgTextVal = state.bg || '';
+                bgRow.innerHTML = '<label>Background:</label>' +
+                    '<input type="color" id="cbc_bg_color_' + safeKey + '" value="' + bgPickerVal + '" />' +
+                    '<input type="text" id="cbc_bg_hex_' + safeKey + '" placeholder="Default" value="' + bgTextVal + '" is="emby-input" />' +
+                    '<button type="button" class="jellytag-color-clear-btn" id="cbc_bg_clear_' + safeKey + '" title="Reset Background to Default">&#10005;</button>';
+                controls.appendChild(bgRow);
+
+                // Text Color row
+                var textRow = document.createElement('div');
+                textRow.className = 'jellytag-color-row';
+                var textPickerVal = state.text || '#FFFFFF';
+                var textTextVal = state.text || '';
+                textRow.innerHTML = '<label>Text / Icon:</label>' +
+                    '<input type="color" id="cbc_text_color_' + safeKey + '" value="' + textPickerVal + '" />' +
+                    '<input type="text" id="cbc_text_hex_' + safeKey + '" placeholder="Default" value="' + textTextVal + '" is="emby-input" />' +
+                    '<button type="button" class="jellytag-color-clear-btn" id="cbc_text_clear_' + safeKey + '" title="Reset Text to Default">&#10005;</button>';
+                controls.appendChild(textRow);
+
+                card.appendChild(controls);
+
+                var actions = document.createElement('div');
+                actions.className = 'jellytag-color-card-actions';
+                var resetCardBtn = document.createElement('button');
+                resetCardBtn.type = 'button';
+                resetCardBtn.className = 'jellytag-color-reset-card-btn';
+                resetCardBtn.textContent = 'Reset to Default';
+                actions.appendChild(resetCardBtn);
+                card.appendChild(actions);
+
+                grid.appendChild(card);
+
+                // Wire event listeners for this card
+                var bgPicker = card.querySelector('#cbc_bg_color_' + safeKey);
+                var bgHex = card.querySelector('#cbc_bg_hex_' + safeKey);
+                var bgClear = card.querySelector('#cbc_bg_clear_' + safeKey);
+                var textPicker = card.querySelector('#cbc_text_color_' + safeKey);
+                var textHex = card.querySelector('#cbc_text_hex_' + safeKey);
+                var textClear = card.querySelector('#cbc_text_clear_' + safeKey);
+
+                function syncCardState() {
+                    var curBg = bgHex.value.trim();
+                    var curText = textHex.value.trim();
+                    if (!curBg && !curText) {
+                        delete customBadgeColorsState[b.key];
+                        card.classList.remove('active-custom');
+                    } else {
+                        customBadgeColorsState[b.key] = {
+                            bg: curBg || null,
+                            text: curText || null
+                        };
+                        card.classList.add('active-custom');
+                    }
+                    updateCbcCounter();
+                    updateBadgeColorPreview(b.key);
+                }
+
+                bgPicker.addEventListener('input', function() {
+                    bgHex.value = bgPicker.value.toUpperCase();
+                    syncCardState();
+                });
+                bgHex.addEventListener('input', function() {
+                    var val = bgHex.value.trim();
+                    if (/^#?[0-9A-Fa-f]{6}$/.test(val)) {
+                        if (!val.startsWith('#')) val = '#' + val;
+                        bgPicker.value = val;
+                    }
+                    syncCardState();
+                });
+                bgClear.addEventListener('click', function() {
+                    bgHex.value = '';
+                    syncCardState();
+                });
+
+                textPicker.addEventListener('input', function() {
+                    textHex.value = textPicker.value.toUpperCase();
+                    syncCardState();
+                });
+                textHex.addEventListener('input', function() {
+                    var val = textHex.value.trim();
+                    if (/^#?[0-9A-Fa-f]{6}$/.test(val)) {
+                        if (!val.startsWith('#')) val = '#' + val;
+                        textPicker.value = val;
+                    }
+                    syncCardState();
+                });
+                textClear.addEventListener('click', function() {
+                    textHex.value = '';
+                    syncCardState();
+                });
+
+                resetCardBtn.addEventListener('click', function() {
+                    bgHex.value = '';
+                    textHex.value = '';
+                    syncCardState();
+                });
+
+                // Load initial preview
+                updateBadgeColorPreview(b.key);
+            });
+
+            updateCbcCounter();
+        }
+
+        function initCustomBadgeColorsUI() {
+            var filterBtns = document.querySelectorAll('#CbcFilterButtons .cbc-filter-btn');
+            filterBtns.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    filterBtns.forEach(function(b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    currentCbcFilterCategory = btn.getAttribute('data-category');
+                    filterCustomBadgeCards();
+                });
+            });
+
+            var searchInput = document.getElementById('CbcSearchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', filterCustomBadgeCards);
+            }
+
+            var resetAllBtn = document.getElementById('CbcResetAllBtn');
+            if (resetAllBtn) {
+                resetAllBtn.addEventListener('click', function() {
+                    if (confirm('Reset all custom badge colors to default?')) {
+                        customBadgeColorsState = {};
+                        renderCustomBadgeColorsGrid();
+                    }
+                });
+            }
+        }
 
         function loadBadgeGallery() {
             // The gallery must edit whatever the renderer uses, so a badge whose panel is in
@@ -1237,6 +1552,8 @@
                 if (input) input.value = '';
             });
 
+            initCustomBadgeColorsUI();
+
             ApiClient.getPluginConfiguration(JellyTagConfig.pluginUniqueId).then(function(config) {
                 q('Enabled').checked = config.Enabled;
                 q('HideDolbyVisionOnSamsungClients').checked = config.HideDolbyVisionOnSamsungClients === true;
@@ -1257,6 +1574,20 @@
                 cbtList.forEach(function(item) { cbtMap[item.Key || item.key] = item.Text || item.text; });
                 cbtInputs.forEach(function(el) { el.value = cbtMap[el.getAttribute('data-badge-key')] || ''; });
 
+                // Custom Badge Colors
+                var cbcList = config.CustomBadgeColors || [];
+                customBadgeColorsState = {};
+                cbcList.forEach(function(item) {
+                    var k = (item.BadgeKey || item.badgeKey || '').toLowerCase();
+                    if (k) {
+                        customBadgeColorsState[k] = {
+                            bg: item.BgColor || item.bgColor || null,
+                            text: item.TextColor || item.textColor || null
+                        };
+                    }
+                });
+                renderCustomBadgeColorsGrid();
+
                 renderLanguageFlagGrid(config.LanguageFlagOverrides);
 
                 q('CacheDurationHours').value = config.CacheDurationHours;
@@ -1272,6 +1603,7 @@
                 toggleThumbSameAsPoster();
                 q('WhiteLogoBackground').addEventListener('change', function() {
                     if (document.getElementById('BadgeGallery')) loadBadgeGallery();
+                    if (document.getElementById('CustomBadgeColorsGrid')) renderCustomBadgeColorsGrid();
                 });
 
                 loadLibraryCheckboxes(config.ExcludedLibraryIds || []);
@@ -1310,6 +1642,7 @@
                 ApiClient.updatePluginConfiguration(JellyTagConfig.pluginUniqueId, config).then(function() {
                     Dashboard.processPluginConfigurationUpdateResult();
                     loadBadgeGallery();
+                    renderCustomBadgeColorsGrid();
                 });
             });
             return false;

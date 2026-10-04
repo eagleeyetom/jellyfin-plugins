@@ -375,8 +375,28 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     }
                 }
 
+                var colorOverride = panel.BadgeTypeOverrides?.FirstOrDefault(o => string.Equals(o.BadgeKey, badgeInfo.BadgeKey, StringComparison.OrdinalIgnoreCase))
+                    ?? Plugin.Instance?.Configuration?.CustomBadgeColors?.FirstOrDefault(o => string.Equals(o.BadgeKey, badgeInfo.BadgeKey, StringComparison.OrdinalIgnoreCase));
+
+                if (colorOverride != null && (!string.IsNullOrEmpty(colorOverride.BgColor) || !string.IsNullOrEmpty(colorOverride.TextColor)))
+                {
+                    if (targetResource.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var altSvg = "badge-" + badgeInfo.BadgeKey.Replace('.', '_') + ".svg";
+                        if (_svgCache.ContainsKey(altSvg))
+                        {
+                            targetResource = altSvg;
+                        }
+                    }
+                }
+
                 if (_svgCache.TryGetValue(targetResource, out var svgBytes))
                 {
+                    if (colorOverride != null && (!string.IsNullOrEmpty(colorOverride.BgColor) || !string.IsNullOrEmpty(colorOverride.TextColor)))
+                    {
+                        svgBytes = RecolorSvg(svgBytes, colorOverride.BgColor, colorOverride.TextColor, badgeInfo.BadgeKey);
+                    }
+
                     var ratio = GetSvgAspectRatio(svgBytes);
                     var badgeHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(badgeWidth / ratio));
                     var rasterWidth = isSquareOrRound ? Math.Max(badgeWidth, (int)(badgeWidth * ratio)) : badgeWidth;
@@ -872,7 +892,8 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         }
 
         // Per-badge-type overrides
-        var typeOverride = panel.BadgeTypeOverrides?.FirstOrDefault(o => string.Equals(o.BadgeKey, badge.BadgeKey, StringComparison.OrdinalIgnoreCase));
+        var typeOverride = panel.BadgeTypeOverrides?.FirstOrDefault(o => string.Equals(o.BadgeKey, badge.BadgeKey, StringComparison.OrdinalIgnoreCase))
+            ?? Plugin.Instance?.Configuration?.CustomBadgeColors?.FirstOrDefault(o => string.Equals(o.BadgeKey, badge.BadgeKey, StringComparison.OrdinalIgnoreCase));
         if (typeOverride != null)
         {
             if (!string.IsNullOrEmpty(typeOverride.BgColor)) bgColor = typeOverride.BgColor;
@@ -988,6 +1009,166 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 RenderTextBadges(canvas, textBadges, textPositions, textSizes, panel, imageConfig);
             }
         }
+    }
+
+    /// <summary>
+    /// Recolors an SVG badge with custom background and text/foreground colors.
+    /// </summary>
+    public static byte[] RecolorSvg(byte[] svgBytes, string? bgColor, string? textColor, string badgeKey)
+    {
+        if (string.IsNullOrWhiteSpace(bgColor) && string.IsNullOrWhiteSpace(textColor))
+        {
+            return svgBytes;
+        }
+
+        try
+        {
+            bgColor = NormalizeHexColor(bgColor);
+            textColor = NormalizeHexColor(textColor);
+
+            if (string.IsNullOrWhiteSpace(textColor) && !string.IsNullOrWhiteSpace(bgColor))
+            {
+                textColor = IsColorLight(bgColor) ? "#000000" : "#FFFFFF";
+            }
+            else if (string.IsNullOrWhiteSpace(bgColor) && !string.IsNullOrWhiteSpace(textColor))
+            {
+                bgColor = IsColorLight(textColor) ? "#000000" : "#FFFFFF";
+            }
+
+            using var ms = new MemoryStream(svgBytes);
+            var doc = XDocument.Load(ms);
+            var root = doc.Root;
+            if (root == null) return svgBytes;
+
+            var key = badgeKey.Replace('_', '.').ToLowerInvariant();
+
+            if (key == "4k")
+            {
+                if (!string.IsNullOrWhiteSpace(bgColor))
+                {
+                    root.SetAttributeValue("fill", bgColor);
+                }
+                var screenRect = root.Elements().FirstOrDefault(e => e.Name.LocalName == "rect");
+                var groups = root.Elements().Where(e => e.Name.LocalName == "g").ToList();
+
+                if (!string.IsNullOrWhiteSpace(textColor))
+                {
+                    // ULTRA & HD in bottom bar
+                    for (int i = 1; i < groups.Count; i++)
+                    {
+                        groups[i].SetAttributeValue("fill", textColor);
+                    }
+                    if (screenRect != null)
+                    {
+                        screenRect.SetAttributeValue("fill", textColor);
+                    }
+                    if (groups.Count > 0 && !string.IsNullOrWhiteSpace(bgColor))
+                    {
+                        groups[0].SetAttributeValue("fill", bgColor);
+                    }
+                }
+            }
+            else if (key is "1080p" or "720p" or "sd")
+            {
+                if (!string.IsNullOrWhiteSpace(bgColor))
+                {
+                    root.SetAttributeValue("fill", bgColor);
+                }
+                var screenRect = root.Elements().FirstOrDefault(e => e.Name.LocalName == "rect");
+                if (screenRect != null && !string.IsNullOrWhiteSpace(textColor))
+                {
+                    screenRect.SetAttributeValue("fill", textColor);
+                }
+            }
+            else
+            {
+                // Standard badges or brand logos
+                var plateRect = root.Elements().FirstOrDefault(e => e.Name.LocalName == "rect");
+                if (plateRect != null && !string.IsNullOrWhiteSpace(bgColor))
+                {
+                    plateRect.SetAttributeValue("fill", bgColor);
+                }
+
+                if (!string.IsNullOrWhiteSpace(textColor))
+                {
+                    var textElements = root.Descendants().Where(e => e.Name.LocalName == "text").ToList();
+                    if (textElements.Count > 0)
+                    {
+                        foreach (var t in textElements)
+                        {
+                            t.SetAttributeValue("fill", textColor);
+                        }
+                    }
+                    else
+                    {
+                        // Vector logo / icon: update <g fill="..."> and monochrome <path fill="...">
+                        var filledGroups = root.Descendants().Where(e => e.Name.LocalName == "g" && e.Attribute("fill") != null).ToList();
+                        foreach (var g in filledGroups)
+                        {
+                            var gFill = g.Attribute("fill")?.Value;
+                            if (gFill != null && IsMonochrome(gFill))
+                            {
+                                g.SetAttributeValue("fill", textColor);
+                            }
+                        }
+
+                        var filledPaths = root.Descendants().Where(e => e.Name.LocalName == "path" && e.Attribute("fill") != null).ToList();
+                        foreach (var p in filledPaths)
+                        {
+                            var pFill = p.Attribute("fill")?.Value;
+                            if (pFill != null && IsMonochrome(pFill))
+                            {
+                                p.SetAttributeValue("fill", textColor);
+                            }
+                        }
+                    }
+                }
+            }
+
+            using var outMs = new MemoryStream();
+            doc.Save(outMs);
+            return outMs.ToArray();
+        }
+        catch
+        {
+            return svgBytes;
+        }
+    }
+
+    private static string? NormalizeHexColor(string? color)
+    {
+        if (string.IsNullOrWhiteSpace(color)) return null;
+        color = color.Trim();
+        if (!color.StartsWith('#') && (color.Length == 6 || color.Length == 8 || color.Length == 3))
+        {
+            color = "#" + color;
+        }
+        return color;
+    }
+
+    private static bool IsColorLight(string hex)
+    {
+        try
+        {
+            if (SKColor.TryParse(hex, out var c))
+            {
+                var lum = (0.299 * c.Red + 0.587 * c.Green + 0.114 * c.Blue) / 255.0;
+                return lum > 0.5;
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    private static bool IsMonochrome(string hex)
+    {
+        var h = hex.Trim().ToLowerInvariant();
+        if (h is "#fff" or "#ffffff" or "#000" or "#000000" or "white" or "black") return true;
+        if (SKColor.TryParse(hex, out var c))
+        {
+            return Math.Abs(c.Red - c.Green) < 10 && Math.Abs(c.Green - c.Blue) < 10;
+        }
+        return false;
     }
 
     /// <inheritdoc />

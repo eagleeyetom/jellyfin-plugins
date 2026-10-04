@@ -331,4 +331,54 @@ public class ConfigurationAndCacheTests
 #pragma warning restore MSTEST0037
         resultStream.Dispose();
     }
+
+    [TestMethod]
+    public void ComputeConfigFingerprint_WithCustomBadgeColors_ChangesHash()
+    {
+        var config1 = new PluginConfiguration();
+        var hash1 = ImageCacheService.ComputeConfigFingerprint(config1);
+
+        var config2 = new PluginConfiguration();
+        config2.CustomBadgeColors.Add(new BadgeTypeStyleOverride
+        {
+            BadgeKey = "hevc",
+            BgColor = "#112233",
+            TextColor = "#ffffff"
+        });
+        var hash2 = ImageCacheService.ComputeConfigFingerprint(config2);
+
+        Assert.AreNotEqual(hash1, hash2, "Adding CustomBadgeColors must change the fingerprint hash");
+
+        config2.CustomBadgeColors[0].TextColor = "#ff0000";
+        var hash3 = ImageCacheService.ComputeConfigFingerprint(config2);
+        Assert.AreNotEqual(hash2, hash3, "Changing TextColor must change the fingerprint hash");
+    }
+
+    [TestMethod]
+    public void ImageOverlayService_RecolorSvg_RecolorsHevcAnd4K()
+    {
+        var asm = typeof(ImageOverlayService).Assembly;
+
+        // Test HEVC badge recoloring
+        var hevcRes = asm.GetManifestResourceNames().First(r => r.EndsWith("badge-hevc.svg", StringComparison.OrdinalIgnoreCase));
+        using var hevcStream = asm.GetManifestResourceStream(hevcRes)!;
+        using var hevcMs = new MemoryStream();
+        hevcStream.CopyTo(hevcMs);
+
+        var recoloredHevc = ImageOverlayService.RecolorSvg(hevcMs.ToArray(), "#123456", "#ABCDEF", "hevc");
+        var hevcXml = System.Text.Encoding.UTF8.GetString(recoloredHevc);
+        StringAssert.Contains(hevcXml, "#123456");
+        StringAssert.Contains(hevcXml, "#ABCDEF");
+
+        // Test 4K badge recoloring
+        var fourKRes = asm.GetManifestResourceNames().First(r => r.EndsWith("badge-4k-white.svg", StringComparison.OrdinalIgnoreCase));
+        using var fourKStream = asm.GetManifestResourceStream(fourKRes)!;
+        using var fourKMs = new MemoryStream();
+        fourKStream.CopyTo(fourKMs);
+
+        var recolored4K = ImageOverlayService.RecolorSvg(fourKMs.ToArray(), "#654321", "#FEDCBA", "4k");
+        var fourKXml = System.Text.Encoding.UTF8.GetString(recolored4K);
+        StringAssert.Contains(fourKXml, "#654321");
+        StringAssert.Contains(fourKXml, "#FEDCBA");
+    }
 }

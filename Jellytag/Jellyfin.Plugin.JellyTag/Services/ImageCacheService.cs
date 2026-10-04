@@ -227,6 +227,15 @@ public class ImageCacheService : IImageCacheService
         }
 
         sb.Append('|');
+        if (config.CustomBadgeColors != null)
+        {
+            foreach (var cbc in config.CustomBadgeColors)
+            {
+                sb.Append(cbc.BadgeKey).Append(cbc.BgColor ?? "n").Append(cbc.TextColor ?? "n").Append(',');
+            }
+        }
+
+        sb.Append('|');
         if (config.LanguageFlagOverrides != null)
         {
             foreach (var lfo in config.LanguageFlagOverrides)
