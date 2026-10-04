@@ -15,6 +15,10 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
     private readonly ILogger<ImageOverlayService> _logger;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> _svgCache = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, SKBitmap?> _rasterCache = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, float> _aspectRatioCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> _recoloredSvgCache = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, SKBitmap> _rasterizedSvgCache = new();
+    private const int MaxCachedRasterBitmaps = 512;
     private readonly SemaphoreSlim _badgeLock = new(1, 1);
     private bool _badgesLoaded;
     private bool _disposed;
@@ -107,7 +111,6 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
         originalImage.Position = 0;
         var sourceContentType = DetectImageContentType(originalImage);
-        originalImage.Position = 0;
 
         using var image = SKBitmap.Decode(originalImage);
         if (image == null)
@@ -128,7 +131,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
         try
         {
-            foreach (var (panel, category) in panels)
+            foreach (var panel in panels)
             {
                 if (!panel.Enabled) continue;
 
@@ -159,8 +162,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     Panel = panel,
                     Filtered = filtered,
                     Sizes = sizes,
-                    SourceBitmaps = sourceBitmaps,
-                    ImageConfig = imageConfig
+                    SourceBitmaps = sourceBitmaps
                 });
             }
 
@@ -216,7 +218,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             foreach (var group in allPanelGroups)
             {
                 var useText = group.Panel.Style == BadgeStyle.Text;
-                RenderBadgeGroup(canvas, group.Filtered, group.SourceBitmaps, group.Positions, group.Sizes, useText, group.Panel, group.ImageConfig, paint, sampling);
+                RenderBadgeGroup(canvas, group.Filtered, group.SourceBitmaps, group.Positions, group.Sizes, useText, group.Panel, imageConfig, paint, sampling);
             }
 
             canvas.Flush();
@@ -246,21 +248,20 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         public List<SKSizeI> Sizes { get; set; } = new();
         public List<SKBitmap> SourceBitmaps { get; set; } = new();
         public List<SKPointI> Positions { get; set; } = new();
-        public ImageTypeConfig ImageConfig { get; set; } = null!;
     }
 
-    private static List<(BadgePanelSettings Panel, string Name)> GetOrderedPanels(ImageTypeConfig imageConfig)
+    private static List<BadgePanelSettings> GetOrderedPanels(ImageTypeConfig imageConfig)
     {
-        var panels = new List<(BadgePanelSettings Panel, string Name)>
+        var panels = new List<BadgePanelSettings>
         {
-            (imageConfig.ResolutionPanel, "Resolution"),
-            (imageConfig.HdrPanel, "HDR"),
-            (imageConfig.CodecPanel, "Codec"),
-            (imageConfig.AudioPanel, "Audio"),
-            (imageConfig.ChannelPanel, "Channel"),
-            (imageConfig.LanguagePanel, "Language")
+            imageConfig.ResolutionPanel,
+            imageConfig.HdrPanel,
+            imageConfig.CodecPanel,
+            imageConfig.AudioPanel,
+            imageConfig.ChannelPanel,
+            imageConfig.LanguagePanel
         };
-        panels.Sort((a, b) => a.Panel.Order.CompareTo(b.Panel.Order));
+        panels.Sort((a, b) => a.Order.CompareTo(b.Order));
         return panels;
     }
 
@@ -283,7 +284,15 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 badge?.Dispose();
             }
 
+            foreach (var bmp in _rasterizedSvgCache.Values)
+            {
+                bmp.Dispose();
+            }
+
             _rasterCache.Clear();
+            _rasterizedSvgCache.Clear();
+            _recoloredSvgCache.Clear();
+            _aspectRatioCache.Clear();
             _svgCache.Clear();
             _badgesLoaded = false;
         }
@@ -293,14 +302,29 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         }
     }
 
+    private static void AddTextFallback(
+        BadgeInfo badgeInfo, int badgeWidth, bool isSquareOrRound,
+        List<BadgeInfo> filtered, List<SKSizeI> sizes)
+    {
+        var fallbackText = GetBadgeDisplayText(badgeInfo.BadgeKey);
+        if (!string.IsNullOrEmpty(fallbackText))
+        {
+            var fbHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(badgeWidth * 0.5));
+            var textBadge = new BadgeInfo { Category = badgeInfo.Category, BadgeKey = badgeInfo.BadgeKey, ResourceFileName = string.Empty };
+            filtered.Add(textBadge);
+            sizes.Add(new SKSizeI(badgeWidth, fbHeight));
+        }
+    }
+
     private async Task PrepareBadgeGroup(
         List<BadgeInfo> badges, int sizePercent, int imageWidth, bool useTextStyle,
         List<SKSizeI> sizes, List<SKBitmap> sourceBitmaps, List<BadgeInfo> filtered, List<SKBitmap> ownedBitmaps,
         BadgePanelSettings panel)
     {
+        var badgeWidth = Math.Max(1, (int)(imageWidth * (sizePercent / 100.0)));
+
         if (useTextStyle)
         {
-            var badgeWidth = Math.Max(1, (int)(imageWidth * (sizePercent / 100.0)));
             var badgeHeight = Math.Max(1, (int)(badgeWidth * 0.5));
 
             foreach (var badgeInfo in badges)
@@ -320,16 +344,10 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             foreach (var badgeInfo in badges)
             {
                 var resourceFileName = badgeInfo.ResourceFileName;
-                var badgeWidth = Math.Max(1, (int)(imageWidth * (sizePercent / 100.0)));
 
                 if (string.IsNullOrEmpty(resourceFileName))
                 {
-                    var text = GetBadgeDisplayText(badgeInfo.BadgeKey);
-                    if (string.IsNullOrEmpty(text)) continue;
-
-                    var badgeHeight = Math.Max(1, (int)(badgeWidth * 0.5));
-                    filtered.Add(badgeInfo);
-                    sizes.Add(new SKSizeI(badgeWidth, badgeHeight));
+                    AddTextFallback(badgeInfo, badgeWidth, isSquareOrRound, filtered, sizes);
                     continue;
                 }
 
@@ -397,38 +415,58 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 {
                     if (colorOverride != null && (!string.IsNullOrEmpty(colorOverride.BgColor) || !string.IsNullOrEmpty(colorOverride.TextColor)))
                     {
-                        svgBytes = RecolorSvg(svgBytes, colorOverride.BgColor, colorOverride.TextColor, badgeInfo.BadgeKey);
+                        var recolorKey = $"{targetResource}:{colorOverride.BgColor}:{colorOverride.TextColor}";
+                        if (!_recoloredSvgCache.TryGetValue(recolorKey, out var recolored))
+                        {
+                            recolored = RecolorSvg(svgBytes, colorOverride.BgColor, colorOverride.TextColor, badgeInfo.BadgeKey);
+                            _recoloredSvgCache[recolorKey] = recolored;
+                        }
+                        svgBytes = recolored;
                     }
 
-                    var ratio = GetSvgAspectRatio(svgBytes);
+                    if (!_aspectRatioCache.TryGetValue(targetResource, out var ratio))
+                    {
+                        ratio = GetSvgAspectRatio(svgBytes);
+                        _aspectRatioCache[targetResource] = ratio;
+                    }
+
                     var badgeHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(badgeWidth / ratio));
                     var rasterWidth = isSquareOrRound ? Math.Max(badgeWidth, (int)(badgeWidth * ratio)) : badgeWidth;
                     var rasterHeight = isSquareOrRound ? rasterWidth : badgeHeight;
 
-                    var rasterized = RasterizeSvg(svgBytes, rasterWidth, rasterHeight);
+                    var rasterKey = $"{targetResource}:{rasterWidth}x{rasterHeight}:{colorOverride?.BgColor}:{colorOverride?.TextColor}";
+                    bool wasCached = true;
+                    if (!_rasterizedSvgCache.TryGetValue(rasterKey, out var rasterized))
+                    {
+                        wasCached = false;
+                        rasterized = RasterizeSvg(svgBytes, rasterWidth, rasterHeight);
+                        if (rasterized != null && _rasterizedSvgCache.Count < MaxCachedRasterBitmaps)
+                        {
+                            _rasterizedSvgCache[rasterKey] = rasterized;
+                            wasCached = true;
+                        }
+                    }
+
                     if (rasterized != null)
                     {
                         var processed = ProcessBitmapStyle(rasterized, isSquareOrRound);
                         if (processed != rasterized)
                         {
-                            rasterized.Dispose();
+                            ownedBitmaps.Add(processed);
+                            if (!wasCached) rasterized.Dispose();
                         }
+                        else if (!wasCached)
+                        {
+                            ownedBitmaps.Add(rasterized);
+                        }
+
                         sourceBitmaps.Add(processed);
-                        ownedBitmaps.Add(processed);
                         filtered.Add(badgeInfo);
                         sizes.Add(new SKSizeI(badgeWidth, badgeHeight));
                         continue;
                     }
 
-                    var fallbackText = GetBadgeDisplayText(badgeInfo.BadgeKey);
-                    if (!string.IsNullOrEmpty(fallbackText))
-                    {
-                        var fbHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(badgeWidth * 0.5));
-                        var textBadge = new BadgeInfo { Category = badgeInfo.Category, BadgeKey = badgeInfo.BadgeKey, ResourceFileName = string.Empty };
-                        filtered.Add(textBadge);
-                        sizes.Add(new SKSizeI(badgeWidth, fbHeight));
-                    }
-
+                    AddTextFallback(badgeInfo, badgeWidth, isSquareOrRound, filtered, sizes);
                     continue;
                 }
 
@@ -447,14 +485,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 else
                 {
                     // Resource not found in any cache — fall back to text badge
-                    var fallbackText = GetBadgeDisplayText(badgeInfo.BadgeKey);
-                    if (!string.IsNullOrEmpty(fallbackText))
-                    {
-                        var fbHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(badgeWidth * 0.5));
-                        var textBadge = new BadgeInfo { Category = badgeInfo.Category, BadgeKey = badgeInfo.BadgeKey, ResourceFileName = string.Empty };
-                        filtered.Add(textBadge);
-                        sizes.Add(new SKSizeI(badgeWidth, fbHeight));
-                    }
+                    AddTextFallback(badgeInfo, badgeWidth, isSquareOrRound, filtered, sizes);
                 }
             }
         }
@@ -497,16 +528,11 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         using var stream = new MemoryStream(svgBytes);
         svg.Load(stream);
         var picture = svg.Picture;
-        if (picture == null) return null;
+        if (picture == null || picture.CullRect.Width <= 0 || picture.CullRect.Height <= 0) return null;
 
         var bitmap = new SKBitmap(targetWidth, targetHeight, SKColorType.Rgba8888, SKAlphaType.Premul);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.Transparent);
-
-        if (picture.CullRect.Width <= 0 || picture.CullRect.Height <= 0)
-        {
-            return null;
-        }
 
         var scaleX = targetWidth / picture.CullRect.Width;
         var scaleY = targetHeight / picture.CullRect.Height;
@@ -570,6 +596,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
         var assetsMarker = ".Assets.";
         var badgeBaseNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var embeddedFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var resourceName in resourceNames)
         {
@@ -577,6 +604,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             if (assetsIdx < 0) continue;
 
             var fileName = resourceName[(assetsIdx + assetsMarker.Length)..];
+            embeddedFiles[fileName] = resourceName;
             if (fileName.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ||
                 fileName.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
             {
@@ -658,11 +686,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 if (foundJpeg) continue;
             }
 
-            var svgResourceName = resourceNames.FirstOrDefault(r =>
-                r.IndexOf(assetsMarker, StringComparison.OrdinalIgnoreCase) >= 0 &&
-                r.EndsWith(svgFileName, StringComparison.OrdinalIgnoreCase));
-
-            if (svgResourceName != null)
+            if (embeddedFiles.TryGetValue(svgFileName, out var svgResourceName))
             {
                 try
                 {
@@ -682,11 +706,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 }
             }
 
-            var pngResourceName = resourceNames.FirstOrDefault(r =>
-                r.IndexOf(assetsMarker, StringComparison.OrdinalIgnoreCase) >= 0 &&
-                r.EndsWith(pngFileName, StringComparison.OrdinalIgnoreCase));
-
-            if (pngResourceName != null)
+            if (embeddedFiles.TryGetValue(pngFileName, out var pngResourceName))
             {
                 try
                 {
@@ -846,7 +866,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         return BadgeDisplayText.TryGetValue(badgeKey, out var text) ? text : badgeKey.ToUpperInvariant();
     }
 
-    private static string DetectImageContentType(Stream stream)
+    internal static string DetectImageContentType(Stream stream)
     {
         Span<byte> header = stackalloc byte[12];
         var read = stream.Read(header);
@@ -856,8 +876,6 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         if (read >= 4 && header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46
             && read >= 12 && header[8] == 0x57 && header[9] == 0x45 && header[10] == 0x42 && header[11] == 0x50)
             return "image/webp";
-        if (read >= 2 && header[0] == 0xFF && header[1] == 0xD8)
-            return "image/jpeg";
         return "image/jpeg";
     }
 
@@ -910,14 +928,16 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
     private static void RenderTextBadges(SKCanvas canvas, List<BadgeInfo> badges, List<SKPointI> positions, List<SKSizeI> sizes, BadgePanelSettings panel, ImageTypeConfig imageConfig)
     {
+        using var bgPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
+        using var textPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
+        using var font = new SKFont(SKTypeface.Default);
+        font.Edging = SKFontEdging.SubpixelAntialias;
+
         for (int i = 0; i < badges.Count; i++)
         {
             var (bgHex, textHex, bgAlpha, cornerRadiusPct) = ResolveBadgeStyle(badges[i], panel, imageConfig);
-            var bgColor = ParseHexColor(bgHex, bgAlpha);
-            var textColor = SKColor.TryParse(textHex, out var tc) ? tc : SKColors.White;
-
-            using var bgPaint = new SKPaint { IsAntialias = true, Color = bgColor, Style = SKPaintStyle.Fill };
-            using var textPaint = new SKPaint { IsAntialias = true, Color = textColor, Style = SKPaintStyle.Fill };
+            bgPaint.Color = ParseHexColor(bgHex, bgAlpha);
+            textPaint.Color = SKColor.TryParse(textHex, out var tc) ? tc : SKColors.White;
 
             var text = GetBadgeDisplayText(badges[i].BadgeKey);
             var width = sizes[i].Width;
@@ -931,30 +951,20 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             var availableWidth = width - (2 * padding);
 
             var fontSize = height * 0.7f;
-            var font = new SKFont(SKTypeface.Default, fontSize);
-            try
+            font.Size = fontSize;
+            var textWidth = font.MeasureText(text);
+            if (textWidth > availableWidth && fontSize > 1f)
             {
-                font.Edging = SKFontEdging.SubpixelAntialias;
-                var textWidth = font.MeasureText(text);
-                if (textWidth > availableWidth && fontSize > 1f)
-                {
-                    fontSize *= (availableWidth / textWidth) * 0.95f;
-                    fontSize = Math.Max(fontSize, 1f);
-                    font.Dispose();
-                    font = new SKFont(SKTypeface.Default, fontSize);
-                    font.Edging = SKFontEdging.SubpixelAntialias;
-                    textWidth = font.MeasureText(text);
-                }
-
-                var textX = rect.MidX - (textWidth / 2f);
-                var textY = rect.MidY + (fontSize / 3f);
-
-                canvas.DrawText(text, textX, textY, font, textPaint);
+                fontSize *= (availableWidth / textWidth) * 0.95f;
+                fontSize = Math.Max(fontSize, 1f);
+                font.Size = fontSize;
+                textWidth = font.MeasureText(text);
             }
-            finally
-            {
-                font.Dispose();
-            }
+
+            var textX = rect.MidX - (textWidth / 2f);
+            var textY = rect.MidY + (fontSize / 3f);
+
+            canvas.DrawText(text, textX, textY, font, textPaint);
         }
     }
 
@@ -1151,15 +1161,12 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
     private static bool IsColorLight(string hex)
     {
-        try
+        if (SKColor.TryParse(hex, out var c))
         {
-            if (SKColor.TryParse(hex, out var c))
-            {
-                var lum = (0.299 * c.Red + 0.587 * c.Green + 0.114 * c.Blue) / 255.0;
-                return lum > 0.5;
-            }
+            var lum = (0.299 * c.Red + 0.587 * c.Green + 0.114 * c.Blue) / 255.0;
+            return lum > 0.5;
         }
-        catch { }
+
         return false;
     }
 
@@ -1192,7 +1199,15 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 badge?.Dispose();
             }
 
+            foreach (var bmp in _rasterizedSvgCache.Values)
+            {
+                bmp.Dispose();
+            }
+
             _rasterCache.Clear();
+            _rasterizedSvgCache.Clear();
+            _recoloredSvgCache.Clear();
+            _aspectRatioCache.Clear();
             _svgCache.Clear();
             _badgeLock.Dispose();
         }

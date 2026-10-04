@@ -1,7 +1,6 @@
 using System.Text.RegularExpressions;
 using Jellyfin.Plugin.JellyTag.Configuration;
 using Jellyfin.Plugin.JellyTag.Services;
-using static Jellyfin.Plugin.JellyTag.Configuration.OutputImageFormat;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -80,14 +79,17 @@ public partial class ImageOverlayMiddleware
         // Check if item's library is excluded
         if (config.ExcludedLibraryIds.Count > 0)
         {
-            var collectionFolders = libraryManager.GetCollectionFolders(item);
-            var isExcluded = collectionFolders.Any(f =>
-                config.ExcludedLibraryIds.Any(ex =>
-                    string.Equals(ex, f.Id.ToString("N"), StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(ex, f.Id.ToString("D"), StringComparison.OrdinalIgnoreCase) ||
-                    (Guid.TryParse(ex, out var exGuid) && exGuid == f.Id)));
+            var excludedGuids = new HashSet<Guid>();
+            foreach (var ex in config.ExcludedLibraryIds)
+            {
+                if (Guid.TryParse(ex, out var g))
+                {
+                    excludedGuids.Add(g);
+                }
+            }
 
-            if (isExcluded)
+            var collectionFolders = libraryManager.GetCollectionFolders(item);
+            if (collectionFolders.Any(f => excludedGuids.Contains(f.Id)))
             {
                 await _next(context).ConfigureAwait(false);
                 return;
@@ -106,11 +108,17 @@ public partial class ImageOverlayMiddleware
         _logger.LogDebug("DetectAllBadges for {Item}: {Count} badges found: {Badges}",
             item.Name, allBadges.Count, string.Join(", ", allBadges.Select(b => $"{b.Category}:{b.BadgeKey}")));
 
-        var isSamsung = IsSamsungClient(context);
-        var isFireTv = IsFireTvClient(context);
+        var client = context.Request.Headers["X-Emby-Client"].ToString();
+        var deviceName = context.Request.Headers["X-Emby-Device-Name"].ToString();
+        var userAgent = context.Request.Headers.UserAgent.ToString();
+
+        var isSamsung = ContainsSamsungIndicator(client) || ContainsSamsungIndicator(deviceName) || ContainsSamsungIndicator(userAgent);
+        var isFireTv = ContainsFireTvIndicator(client) || ContainsFireTvIndicator(deviceName) || ContainsFireTvIndicator(userAgent);
+        var isWindows = ContainsWindowsIndicator(client) || ContainsWindowsIndicator(deviceName) || ContainsWindowsIndicator(userAgent);
+
         var hideDolbyVision = (config.HideDolbyVisionOnSamsungClients && isSamsung)
             || (config.HideDolbyVisionOnFireTvClients && isFireTv);
-        var hideHdrOnWindows = config.HideHdrOnWindowsClients && IsWindowsClient(context);
+        var hideHdrOnWindows = config.HideHdrOnWindowsClients && isWindows;
         var visibleBadges = allBadges
             .Where(b => overlayService.ShouldShowBadge(b, imageConfig))
             .Where(b => !hideDolbyVision || !string.Equals(b.BadgeKey, "dv", StringComparison.OrdinalIgnoreCase))
@@ -141,7 +149,7 @@ public partial class ImageOverlayMiddleware
         {
             await using (cachedImage.ConfigureAwait(false))
             {
-                var cachedContentType = config.OutputFormat == OutputImageFormat.WebP ? "image/webp" : "image/jpeg";
+                var cachedContentType = ImageOverlayService.DetectImageContentType(cachedImage);
                 context.Response.ContentType = cachedContentType;
                 context.Response.ContentLength = cachedImage.Length;
                 await cachedImage.CopyToAsync(context.Response.Body).ConfigureAwait(false);
@@ -321,7 +329,8 @@ public partial class ImageOverlayMiddleware
             TextCornerRadius = panel.TextCornerRadius,
             BadgeTypeOverrides = new List<BadgeTypeStyleOverride>(panel.BadgeTypeOverrides),
             EnabledBadges = new List<string>(panel.EnabledBadges),
-            DisabledLogos = new List<string>(panel.DisabledLogos)
+            DisabledLogos = new List<string>(panel.DisabledLogos),
+            WhiteLogoBackground = panel.WhiteLogoBackground
         };
     }
 }

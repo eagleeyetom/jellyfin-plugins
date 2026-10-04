@@ -267,7 +267,6 @@ public class PluginConfiguration : BasePluginConfiguration
                 if (audioBadgesList != null)
                 {
                     chBadges = audioBadgesList.Where(k => k is "7.1" or "5.1" or "stereo" or "mono").ToList();
-                    audioBadgesList.RemoveAll(k => k is "7.1" or "5.1" or "stereo" or "mono");
                 }
 
                 if (chBadges.Count == 0)
@@ -296,14 +295,6 @@ public class PluginConfiguration : BasePluginConfiguration
                 if (imageConfig.LanguagePanel != null && imageConfig.LanguagePanel.Order <= 4)
                 {
                     imageConfig.LanguagePanel.Order = 5;
-                }
-            }
-            else
-            {
-                var audioBadgesList = imageConfig.AudioPanel?.EnabledBadges;
-                if (audioBadgesList != null)
-                {
-                    audioBadgesList.RemoveAll(k => k is "7.1" or "5.1" or "stereo" or "mono");
                 }
             }
 

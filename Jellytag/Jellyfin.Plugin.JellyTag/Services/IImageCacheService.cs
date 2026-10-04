@@ -29,12 +29,6 @@ public interface IImageCacheService
     void ClearCache();
 
     /// <summary>
-    /// Invalidates cache for a specific item.
-    /// </summary>
-    /// <param name="itemId">The item ID.</param>
-    void InvalidateCache(Guid itemId);
-
-    /// <summary>
     /// Gets the cache directory path.
     /// </summary>
     /// <returns>The absolute path to the cache directory.</returns>

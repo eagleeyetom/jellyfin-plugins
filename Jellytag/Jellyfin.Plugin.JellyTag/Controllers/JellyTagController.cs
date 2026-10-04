@@ -30,6 +30,9 @@ public partial class JellyTagController : ControllerBase
         Converters = { new JsonStringEnumConverter() }
     };
 
+    private static readonly string[] ManifestResourceNamesArray = Assembly.GetExecutingAssembly().GetManifestResourceNames();
+    private static readonly HashSet<string> ManifestResourceNames = new(ManifestResourceNamesArray, StringComparer.OrdinalIgnoreCase);
+
     [GeneratedRegex(@"^[a-zA-Z0-9._-]+$")]
     private static partial Regex SafeBadgeKeyRegex();
 
@@ -117,12 +120,10 @@ public partial class JellyTagController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult GetResources()
     {
-        var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-        var resources = assembly.GetManifestResourceNames();
         return Ok(new
         {
-            AssemblyName = assembly.FullName,
-            Resources = resources
+            AssemblyName = typeof(JellyTagController).Assembly.FullName,
+            Resources = ManifestResourceNamesArray
         });
     }
 
@@ -135,8 +136,8 @@ public partial class JellyTagController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public IActionResult GetBadge(string quality)
     {
-        var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-        var resourceNames = assembly.GetManifestResourceNames();
+        var assembly = Assembly.GetExecutingAssembly();
+        var resourceNames = ManifestResourceNames;
 
         var fileName = quality.ToLower() switch
         {
@@ -351,8 +352,7 @@ public partial class JellyTagController : ControllerBase
             return "badge-";
         }
 
-        var resourceNames = Assembly.GetExecutingAssembly().GetManifestResourceNames();
-        var hasLogo = resourceNames.Any(r =>
+        var hasLogo = ManifestResourceNames.Any(r =>
             r.EndsWith($".logo-{fileKey}.svg", StringComparison.OrdinalIgnoreCase) ||
             r.EndsWith($".logo-{fileKey}.png", StringComparison.OrdinalIgnoreCase));
 
@@ -396,7 +396,7 @@ public partial class JellyTagController : ControllerBase
                 : null;
             var hasWhiteCustom = customDirCheck != null && SupportedBadgeExtensions.Any(ext =>
                 System.IO.File.Exists(Path.Combine(customDirCheck, $"{whitePrefix}{whiteKey}{ext}")));
-            var hasWhiteEmbedded = Assembly.GetExecutingAssembly().GetManifestResourceNames().Any(r =>
+            var hasWhiteEmbedded = ManifestResourceNames.Any(r =>
                 r.EndsWith($"{whitePrefix}{whiteKey}.svg", StringComparison.OrdinalIgnoreCase) ||
                 r.EndsWith($"{whitePrefix}{whiteKey}.png", StringComparison.OrdinalIgnoreCase));
 
@@ -438,14 +438,13 @@ public partial class JellyTagController : ControllerBase
 
         // Fall back to embedded resources: SVG > PNG
         var assembly = Assembly.GetExecutingAssembly();
-        var resourceNames = assembly.GetManifestResourceNames();
 
         // If recoloring is requested, prefer SVG even if logo resolved to PNG (e.g. badge-dtsx.svg)
         var targetSvgPrefix = prefix;
         var targetSvgFileKey = fileKey;
         if (hasColorOverride)
         {
-            var svgExists = resourceNames.Any(r => r.EndsWith($"{prefix}{fileKey}.svg", StringComparison.OrdinalIgnoreCase));
+            var svgExists = ManifestResourceNames.Any(r => r.EndsWith($"{prefix}{fileKey}.svg", StringComparison.OrdinalIgnoreCase));
             if (!svgExists)
             {
                 targetSvgPrefix = "badge-";
@@ -454,7 +453,7 @@ public partial class JellyTagController : ControllerBase
         }
 
         // Try SVG first
-        var svgResourceName = resourceNames
+        var svgResourceName = ManifestResourceNames
             .FirstOrDefault(r => r.EndsWith($"{targetSvgPrefix}{targetSvgFileKey}.svg", StringComparison.OrdinalIgnoreCase));
         if (svgResourceName != null)
         {
@@ -473,7 +472,7 @@ public partial class JellyTagController : ControllerBase
         }
 
         // Then PNG
-        var pngResourceName = resourceNames
+        var pngResourceName = ManifestResourceNames
             .FirstOrDefault(r => r.EndsWith($"{prefix}{fileKey}.png", StringComparison.OrdinalIgnoreCase));
         if (pngResourceName != null)
         {

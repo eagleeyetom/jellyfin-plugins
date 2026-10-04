@@ -426,4 +426,44 @@ public class ConfigurationAndCacheTests
         StringAssert.Contains(origXml, "width=\"1040\"");
         StringAssert.Contains(origXml, "height=\"1138\"");
     }
+
+    [TestMethod]
+    public void ClonePanelWithReduction_PreservesWhiteLogoBackground()
+    {
+        var panel = new BadgePanelSettings
+        {
+            WhiteLogoBackground = true,
+            SizePercent = 20
+        };
+
+        var cloned = Jellyfin.Plugin.JellyTag.Middleware.ImageOverlayMiddleware.ClonePanelWithReduction(panel, 5);
+
+        Assert.IsTrue(cloned.WhiteLogoBackground);
+        Assert.AreEqual(15, cloned.SizePercent);
+    }
+
+    [TestMethod]
+    public void DetectImageContentType_RecognizesFormats()
+    {
+        // JPEG
+        var jpegBytes = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01 };
+        using (var ms = new MemoryStream(jpegBytes))
+        {
+            Assert.AreEqual("image/jpeg", ImageOverlayService.DetectImageContentType(ms));
+        }
+
+        // PNG
+        var pngBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+        using (var ms = new MemoryStream(pngBytes))
+        {
+            Assert.AreEqual("image/png", ImageOverlayService.DetectImageContentType(ms));
+        }
+
+        // WebP
+        var webpBytes = new byte[] { 0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50 };
+        using (var ms = new MemoryStream(webpBytes))
+        {
+            Assert.AreEqual("image/webp", ImageOverlayService.DetectImageContentType(ms));
+        }
+    }
 }

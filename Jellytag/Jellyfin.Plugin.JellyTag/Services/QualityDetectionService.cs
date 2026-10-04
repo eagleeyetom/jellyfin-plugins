@@ -20,7 +20,7 @@ public partial class QualityDetectionService : IQualityDetectionService
     private readonly ILogger<QualityDetectionService> _logger;
     private readonly ConcurrentDictionary<Guid, (List<BadgeInfo> Badges, DateTime CachedAt)> _badgeCache = new();
     private static readonly TimeSpan BadgeCacheTtl = TimeSpan.FromMinutes(5);
-    private DateTime _lastCacheCleanup = DateTime.UtcNow;
+    private long _lastCacheCleanupTicks = DateTime.UtcNow.Ticks;
     private static readonly TimeSpan CacheCleanupInterval = TimeSpan.FromMinutes(10);
 
     public QualityDetectionService(
@@ -29,19 +29,6 @@ public partial class QualityDetectionService : IQualityDetectionService
     {
         _libraryManager = libraryManager;
         _logger = logger;
-    }
-
-    /// <inheritdoc />
-    public VideoQuality GetQuality(Guid itemId)
-    {
-        var item = _libraryManager.GetItemById(itemId);
-        if (item == null)
-        {
-            _logger.LogDebug("Item not found: {ItemId}", itemId);
-            return VideoQuality.Unknown;
-        }
-
-        return GetQualityFromItem(item);
     }
 
     public static VideoQuality DetermineQuality(int width, int height)
@@ -60,44 +47,6 @@ public partial class QualityDetectionService : IQualityDetectionService
     }
 
     /// <inheritdoc />
-    public VideoQuality GetQualityFromItem(BaseItem item)
-    {
-        if (item is Video video)
-        {
-            return GetQualityFromVideo(video);
-        }
-
-        var query = new InternalItemsQuery
-        {
-            ParentId = item.Id,
-            Recursive = true,
-            IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
-            Limit = 50
-        };
-        var children = _libraryManager.GetItemList(query);
-        var bestQuality = VideoQuality.Unknown;
-        foreach (var child in children)
-        {
-            if (child is Video childVideo)
-            {
-                var q = GetQualityFromVideo(childVideo);
-                if (q != VideoQuality.Unknown && (bestQuality == VideoQuality.Unknown || q > bestQuality))
-                {
-                    bestQuality = q;
-                    if (bestQuality == VideoQuality.UHD4K) break;
-                }
-            }
-        }
-
-        if (bestQuality != VideoQuality.Unknown)
-        {
-            _logger.LogDebug("Resolved quality {Quality} for parent item: {ItemName}", bestQuality, item.Name);
-        }
-
-        return bestQuality;
-    }
-
-    /// <inheritdoc />
     public List<BadgeInfo> DetectAllBadges(BaseItem item)
     {
         if (_badgeCache.TryGetValue(item.Id, out var cached) && DateTime.UtcNow - cached.CachedAt < BadgeCacheTtl)
@@ -109,16 +58,20 @@ public partial class QualityDetectionService : IQualityDetectionService
         _badgeCache[item.Id] = (badges, DateTime.UtcNow);
 
         // Periodically evict expired entries to prevent unbounded memory growth
-        if (DateTime.UtcNow - _lastCacheCleanup > CacheCleanupInterval)
+        var nowTicks = DateTime.UtcNow.Ticks;
+        var lastTicks = Volatile.Read(ref _lastCacheCleanupTicks);
+        if (nowTicks - lastTicks > CacheCleanupInterval.Ticks)
         {
-            _lastCacheCleanup = DateTime.UtcNow;
-            var expiredKeys = _badgeCache
-                .Where(kvp => DateTime.UtcNow - kvp.Value.CachedAt > BadgeCacheTtl)
-                .Select(kvp => kvp.Key)
-                .ToList();
-            foreach (var key in expiredKeys)
+            if (Interlocked.CompareExchange(ref _lastCacheCleanupTicks, nowTicks, lastTicks) == lastTicks)
             {
-                _badgeCache.TryRemove(key, out _);
+                var expiredKeys = _badgeCache
+                    .Where(kvp => DateTime.UtcNow - kvp.Value.CachedAt > BadgeCacheTtl)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+                foreach (var key in expiredKeys)
+                {
+                    _badgeCache.TryRemove(key, out _);
+                }
             }
         }
         return badges;
@@ -162,16 +115,46 @@ public partial class QualityDetectionService : IQualityDetectionService
             {
                 if (child is Video childVideo)
                 {
-                    var q = GetQualityFromVideo(childVideo);
-                    if (q != VideoQuality.Unknown && (bestResolution == VideoQuality.Unknown || q > bestResolution))
+                    var childBadges = new List<BadgeInfo>();
+                    DetectBadgesFromVideo(childVideo, childBadges, includeResolution: true);
+
+                    var childHdr = new List<BadgeInfo>();
+                    var childAudio = new List<BadgeInfo>();
+                    var childChannels = new List<BadgeInfo>();
+
+                    foreach (var b in childBadges)
                     {
-                        bestResolution = q;
+                        switch (b.Category)
+                        {
+                            case BadgeCategory.Resolution:
+                                var q = b.BadgeKey switch
+                                {
+                                    "4k" => VideoQuality.UHD4K,
+                                    "1080p" => VideoQuality.FHD1080p,
+                                    "720p" => VideoQuality.HD720p,
+                                    "sd" => VideoQuality.SD,
+                                    _ => VideoQuality.Unknown
+                                };
+                                if (q != VideoQuality.Unknown && (bestResolution == VideoQuality.Unknown || q > bestResolution))
+                                {
+                                    bestResolution = q;
+                                }
+                                break;
+                            case BadgeCategory.Hdr:
+                                childHdr.Add(b);
+                                break;
+                            case BadgeCategory.Audio:
+                                childAudio.Add(b);
+                                break;
+                            case BadgeCategory.Channels:
+                                childChannels.Add(b);
+                                break;
+                            default:
+                                otherBadges.Add(b);
+                                break;
+                        }
                     }
 
-                    var childBadges = new List<BadgeInfo>();
-                    DetectBadgesFromVideo(childVideo, childBadges, includeResolution: false);
-
-                    var childHdr = childBadges.Where(b => b.Category == BadgeCategory.Hdr).ToList();
                     var hdrScore = GetHdrQualityScore(childHdr);
                     if (hdrScore > bestHdrScore)
                     {
@@ -179,7 +162,6 @@ public partial class QualityDetectionService : IQualityDetectionService
                         bestHdrBadges = childHdr;
                     }
 
-                    var childAudio = childBadges.Where(b => b.Category == BadgeCategory.Audio).ToList();
                     var audioScore = GetAudioQualityScore(childAudio);
                     if (audioScore > bestAudioScore)
                     {
@@ -187,15 +169,12 @@ public partial class QualityDetectionService : IQualityDetectionService
                         bestAudioBadges = childAudio;
                     }
 
-                    var childChannels = childBadges.Where(b => b.Category == BadgeCategory.Channels).ToList();
                     var channelScore = GetChannelQualityScore(childChannels);
                     if (channelScore > bestChannelScore)
                     {
                         bestChannelScore = channelScore;
                         bestChannelBadges = childChannels;
                     }
-
-                    otherBadges.AddRange(childBadges.Where(b => b.Category is not (BadgeCategory.Hdr or BadgeCategory.Audio or BadgeCategory.Channels)));
                 }
             }
 
@@ -251,10 +230,6 @@ public partial class QualityDetectionService : IQualityDetectionService
                 "opus" => 30,
                 "ac3" => 25,
                 "aac" => 20,
-                "7.1" => 8,
-                "5.1" => 6,
-                "stereo" => 2,
-                "mono" => 1,
                 _ => 0
             };
         }
@@ -279,17 +254,7 @@ public partial class QualityDetectionService : IQualityDetectionService
         return max;
     }
 
-    private void DetectBadgesFromVideo(Video video, List<BadgeInfo> badges)
-    {
-        DetectBadgesFromVideo(video, badges, includeResolution: true);
-    }
-
-    private void DetectHdrAndAudioBadges(Video video, List<BadgeInfo> badges)
-    {
-        DetectBadgesFromVideo(video, badges, includeResolution: false);
-    }
-
-    private void DetectBadgesFromVideo(Video video, List<BadgeInfo> badges, bool includeResolution)
+    private void DetectBadgesFromVideo(Video video, List<BadgeInfo> badges, bool includeResolution = true)
     {
         try
         {
@@ -839,25 +804,5 @@ public partial class QualityDetectionService : IQualityDetectionService
             VideoQuality.SD => new BadgeInfo { Category = BadgeCategory.Resolution, BadgeKey = "sd", ResourceFileName = "badge-sd.svg" },
             _ => new BadgeInfo { Category = BadgeCategory.Resolution, BadgeKey = "unknown", ResourceFileName = string.Empty }
         };
-    }
-
-    private VideoQuality GetQualityFromVideo(Video video)
-    {
-        try
-        {
-            var mediaSources = video.GetMediaSources(false);
-            var mediaSource = mediaSources?.FirstOrDefault();
-            var videoStream = mediaSource?.MediaStreams?.FirstOrDefault(s => s.Type == MediaStreamType.Video);
-            if (videoStream == null) return VideoQuality.Unknown;
-
-            var width = videoStream.Width ?? 0;
-            var height = videoStream.Height ?? 0;
-            return DetermineQuality(width, height);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get media sources for video item: {ItemName}", video.Name);
-            return VideoQuality.Unknown;
-        }
     }
 }

@@ -11,7 +11,7 @@ public class ImageCacheService : IImageCacheService
 {
     private readonly ILogger<ImageCacheService> _logger;
     private readonly string _cachePath;
-    private readonly object _lock = new();
+    private static volatile string? _cachedConfigFingerprint;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ImageCacheService"/> class.
@@ -21,6 +21,11 @@ public class ImageCacheService : IImageCacheService
         _logger = logger;
         _cachePath = Plugin.Instance?.CacheFolderPath ?? Path.Combine(Path.GetTempPath(), "JellyTag", "cache");
         EnsureCacheDirectoryExists();
+
+        if (Plugin.Instance != null)
+        {
+            Plugin.Instance.ConfigurationChanged += (_, _) => _cachedConfigFingerprint = null;
+        }
     }
 
     /// <inheritdoc />
@@ -99,64 +104,44 @@ public class ImageCacheService : IImageCacheService
     /// <inheritdoc />
     public string GetCacheDirectory() => _cachePath;
 
-    /// <inheritdoc />
-    public void ClearCache()
+    internal static IEnumerable<string> EnumerateCacheFiles(string dir)
     {
-        lock (_lock)
+        if (!Directory.Exists(dir))
         {
-            try
-            {
-                if (Directory.Exists(_cachePath))
-                {
-                    var jpgFiles = Directory.GetFiles(_cachePath, "*.jpg");
-                    var webpFiles = Directory.GetFiles(_cachePath, "*.webp");
-                    var files = jpgFiles.Concat(webpFiles).ToArray();
-                    foreach (var file in files)
-                    {
-                        try
-                        {
-                            File.Delete(file);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Failed to delete cache file: {Path}", file);
-                        }
-                    }
-
-                    _logger.LogInformation("Cleared {Count} cached images", files.Length);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to clear cache");
-            }
+            return Enumerable.Empty<string>();
         }
+
+        return Directory.EnumerateFiles(dir, "*.*")
+            .Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".webp", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <inheritdoc />
-    public void InvalidateCache(Guid itemId)
+    public void ClearCache()
     {
         try
         {
-            var jpgPattern = $"{itemId}_*.jpg";
-            var webpPattern = $"{itemId}_*.webp";
-            var files = Directory.GetFiles(_cachePath, jpgPattern).Concat(Directory.GetFiles(_cachePath, webpPattern)).ToArray();
-            foreach (var file in files)
+            if (Directory.Exists(_cachePath))
             {
-                try
+                int count = 0;
+                foreach (var file in EnumerateCacheFiles(_cachePath))
                 {
-                    File.Delete(file);
-                    _logger.LogDebug("Invalidated cache for item {ItemId}: {File}", itemId, file);
+                    try
+                    {
+                        File.Delete(file);
+                        count++;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to delete cache file: {Path}", file);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to delete cache file: {Path}", file);
-                }
+
+                _logger.LogInformation("Cleared {Count} cached images", count);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to invalidate cache for item {ItemId}", itemId);
+            _logger.LogError(ex, "Failed to clear cache");
         }
     }
 
@@ -170,9 +155,7 @@ public class ImageCacheService : IImageCacheService
                 return (0, 0, null, null);
             }
 
-            var jpgFiles = Directory.GetFiles(_cachePath, "*.jpg");
-            var webpFiles = Directory.GetFiles(_cachePath, "*.webp");
-            var allFiles = jpgFiles.Concat(webpFiles).Select(f => new FileInfo(f)).ToArray();
+            var allFiles = EnumerateCacheFiles(_cachePath).Select(f => new FileInfo(f)).ToArray();
 
             if (allFiles.Length == 0)
             {
@@ -195,7 +178,9 @@ public class ImageCacheService : IImageCacheService
     private string GenerateCacheKey(Guid itemId, string badgeKey, string imageTag)
     {
         var config = Plugin.Instance?.Configuration;
-        var configFingerprint = config != null ? ComputeConfigFingerprint(config) : string.Empty;
+        var configFingerprint = config != null
+            ? (_cachedConfigFingerprint ??= ComputeConfigFingerprint(config))
+            : string.Empty;
         var input = $"{itemId}_{badgeKey}_{imageTag}_{configFingerprint}";
 
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
@@ -232,7 +217,12 @@ public class ImageCacheService : IImageCacheService
         {
             foreach (var cbc in config.CustomBadgeColors)
             {
-                sb.Append(cbc.BadgeKey).Append(cbc.BgColor ?? "n").Append(cbc.TextColor ?? "n").Append(',');
+                sb.Append(cbc.BadgeKey)
+                  .Append(cbc.BgColor ?? "n")
+                  .Append(cbc.BgOpacity)
+                  .Append(cbc.TextColor ?? "n")
+                  .Append(cbc.CornerRadius)
+                  .Append(',');
             }
         }
 
