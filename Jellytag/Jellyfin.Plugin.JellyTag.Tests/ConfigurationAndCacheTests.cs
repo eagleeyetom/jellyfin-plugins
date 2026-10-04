@@ -567,4 +567,64 @@ public class ConfigurationAndCacheTests
             foreach (var b in ownedBitmaps) b.Dispose();
         }
     }
+
+    [TestMethod]
+    public void CalculateSafeAreaCrop_ForTvdbPortraitPoster_CalculatesCorrectHorizontalCrop()
+    {
+        // TVDB series posters like Arcane and Breaking Bad: 1000x1426 (ratio 1.426, wider than 2:3 = 1.5)
+        var (cropX, cropY) = ImageOverlayService.CalculateSafeAreaCrop(1000, 1426);
+
+        // visibleWidth = 1426 / 1.5 = ~951; cropX = (1000 - 951) / 2 = ~25; cropY = 0
+        Assert.AreEqual(0, cropY, "cropY should be 0 for wider portrait poster");
+        Assert.IsTrue(cropX >= 24 && cropX <= 26, $"cropX should be around 25, got {cropX}");
+    }
+
+    [TestMethod]
+    public void CalculateSafeAreaCrop_ForStandardPosterAndThumbnail_ReturnsZeroCrop()
+    {
+        // Standard 2:3 movie poster (1000x1500)
+        var (cropXPoster, cropYPoster) = ImageOverlayService.CalculateSafeAreaCrop(1000, 1500);
+        Assert.AreEqual(0, cropXPoster);
+        Assert.AreEqual(0, cropYPoster);
+
+        // Standard 16:9 thumbnail (1920x1080)
+        var (cropXThumb, cropYThumb) = ImageOverlayService.CalculateSafeAreaCrop(1920, 1080);
+        Assert.AreEqual(0, cropXThumb);
+        Assert.AreEqual(0, cropYThumb);
+
+        // Square album cover (600x600)
+        var (cropXSquare, cropYSquare) = ImageOverlayService.CalculateSafeAreaCrop(600, 600);
+        Assert.AreEqual(0, cropXSquare);
+        Assert.AreEqual(0, cropYSquare);
+    }
+
+    [TestMethod]
+    public void CalculateStackedPositions_WithCrop_OffsetsBadgesFromImageEdge()
+    {
+        var badges = new List<SkiaSharp.SKSizeI>
+        {
+            new(150, 45),
+            new(150, 45)
+        };
+
+        const int imageWidth = 1000;
+        const int imageHeight = 1426;
+        const int margin = 20; // 2%
+        const int gap = 10;
+        const int cropX = 25;
+        const int cropY = 0;
+
+        // TopLeft: should start at cropX + margin
+        var topLeftPositions = ImageOverlayService.CalculateStackedPositions(
+            imageWidth, imageHeight, badges, BadgePosition.TopLeft, margin, gap, BadgeLayout.Vertical, 0, cropX, cropY);
+
+        Assert.AreEqual(cropX + margin, topLeftPositions[0].X, "TopLeft X should be offset by cropX + margin");
+        Assert.AreEqual(margin, topLeftPositions[0].Y);
+
+        // TopRight: should end at imageWidth - width - margin - cropX
+        var topRightPositions = ImageOverlayService.CalculateStackedPositions(
+            imageWidth, imageHeight, badges, BadgePosition.TopRight, margin, gap, BadgeLayout.Vertical, 0, cropX, cropY);
+
+        Assert.AreEqual(imageWidth - 150 - margin - cropX, topRightPositions[0].X, "TopRight X should be offset by imageWidth - width - margin - cropX");
+    }
 }

@@ -183,11 +183,14 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 { BadgePosition.BottomLeft, 0 }, { BadgePosition.BottomRight, 0 }
             };
 
+            var (cropX, cropY) = CalculateSafeAreaCrop(image.Width, image.Height);
+
             foreach (var group in allPanelGroups)
             {
                 var panel = group.Panel;
                 var marginPercent = Math.Clamp(panel.MarginPercent, MinBadgeMarginPercent, MaxBadgeMarginPercent);
-                var badgeMargin = (int)(image.Width * marginPercent / 100f);
+                var effectiveWidth = cropX > 0 ? image.Width - 2 * cropX : image.Width;
+                var badgeMargin = (int)(effectiveWidth * marginPercent / 100f);
                 var gapPercent = Math.Max(0f, panel.GapPercent);
                 var gap = group.Sizes.Count > 0 ? (int)(group.Sizes.Average(s => s.Height) * gapPercent / 100f) : 0;
 
@@ -200,7 +203,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 }
 
                 var priorExtent = priorExtents[panel.Position];
-                group.Positions = CalculateStackedPositions(image.Width, image.Height, group.Sizes, panel.Position, badgeMargin, gap, panel.Layout, priorExtent);
+                group.Positions = CalculateStackedPositions(image.Width, image.Height, group.Sizes, panel.Position, badgeMargin, gap, panel.Layout, priorExtent, cropX, cropY);
 
                 // Update prior extent for this corner
                 var groupExtent = GroupVerticalExtent(group.Sizes, gap, panel.Layout);
@@ -784,11 +787,60 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         (layout == BadgeLayout.Vertical && (position == BadgePosition.BottomLeft || position == BadgePosition.BottomRight))
         || (layout == BadgeLayout.Horizontal && (position == BadgePosition.TopRight || position == BadgePosition.BottomRight));
 
-    private static List<SKPointI> CalculateStackedPositions(
+    internal static (int cropX, int cropY) CalculateSafeAreaCrop(int imageWidth, int imageHeight)
+    {
+        if (imageHeight <= 0 || imageWidth <= 0) return (0, 0);
+
+        if (imageHeight > imageWidth)
+        {
+            // Portrait card in Jellyfin has 2:3 aspect ratio (height / width = 1.5)
+            const float targetRatio = 1.5f;
+            var currentRatio = (float)imageHeight / imageWidth;
+            if (currentRatio < targetRatio)
+            {
+                // Image is wider than 2:3 (e.g. TVDB posters 1000x1426, ratio ~1.426)
+                // Left and right edges are cropped by Jellyfin client's background-size: cover
+                var visibleWidth = (int)Math.Round(imageHeight / targetRatio);
+                return (Math.Max(0, (imageWidth - visibleWidth) / 2), 0);
+            }
+
+            if (currentRatio > targetRatio)
+            {
+                // Image is taller than 2:3
+                // Top and bottom edges are cropped by Jellyfin client's background-size: cover
+                var visibleHeight = (int)Math.Round(imageWidth * targetRatio);
+                return (0, Math.Max(0, (imageHeight - visibleHeight) / 2));
+            }
+        }
+        else if (imageWidth > imageHeight)
+        {
+            // Landscape card in Jellyfin has 16:9 aspect ratio (width / height = 16/9)
+            const float targetRatio = 16f / 9f;
+            var currentRatio = (float)imageWidth / imageHeight;
+            if (currentRatio < targetRatio)
+            {
+                // Image is taller than 16:9 (e.g. 4:3 thumbnail)
+                var visibleHeight = (int)Math.Round(imageWidth / targetRatio);
+                return (0, Math.Max(0, (imageHeight - visibleHeight) / 2));
+            }
+
+            if (currentRatio > targetRatio)
+            {
+                // Image is wider than 16:9 (e.g. 21:9 ultrawide)
+                var visibleWidth = (int)Math.Round(imageHeight * targetRatio);
+                return (Math.Max(0, (imageWidth - visibleWidth) / 2), 0);
+            }
+        }
+
+        return (0, 0);
+    }
+
+    internal static List<SKPointI> CalculateStackedPositions(
         int imageWidth, int imageHeight,
         List<SKSizeI> badges,
         BadgePosition position, int margin, int gap,
-        BadgeLayout layout, int priorExtent = 0)
+        BadgeLayout layout, int priorExtent = 0,
+        int cropX = 0, int cropY = 0)
     {
         var positions = new List<SKPointI>();
         if (badges.Count == 0) return positions;
@@ -802,15 +854,25 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             switch (position)
             {
                 case BadgePosition.TopLeft:
-                    startX = margin; startY = margin + priorExtent; break;
+                    startX = cropX + margin;
+                    startY = cropY + margin + priorExtent;
+                    break;
                 case BadgePosition.TopRight:
-                    startX = Math.Max(0, imageWidth - totalWidth - margin); startY = margin + priorExtent; break;
+                    startX = Math.Max(0, imageWidth - totalWidth - margin - cropX);
+                    startY = cropY + margin + priorExtent;
+                    break;
                 case BadgePosition.BottomLeft:
-                    startX = margin; startY = Math.Max(0, imageHeight - maxHeight - margin - priorExtent); break;
+                    startX = cropX + margin;
+                    startY = Math.Max(0, imageHeight - maxHeight - margin - priorExtent - cropY);
+                    break;
                 case BadgePosition.BottomRight:
-                    startX = Math.Max(0, imageWidth - totalWidth - margin); startY = Math.Max(0, imageHeight - maxHeight - margin - priorExtent); break;
+                    startX = Math.Max(0, imageWidth - totalWidth - margin - cropX);
+                    startY = Math.Max(0, imageHeight - maxHeight - margin - priorExtent - cropY);
+                    break;
                 default:
-                    startX = margin; startY = margin + priorExtent; break;
+                    startX = cropX + margin;
+                    startY = cropY + margin + priorExtent;
+                    break;
             }
 
             var currentX = startX;
@@ -830,15 +892,25 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             switch (position)
             {
                 case BadgePosition.TopLeft:
-                    startX = margin; startY = margin + priorExtent; break;
+                    startX = cropX + margin;
+                    startY = cropY + margin + priorExtent;
+                    break;
                 case BadgePosition.TopRight:
-                    startX = Math.Max(0, imageWidth - maxWidth - margin); startY = margin + priorExtent; break;
+                    startX = Math.Max(0, imageWidth - maxWidth - margin - cropX);
+                    startY = cropY + margin + priorExtent;
+                    break;
                 case BadgePosition.BottomLeft:
-                    startX = margin; startY = Math.Max(0, imageHeight - totalHeight - margin - priorExtent); break;
+                    startX = cropX + margin;
+                    startY = Math.Max(0, imageHeight - totalHeight - margin - priorExtent - cropY);
+                    break;
                 case BadgePosition.BottomRight:
-                    startX = Math.Max(0, imageWidth - maxWidth - margin); startY = Math.Max(0, imageHeight - totalHeight - margin - priorExtent); break;
+                    startX = Math.Max(0, imageWidth - maxWidth - margin - cropX);
+                    startY = Math.Max(0, imageHeight - totalHeight - margin - priorExtent - cropY);
+                    break;
                 default:
-                    startX = margin; startY = margin + priorExtent; break;
+                    startX = cropX + margin;
+                    startY = cropY + margin + priorExtent;
+                    break;
             }
 
             var currentY = startY;
@@ -847,7 +919,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 int x;
                 if (position == BadgePosition.TopRight || position == BadgePosition.BottomRight)
                 {
-                    x = Math.Max(0, imageWidth - badges[i].Width - margin);
+                    x = Math.Max(0, imageWidth - badges[i].Width - margin - cropX);
                 }
                 else
                 {
