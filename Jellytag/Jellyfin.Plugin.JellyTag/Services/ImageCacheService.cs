@@ -213,6 +213,7 @@ public class ImageCacheService : IImageCacheService
         sb.Append(config.HideDolbyVisionOnFireTvClients).Append('|');
         sb.Append(config.HideHdrOnWindowsClients).Append('|');
         sb.Append(config.WhiteLogoBackground).Append('|');
+        sb.Append(config.UseOriginalAacLogo).Append('|');
         sb.Append((int)config.OutputFormat).Append(config.JpegQuality).Append(config.WebPQuality).Append('|');
         sb.Append(config.ThumbnailSameAsPoster).Append('|');
         sb.Append(config.ThumbnailSizeReduction).Append('|');

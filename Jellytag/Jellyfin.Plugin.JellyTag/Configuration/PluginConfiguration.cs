@@ -183,6 +183,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public bool WhiteLogoBackground { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether to use the original square AAC logo instead of the wide rectangular one (default: false).
+    /// </summary>
+    public bool UseOriginalAacLogo { get; set; }
+
     public ImageTypeConfig PosterConfig { get; set; }
     public ImageTypeConfig ThumbnailConfig { get; set; }
     public bool ThumbnailSameAsPoster { get; set; }

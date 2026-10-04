@@ -57,6 +57,18 @@ public class ConfigurationAndCacheTests
     }
 
     [TestMethod]
+    public void ComputeConfigFingerprint_ChangesWhenUseOriginalAacLogoChanges()
+    {
+        var config1 = new PluginConfiguration { UseOriginalAacLogo = false };
+        var config2 = new PluginConfiguration { UseOriginalAacLogo = true };
+
+        var fp1 = ImageCacheService.ComputeConfigFingerprint(config1);
+        var fp2 = ImageCacheService.ComputeConfigFingerprint(config2);
+
+        Assert.AreNotEqual(fp1, fp2, "Fingerprint should differ when UseOriginalAacLogo changes");
+    }
+
+    [TestMethod]
     public void ComputeConfigFingerprint_ChangesWhenPanelWhiteLogoBackgroundChanges()
     {
         var config1 = new PluginConfiguration();
@@ -380,5 +392,38 @@ public class ConfigurationAndCacheTests
         var fourKXml = System.Text.Encoding.UTF8.GetString(recolored4K);
         StringAssert.Contains(fourKXml, "#654321");
         StringAssert.Contains(fourKXml, "#FEDCBA");
+    }
+
+    [TestMethod]
+    public void ImageOverlayService_AacLogoAssets_ExistAndHaveCorrectAspectRatios()
+    {
+        var asm = typeof(ImageOverlayService).Assembly;
+        var names = asm.GetManifestResourceNames();
+
+        var standardRes = names.FirstOrDefault(r => r.EndsWith("logo-aac.svg", StringComparison.OrdinalIgnoreCase));
+        var standardWhiteRes = names.FirstOrDefault(r => r.EndsWith("logo-aac-white.svg", StringComparison.OrdinalIgnoreCase));
+        var origRes = names.FirstOrDefault(r => r.EndsWith("logo-aac-orig.svg", StringComparison.OrdinalIgnoreCase));
+        var origWhiteRes = names.FirstOrDefault(r => r.EndsWith("logo-aac-orig-white.svg", StringComparison.OrdinalIgnoreCase));
+
+        Assert.IsNotNull(standardRes, "logo-aac.svg resource should exist");
+        Assert.IsNotNull(standardWhiteRes, "logo-aac-white.svg resource should exist");
+        Assert.IsNotNull(origRes, "logo-aac-orig.svg resource should exist");
+        Assert.IsNotNull(origWhiteRes, "logo-aac-orig-white.svg resource should exist");
+
+        // Verify standard logo is wide rectangular (1140x540)
+        using var stdStream = asm.GetManifestResourceStream(standardRes)!;
+        using var stdMs = new MemoryStream();
+        stdStream.CopyTo(stdMs);
+        var stdXml = System.Text.Encoding.UTF8.GetString(stdMs.ToArray());
+        StringAssert.Contains(stdXml, "width=\"1140\"");
+        StringAssert.Contains(stdXml, "height=\"540\"");
+
+        // Verify original logo is tall square-ish (1040x1138)
+        using var origStream = asm.GetManifestResourceStream(origRes)!;
+        using var origMs = new MemoryStream();
+        origStream.CopyTo(origMs);
+        var origXml = System.Text.Encoding.UTF8.GetString(origMs.ToArray());
+        StringAssert.Contains(origXml, "width=\"1040\"");
+        StringAssert.Contains(origXml, "height=\"1138\"");
     }
 }

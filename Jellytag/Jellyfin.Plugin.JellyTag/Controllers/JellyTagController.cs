@@ -367,7 +367,7 @@ public partial class JellyTagController : ControllerBase
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public IActionResult GetBadgePreview(string badgeKey, [FromQuery] bool logo = false, [FromQuery] bool? white = null, [FromQuery] string? bgColor = null, [FromQuery] string? textColor = null)
+    public IActionResult GetBadgePreview(string badgeKey, [FromQuery] bool logo = false, [FromQuery] bool? white = null, [FromQuery] string? bgColor = null, [FromQuery] string? textColor = null, [FromQuery] bool? origAac = null)
     {
         if (!SafeBadgeKeyRegex().IsMatch(badgeKey))
         {
@@ -380,8 +380,12 @@ public partial class JellyTagController : ControllerBase
             .FirstOrDefault(c => string.Equals(c.BadgeKey, badgeKey, StringComparison.OrdinalIgnoreCase))?.TextColor;
         var hasColorOverride = !string.IsNullOrEmpty(effectiveBg) || !string.IsNullOrEmpty(effectiveText);
 
+        var useOrigAac = badgeKey.Equals("aac", StringComparison.OrdinalIgnoreCase)
+            && (origAac ?? Plugin.Instance?.Configuration?.UseOriginalAacLogo == true);
+        var aacSuffix = (logo && useOrigAac) ? "-orig" : "";
+
         // Normalize dots to underscores for file lookup (e.g. "5.1" -> "5_1")
-        var fileKey = badgeKey.Replace('.', '_');
+        var fileKey = badgeKey.Replace('.', '_') + aacSuffix;
         var isWhite = white ?? Plugin.Instance?.Configuration?.WhiteLogoBackground == true;
         if (isWhite)
         {

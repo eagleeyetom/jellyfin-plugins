@@ -345,13 +345,16 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
                     if (!isLogoDisabled)
                     {
-                        var logoName = "logo-" + fileKey;
+                        var useOrigAac = (badgeInfo.BadgeKey.Equals("aac", StringComparison.OrdinalIgnoreCase) || fileKey.StartsWith("aac", StringComparison.OrdinalIgnoreCase))
+                            && Plugin.Instance?.Configuration?.UseOriginalAacLogo == true;
+                        var aacSuffix = useOrigAac ? "-orig" : "";
+                        var baseKey = fileKey.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? fileKey[..^4] : fileKey;
+                        var logoName = "logo-" + baseKey + aacSuffix + (fileKey.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? ".svg" : "");
+
                         var isWhite = panel.WhiteLogoBackground ?? Plugin.Instance?.Configuration?.WhiteLogoBackground == true;
                         if (isWhite)
                         {
-                            var whiteName = fileKey.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
-                                ? "logo-" + fileKey[..^4] + "-white.svg"
-                                : "logo-" + fileKey + "-white";
+                            var whiteName = "logo-" + baseKey + aacSuffix + "-white.svg";
                             if (_svgCache.ContainsKey(whiteName) || _rasterCache.ContainsKey(whiteName))
                             {
                                 logoName = whiteName;
