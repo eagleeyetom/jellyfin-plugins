@@ -237,24 +237,84 @@ public partial class JellyTagController : ControllerBase
         var customDir = Path.Combine(dataFolder, "custom-badges");
         Directory.CreateDirectory(customDir);
 
-        // Delete existing custom badges for this key (all extensions)
         var fileKey = badgeKey.Replace('.', '_');
         var prefix = ResolveAssetPrefix(fileKey, logo);
-        foreach (var ext in SupportedBadgeExtensions)
-        {
-            var existing = Path.Combine(customDir, $"{prefix}{fileKey}{ext}");
-            if (System.IO.File.Exists(existing))
-            {
-                System.IO.File.Delete(existing);
-            }
-        }
-
         var fileName = $"{prefix}{fileKey}{extension}";
         var filePath = Path.Combine(customDir, fileName);
+        var tempPath = Path.Combine(customDir, $".{fileName}.{Guid.NewGuid():N}.tmp");
+        var backups = new List<(string Original, string Backup)>();
 
-        using (var stream = new FileStream(filePath, FileMode.Create))
+        try
         {
-            await file.CopyToAsync(stream).ConfigureAwait(false);
+            await using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, true))
+            {
+                await file.CopyToAsync(stream).ConfigureAwait(false);
+            }
+
+            try
+            {
+                foreach (var ext in SupportedBadgeExtensions)
+                {
+                    var existing = Path.Combine(customDir, $"{prefix}{fileKey}{ext}");
+                    if (!System.IO.File.Exists(existing))
+                    {
+                        continue;
+                    }
+
+                    var backup = existing + $".{Guid.NewGuid():N}.bak";
+                    System.IO.File.Move(existing, backup);
+                    backups.Add((existing, backup));
+                }
+
+                System.IO.File.Move(tempPath, filePath);
+            }
+            catch (Exception replacementException)
+            {
+                var rollbackErrors = new List<Exception>();
+                foreach (var (original, backup) in backups.AsEnumerable().Reverse())
+                {
+                    try
+                    {
+                        if (System.IO.File.Exists(backup) && !System.IO.File.Exists(original))
+                        {
+                            System.IO.File.Move(backup, original);
+                        }
+                    }
+                    catch (Exception rollbackException)
+                    {
+                        rollbackErrors.Add(rollbackException);
+                    }
+                }
+
+                if (rollbackErrors.Count > 0)
+                {
+                    throw new AggregateException("Custom badge replacement failed and rollback was incomplete.",
+                        new[] { replacementException }.Concat(rollbackErrors));
+                }
+
+                throw;
+            }
+
+            foreach (var (_, backup) in backups)
+            {
+                try
+                {
+                    System.IO.File.Delete(backup);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
+            }
+        }
+        finally
+        {
+            try
+            {
+                System.IO.File.Delete(tempPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
         }
 
         // Reload badges and clear cache

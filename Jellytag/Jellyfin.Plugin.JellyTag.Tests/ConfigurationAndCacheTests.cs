@@ -21,6 +21,23 @@ public class ConfigurationAndCacheTests
     }
 
     [TestMethod]
+    public void ComputeConfigFingerprint_DistinguishesAdjacentNumericSettings()
+    {
+        var config1 = new PluginConfiguration();
+        config1.PosterConfig.ResolutionPanel.GapPercent = 2;
+        config1.PosterConfig.ResolutionPanel.SizePercent = 15;
+
+        var config2 = new PluginConfiguration();
+        config2.PosterConfig.ResolutionPanel.GapPercent = 21;
+        config2.PosterConfig.ResolutionPanel.SizePercent = 5;
+
+        var fp1 = ImageCacheService.ComputeConfigFingerprint(config1);
+        var fp2 = ImageCacheService.ComputeConfigFingerprint(config2);
+
+        Assert.AreNotEqual(fp1, fp2, "Distinct render settings must not share a fingerprint");
+    }
+
+    [TestMethod]
     public void ComputeConfigFingerprint_ChangesWhenClientSettingsChange()
     {
         var config1 = new PluginConfiguration { HideDolbyVisionOnSamsungClients = false };
@@ -105,6 +122,22 @@ public class ConfigurationAndCacheTests
         context5.Request.Headers["X-Emby-Device-Name"] = "Nvidia Shield";
         context5.Request.Headers["X-Emby-Client"] = "Jellyfin for Android TV";
         Assert.IsFalse(ImageOverlayMiddleware.IsFireTvClient(context5));
+    }
+
+    [TestMethod]
+    public void GetCacheRelevantQuery_IgnoresApiKeyAndCanonicalizesParameterOrder()
+    {
+        var first = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        first.Request.QueryString = new Microsoft.AspNetCore.Http.QueryString("?api_key=first&maxWidth=500&quality=90");
+        var second = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        second.Request.QueryString = new Microsoft.AspNetCore.Http.QueryString("?quality=90&api_key=second&maxWidth=500");
+
+        var firstQuery = ImageOverlayMiddleware.GetCacheRelevantQuery(first.Request.Query);
+        var secondQuery = ImageOverlayMiddleware.GetCacheRelevantQuery(second.Request.Query);
+
+        Assert.AreEqual(firstQuery, secondQuery);
+        StringAssert.Contains(firstQuery, "maxWidth=500");
+        StringAssert.Contains(firstQuery, "quality=90");
     }
 
     [TestMethod]

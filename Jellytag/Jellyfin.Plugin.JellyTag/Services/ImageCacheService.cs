@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -192,46 +193,51 @@ public class ImageCacheService : IImageCacheService
     internal static string ComputeConfigFingerprint(Configuration.PluginConfiguration config)
     {
         var sb = new StringBuilder(256);
-        sb.Append(typeof(ImageCacheService).Assembly.GetName().Version?.ToString() ?? "unknown").Append('|');
-        sb.Append(config.Enabled).Append('|');
-        sb.Append(config.HideDolbyVisionOnSamsungClients).Append('|');
-        sb.Append(config.HideDolbyVisionOnFireTvClients).Append('|');
-        sb.Append(config.HideHdrOnWindowsClients).Append('|');
-        sb.Append(config.WhiteLogoBackground).Append('|');
-        sb.Append(config.UseOriginalAacLogo).Append('|');
-        sb.Append((int)config.OutputFormat).Append(config.JpegQuality).Append(config.WebPQuality).Append('|');
-        sb.Append(config.ThumbnailSameAsPoster).Append('|');
-        sb.Append(config.ThumbnailSizeReduction).Append('|');
+        AppendFingerprintValue(sb, typeof(ImageCacheService).Assembly.GetName().Version?.ToString() ?? "unknown");
+        AppendFingerprintValue(sb, config.Enabled);
+        AppendFingerprintValue(sb, config.HideDolbyVisionOnSamsungClients);
+        AppendFingerprintValue(sb, config.HideDolbyVisionOnFireTvClients);
+        AppendFingerprintValue(sb, config.HideHdrOnWindowsClients);
+        AppendFingerprintValue(sb, config.WhiteLogoBackground);
+        AppendFingerprintValue(sb, config.UseOriginalAacLogo);
+        AppendFingerprintValue(sb, (int)config.OutputFormat);
+        AppendFingerprintValue(sb, config.JpegQuality);
+        AppendFingerprintValue(sb, config.WebPQuality);
+        AppendFingerprintValue(sb, config.ThumbnailSameAsPoster);
+        AppendFingerprintValue(sb, config.ThumbnailSizeReduction);
+        AppendFingerprintValue(sb, config.DebugCountryCode);
         AppendImageTypeFingerprint(sb, config.PosterConfig);
         AppendImageTypeFingerprint(sb, config.ThumbnailConfig);
+        AppendFingerprintValue(sb, config.CustomBadgeTexts?.Count ?? -1);
         if (config.CustomBadgeTexts != null)
         {
             foreach (var cbt in config.CustomBadgeTexts)
             {
-                sb.Append(cbt.Key).Append('=').Append(cbt.Text).Append(',');
+                AppendFingerprintValue(sb, cbt.Key);
+                AppendFingerprintValue(sb, cbt.Text);
             }
         }
 
-        sb.Append('|');
+        AppendFingerprintValue(sb, config.CustomBadgeColors?.Count ?? -1);
         if (config.CustomBadgeColors != null)
         {
             foreach (var cbc in config.CustomBadgeColors)
             {
-                sb.Append(cbc.BadgeKey)
-                  .Append(cbc.BgColor ?? "n")
-                  .Append(cbc.BgOpacity)
-                  .Append(cbc.TextColor ?? "n")
-                  .Append(cbc.CornerRadius)
-                  .Append(',');
+                AppendFingerprintValue(sb, cbc.BadgeKey);
+                AppendFingerprintValue(sb, cbc.BgColor);
+                AppendFingerprintValue(sb, cbc.BgOpacity);
+                AppendFingerprintValue(sb, cbc.TextColor);
+                AppendFingerprintValue(sb, cbc.CornerRadius);
             }
         }
 
-        sb.Append('|');
+        AppendFingerprintValue(sb, config.LanguageFlagOverrides?.Count ?? -1);
         if (config.LanguageFlagOverrides != null)
         {
             foreach (var lfo in config.LanguageFlagOverrides)
             {
-                sb.Append(lfo.LanguageCode).Append('=').Append(lfo.FlagCode).Append(',');
+                AppendFingerprintValue(sb, lfo.LanguageCode);
+                AppendFingerprintValue(sb, lfo.FlagCode);
             }
         }
 
@@ -241,40 +247,79 @@ public class ImageCacheService : IImageCacheService
 
     private static void AppendImageTypeFingerprint(StringBuilder sb, Configuration.ImageTypeConfig c)
     {
-        sb.Append(c.Enabled).Append('|');
+        AppendFingerprintValue(sb, c.Enabled);
         AppendPanelFingerprint(sb, c.ResolutionPanel);
         AppendPanelFingerprint(sb, c.HdrPanel);
         AppendPanelFingerprint(sb, c.CodecPanel);
         AppendPanelFingerprint(sb, c.AudioPanel);
         AppendPanelFingerprint(sb, c.ChannelPanel);
         AppendPanelFingerprint(sb, c.LanguagePanel);
-        sb.Append(c.ShowVostIndicator).Append(c.VostBgColor ?? "n").Append(c.VostTextColor ?? "n");
-        sb.Append(c.VostBgOpacity).Append(c.VostCornerRadius).Append('|');
+        AppendFingerprintValue(sb, c.ShowVostIndicator);
+        AppendFingerprintValue(sb, c.VostBgColor);
+        AppendFingerprintValue(sb, c.VostTextColor);
+        AppendFingerprintValue(sb, c.VostBgOpacity);
+        AppendFingerprintValue(sb, c.VostCornerRadius);
     }
 
     private static void AppendPanelFingerprint(StringBuilder sb, Configuration.BadgePanelSettings p)
     {
-        sb.Append(p.Enabled).Append((int)p.Position).Append((int)p.ShowMode);
-        sb.Append((int)p.Layout).Append(p.GapPercent).Append(p.SizePercent).Append(p.MarginPercent);
-        sb.Append((int)p.Style).Append((int)p.IconStyle).Append(p.Order);
-        sb.Append(p.TextBgColor).Append(p.TextBgOpacity).Append(p.TextColor).Append(p.TextCornerRadius);
-        sb.Append(string.Join(",", p.EnabledBadges));
-        if (p.DisabledLogos != null && p.DisabledLogos.Count > 0)
+        AppendFingerprintValue(sb, p.Enabled);
+        AppendFingerprintValue(sb, (int)p.Position);
+        AppendFingerprintValue(sb, (int)p.ShowMode);
+        AppendFingerprintValue(sb, (int)p.Layout);
+        AppendFingerprintValue(sb, p.GapPercent);
+        AppendFingerprintValue(sb, p.SizePercent);
+        AppendFingerprintValue(sb, p.MarginPercent);
+        AppendFingerprintValue(sb, (int)p.Style);
+        AppendFingerprintValue(sb, (int)p.IconStyle);
+        AppendFingerprintValue(sb, p.Order);
+        AppendFingerprintValue(sb, p.TextBgColor);
+        AppendFingerprintValue(sb, p.TextBgOpacity);
+        AppendFingerprintValue(sb, p.TextColor);
+        AppendFingerprintValue(sb, p.TextCornerRadius);
+        AppendFingerprintValue(sb, p.EnabledBadges?.Count ?? -1);
+        if (p.EnabledBadges != null)
         {
-            sb.Append(":disLogos:").Append(string.Join(",", p.DisabledLogos));
+            foreach (var badge in p.EnabledBadges)
+            {
+                AppendFingerprintValue(sb, badge);
+            }
         }
-        if (p.WhiteLogoBackground.HasValue)
+
+        AppendFingerprintValue(sb, p.DisabledLogos?.Count ?? -1);
+        if (p.DisabledLogos != null)
         {
-            sb.Append(":whiteLogo:").Append(p.WhiteLogoBackground.Value);
+            foreach (var logo in p.DisabledLogos)
+            {
+                AppendFingerprintValue(sb, logo);
+            }
         }
+
+        AppendFingerprintValue(sb, p.WhiteLogoBackground);
+        AppendFingerprintValue(sb, p.BadgeTypeOverrides?.Count ?? -1);
         if (p.BadgeTypeOverrides != null)
         {
             foreach (var o in p.BadgeTypeOverrides)
             {
-                sb.Append(o.BadgeKey).Append(o.BgColor ?? "n").Append(o.BgOpacity).Append(o.TextColor ?? "n").Append(o.CornerRadius);
+                AppendFingerprintValue(sb, o.BadgeKey);
+                AppendFingerprintValue(sb, o.BgColor);
+                AppendFingerprintValue(sb, o.BgOpacity);
+                AppendFingerprintValue(sb, o.TextColor);
+                AppendFingerprintValue(sb, o.CornerRadius);
             }
         }
-        sb.Append('|');
+    }
+
+    private static void AppendFingerprintValue(StringBuilder sb, object? value)
+    {
+        if (value == null)
+        {
+            sb.Append("-1:");
+            return;
+        }
+
+        var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+        sb.Append(text.Length).Append(':').Append(text);
     }
 
     private string GetCachePath(string cacheKey)

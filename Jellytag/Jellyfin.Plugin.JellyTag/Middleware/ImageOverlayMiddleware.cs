@@ -33,6 +33,12 @@ public partial class ImageOverlayMiddleware
         IImageCacheService cacheService,
         MediaBrowser.Controller.Library.ILibraryManager libraryManager)
     {
+        if (!HttpMethods.IsGet(context.Request.Method))
+        {
+            await _next(context).ConfigureAwait(false);
+            return;
+        }
+
         var path = context.Request.Path.Value;
         if (path == null)
         {
@@ -137,26 +143,15 @@ public partial class ImageOverlayMiddleware
         var badgeKey = string.Join("_", visibleBadges.Select(b => b.BadgeKey));
         _logger.LogInformation("Applying {Count} badges to {Item}: {BadgeKey}", visibleBadges.Count, item.Name, badgeKey);
 
-        var query = context.Request.QueryString.Value ?? string.Empty;
+        var query = GetCacheRelevantQuery(context.Request.Query);
         var tag = context.Request.Query["tag"].FirstOrDefault() ?? item.DateModified.Ticks.ToString();
         var dvVariant = hideDolbyVision ? (isSamsung ? "samsung-no-dv" : "firetv-no-dv") : "";
         var clientVariant = dvVariant + (hideHdrOnWindows ? "_windows-sdr" : "");
         if (string.IsNullOrEmpty(clientVariant)) clientVariant = "default";
         var imageTag = $"{tag}_{imageType}_{clientVariant}_{query}";
 
-        var cachedImage = await cacheService.GetCachedImageAsync(itemId, badgeKey, imageTag).ConfigureAwait(false);
-        if (cachedImage != null)
-        {
-            await using (cachedImage.ConfigureAwait(false))
-            {
-                var cachedContentType = ImageOverlayService.DetectImageContentType(cachedImage);
-                context.Response.ContentType = cachedContentType;
-                context.Response.ContentLength = cachedImage.Length;
-                await cachedImage.CopyToAsync(context.Response.Body).ConfigureAwait(false);
-            }
-
-            return;
-        }
+        context.Request.Headers.Remove("If-None-Match");
+        context.Request.Headers.Remove("If-Modified-Since");
 
         var originalBody = context.Response.Body;
         using var capturedBody = new MemoryStream();
@@ -174,6 +169,22 @@ public partial class ImageOverlayMiddleware
             }
 
             capturedBody.Position = 0;
+
+            var cachedImage = await cacheService.GetCachedImageAsync(itemId, badgeKey, imageTag).ConfigureAwait(false);
+            if (cachedImage != null)
+            {
+                await using (cachedImage.ConfigureAwait(false))
+                {
+                    cachedImage.Position = 0;
+                    var cachedContentType = ImageOverlayService.DetectImageContentType(cachedImage);
+                    ClearEntityHeaders(context.Response);
+                    context.Response.ContentType = cachedContentType;
+                    context.Response.ContentLength = cachedImage.Length;
+                    await cachedImage.CopyToAsync(originalBody).ConfigureAwait(false);
+                }
+
+                return;
+            }
 
             (Stream resultStream, string contentType) result;
             try
@@ -194,6 +205,7 @@ public partial class ImageOverlayMiddleware
                 await cacheService.CacheImageAsync(itemId, badgeKey, imageTag, result.resultStream).ConfigureAwait(false);
 
                 result.resultStream.Position = 0;
+                ClearEntityHeaders(context.Response);
                 context.Response.ContentType = result.contentType;
                 context.Response.ContentLength = result.resultStream.Length;
                 await result.resultStream.CopyToAsync(originalBody).ConfigureAwait(false);
@@ -203,6 +215,26 @@ public partial class ImageOverlayMiddleware
         {
             context.Response.Body = originalBody;
         }
+    }
+
+    internal static string GetCacheRelevantQuery(IQueryCollection query)
+    {
+        var parameters = query
+            .Where(parameter => !parameter.Key.Equals("api_key", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(parameter => parameter.Key, StringComparer.OrdinalIgnoreCase)
+            .SelectMany(parameter => parameter.Value.Select(value =>
+                new KeyValuePair<string, string?>(parameter.Key, value)));
+
+        return QueryString.Create(parameters).Value ?? string.Empty;
+    }
+
+    private static void ClearEntityHeaders(HttpResponse response)
+    {
+        response.Headers.Remove("ETag");
+        response.Headers.Remove("Last-Modified");
+        response.Headers.Remove("Content-MD5");
+        response.Headers.Remove("Accept-Ranges");
+        response.Headers.CacheControl = "no-cache";
     }
 
     private static ImageTypeConfig? GetImageTypeConfig(PluginConfiguration config, string imageType, BaseItem item)

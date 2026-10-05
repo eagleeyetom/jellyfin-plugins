@@ -125,6 +125,8 @@ public class FullscreenToastMiddleware
 
         // Strip Accept-Encoding so downstream response compression does not compress index.html before we can inject our script.
         context.Request.Headers.Remove("Accept-Encoding");
+        context.Request.Headers.Remove("If-None-Match");
+        context.Request.Headers.Remove("If-Modified-Since");
 
         // Buffer the original response so we can manipulate it.
         var originalBody = context.Response.Body;
@@ -170,6 +172,11 @@ public class FullscreenToastMiddleware
                 html.AsSpan(markerIndex));
 
             var patchedBytes = Encoding.UTF8.GetBytes(patched);
+            context.Response.Headers.Remove("ETag");
+            context.Response.Headers.Remove("Last-Modified");
+            context.Response.Headers.Remove("Content-MD5");
+            context.Response.Headers.Remove("Accept-Ranges");
+            context.Response.Headers.CacheControl = "no-cache";
             context.Response.ContentLength = patchedBytes.Length;
 
             await originalBody.WriteAsync(patchedBytes).ConfigureAwait(false);
