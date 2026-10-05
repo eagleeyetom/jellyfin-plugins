@@ -200,6 +200,7 @@ public class ImageCacheService : IImageCacheService
         AppendFingerprintValue(sb, config.HideHdrOnWindowsClients);
         AppendFingerprintValue(sb, config.WhiteLogoBackground);
         AppendFingerprintValue(sb, config.UseOriginalAacLogo);
+        AppendFingerprintValue(sb, config.CombineDolbyVisionAtmosLogos);
         AppendFingerprintValue(sb, (int)config.OutputFormat);
         AppendFingerprintValue(sb, config.JpegQuality);
         AppendFingerprintValue(sb, config.WebPQuality);

@@ -204,6 +204,13 @@
                                 </div>
                                 <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top:.8em;">
                                     <label class="emby-checkbox-label">
+                                        <input id="CombineDolbyVisionAtmosLogos" type="checkbox" is="emby-checkbox" />
+                                        <span>Combine Dolby Vision + Atmos into one logo</span>
+                                    </label>
+                                    <div class="fieldDescription">When both badges are selected and the HDR and Audio panels use Brand Logos, show one combined logo in the HDR panel.</div>
+                                </div>
+                                <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top:.8em;">
+                                    <label class="emby-checkbox-label">
                                         <input id="UseOriginalAacLogo" type="checkbox" is="emby-checkbox" />
                                         <span>Use original square AAC logo</span>
                                     </label>
@@ -1138,6 +1145,7 @@
             config.HideDolbyVisionOnFireTvClients = q('HideDolbyVisionOnFireTvClients').checked;
             config.HideHdrOnWindowsClients = q('HideHdrOnWindowsClients').checked;
             config.WhiteLogoBackground = q('WhiteLogoBackground').checked;
+            config.CombineDolbyVisionAtmosLogos = q('CombineDolbyVisionAtmosLogos').checked;
             config.UseOriginalAacLogo = q('UseOriginalAacLogo').checked;
             var debugContainer = document.getElementById('DebugCountryCodeContainer');
             if (debugContainer && debugContainer.style.display === 'none') {
@@ -1626,6 +1634,7 @@
                 q('HideDolbyVisionOnFireTvClients').checked = config.HideDolbyVisionOnFireTvClients === true;
                 q('HideHdrOnWindowsClients').checked = config.HideHdrOnWindowsClients === true;
                 q('WhiteLogoBackground').checked = config.WhiteLogoBackground === true;
+                q('CombineDolbyVisionAtmosLogos').checked = config.CombineDolbyVisionAtmosLogos === true;
                 q('UseOriginalAacLogo').checked = config.UseOriginalAacLogo === true;
                 if (q('ThumbUseOriginalAacLogo')) q('ThumbUseOriginalAacLogo').checked = config.UseOriginalAacLogo === true;
                 q('DebugCountryCode').value = config.DebugCountryCode || '';

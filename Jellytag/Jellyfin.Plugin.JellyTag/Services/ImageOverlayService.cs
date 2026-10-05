@@ -125,7 +125,33 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         // Get ordered panels
         var panels = GetOrderedPanels(imageConfig);
 
-        // Group badges by panel, prepare and render each panel
+        // Apply per-panel selection before combining cross-panel brand logos.
+        var panelBadgesByPanel = panels
+            .Where(panel => panel.Enabled)
+            .ToDictionary(
+                panel => panel,
+                panel => badges.Where(b => GetPanelForCategory(b.Category, imageConfig) == panel).ToList());
+
+        foreach (var panel in panels.Where(panel => panel.Enabled))
+        {
+            var panelBadges = panelBadgesByPanel[panel];
+            if (panel.ShowMode == BadgeDisplayMode.Highest && panelBadges.Count > 1)
+            {
+                panelBadges.RemoveRange(1, panelBadges.Count - 1);
+            }
+        }
+
+        if (config.CombineDolbyVisionAtmosLogos)
+        {
+            TryCombineDolbyVisionAtmosBadges(
+                panelBadgesByPanel.GetValueOrDefault(imageConfig.HdrPanel) ?? new List<BadgeInfo>(),
+                panelBadgesByPanel.GetValueOrDefault(imageConfig.AudioPanel) ?? new List<BadgeInfo>(),
+                imageConfig.HdrPanel,
+                imageConfig.AudioPanel,
+                true);
+        }
+
+        // Prepare and render each panel
         var allPanelGroups = new List<PanelRenderGroup>();
         var allOwnedBitmaps = new List<SKBitmap>();
 
@@ -135,14 +161,8 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             {
                 if (!panel.Enabled) continue;
 
-                var panelBadges = badges.Where(b => GetPanelForCategory(b.Category, imageConfig) == panel).ToList();
+                var panelBadges = panelBadgesByPanel[panel];
                 if (panelBadges.Count == 0) continue;
-
-                // Apply ShowMode filter: Highest = keep only the first (highest priority) badge
-                if (panel.ShowMode == BadgeDisplayMode.Highest && panelBadges.Count > 1)
-                {
-                    panelBadges = new List<BadgeInfo> { panelBadges[0] };
-                }
 
                 var sizePercent = Math.Clamp(panel.SizePercent, MinBadgeSizePercent, MaxBadgeSizePercent);
                 var useText = panel.Style == BadgeStyle.Text;
@@ -242,6 +262,54 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         {
             foreach (var bmp in allOwnedBitmaps) bmp.Dispose();
         }
+    }
+
+    internal static bool TryCombineDolbyVisionAtmosBadges(
+        List<BadgeInfo> hdrBadges,
+        List<BadgeInfo> audioBadges,
+        BadgePanelSettings hdrPanel,
+        BadgePanelSettings audioPanel,
+        bool combineEnabled)
+    {
+        if (!combineEnabled || !hdrPanel.Enabled || !audioPanel.Enabled ||
+            hdrPanel.Style != BadgeStyle.Logo || audioPanel.Style != BadgeStyle.Logo)
+        {
+            return false;
+        }
+
+        var dolbyVisionIndex = hdrBadges.FindIndex(b => string.Equals(b.BadgeKey, "dv", StringComparison.OrdinalIgnoreCase));
+        var atmosIndex = audioBadges.FindIndex(b => string.Equals(b.BadgeKey, "atmos", StringComparison.OrdinalIgnoreCase));
+        if (dolbyVisionIndex < 0 || atmosIndex < 0 ||
+            IsLogoDisabled(hdrPanel, hdrBadges[dolbyVisionIndex]) ||
+            IsLogoDisabled(audioPanel, audioBadges[atmosIndex]))
+        {
+            return false;
+        }
+
+        hdrBadges[dolbyVisionIndex] = new BadgeInfo
+        {
+            Category = BadgeCategory.Hdr,
+            BadgeKey = "dv_atmos",
+            ResourceFileName = "logo-dv-atmos.svg"
+        };
+        audioBadges.RemoveAt(atmosIndex);
+        return true;
+    }
+
+    private static bool IsLogoDisabled(BadgePanelSettings panel, BadgeInfo badge)
+    {
+        if (panel.DisabledLogos == null || panel.DisabledLogos.Count == 0)
+        {
+            return false;
+        }
+
+        var fileKey = badge.ResourceFileName.StartsWith("badge-", StringComparison.OrdinalIgnoreCase)
+            ? badge.ResourceFileName[6..]
+            : badge.ResourceFileName;
+        var fileBaseName = Path.GetFileNameWithoutExtension(fileKey);
+        return panel.DisabledLogos.Contains(badge.BadgeKey, StringComparer.OrdinalIgnoreCase)
+            || panel.DisabledLogos.Contains(fileKey, StringComparer.OrdinalIgnoreCase)
+            || panel.DisabledLogos.Contains(fileBaseName, StringComparer.OrdinalIgnoreCase);
     }
 
     private sealed class PanelRenderGroup

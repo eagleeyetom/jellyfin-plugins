@@ -86,6 +86,101 @@ public class ConfigurationAndCacheTests
     }
 
     [TestMethod]
+    public void ComputeConfigFingerprint_ChangesWhenDolbyVisionAtmosCombinationChanges()
+    {
+        var config1 = new PluginConfiguration { CombineDolbyVisionAtmosLogos = false };
+        var config2 = new PluginConfiguration { CombineDolbyVisionAtmosLogos = true };
+
+        var fp1 = ImageCacheService.ComputeConfigFingerprint(config1);
+        var fp2 = ImageCacheService.ComputeConfigFingerprint(config2);
+
+        Assert.AreNotEqual(fp1, fp2, "Fingerprint should differ when Dolby Vision and Atmos combination changes");
+    }
+
+    [TestMethod]
+    public void TryCombineDolbyVisionAtmosBadges_ReplacesBothWithOneHdrLogo()
+    {
+        var hdrPanel = new BadgePanelSettings { Enabled = true, Style = BadgeStyle.Logo };
+        var audioPanel = new BadgePanelSettings { Enabled = true, Style = BadgeStyle.Logo };
+        var hdrBadges = new List<BadgeInfo>
+        {
+            new() { Category = BadgeCategory.Hdr, BadgeKey = "dv", ResourceFileName = "badge-dv.svg" }
+        };
+        var audioBadges = new List<BadgeInfo>
+        {
+            new() { Category = BadgeCategory.Audio, BadgeKey = "atmos", ResourceFileName = "badge-atmos.svg" }
+        };
+
+        var combined = ImageOverlayService.TryCombineDolbyVisionAtmosBadges(
+            hdrBadges, audioBadges, hdrPanel, audioPanel, true);
+
+        Assert.IsTrue(combined);
+        Assert.AreEqual("dv_atmos", hdrBadges[0].BadgeKey);
+        Assert.AreEqual("logo-dv-atmos.svg", hdrBadges[0].ResourceFileName);
+        Assert.AreEqual(BadgeCategory.Hdr, hdrBadges[0].Category);
+        Assert.IsEmpty(audioBadges);
+    }
+
+    [TestMethod]
+    public void TryCombineDolbyVisionAtmosBadges_LeavesBadgesAloneWhenLogoDisabled()
+    {
+        var hdrPanel = new BadgePanelSettings { Enabled = true, Style = BadgeStyle.Logo };
+        var audioPanel = new BadgePanelSettings { Enabled = true, Style = BadgeStyle.Logo };
+        audioPanel.DisabledLogos.Add("atmos");
+        var hdrBadges = new List<BadgeInfo>
+        {
+            new() { Category = BadgeCategory.Hdr, BadgeKey = "dv", ResourceFileName = "badge-dv.svg" }
+        };
+        var audioBadges = new List<BadgeInfo>
+        {
+            new() { Category = BadgeCategory.Audio, BadgeKey = "atmos", ResourceFileName = "badge-atmos.svg" }
+        };
+
+        var combined = ImageOverlayService.TryCombineDolbyVisionAtmosBadges(
+            hdrBadges, audioBadges, hdrPanel, audioPanel, true);
+
+        Assert.IsFalse(combined);
+        Assert.AreEqual("dv", hdrBadges[0].BadgeKey);
+        Assert.AreEqual("atmos", audioBadges[0].BadgeKey);
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task PrepareBadgeGroup_LoadsCombinedDolbyVisionAtmosLogo(bool whiteBackground)
+    {
+        var service = new ImageOverlayService(Microsoft.Extensions.Logging.Abstractions.NullLogger<ImageOverlayService>.Instance);
+        var panel = new BadgePanelSettings { Style = BadgeStyle.Logo, WhiteLogoBackground = whiteBackground };
+        var badges = new List<BadgeInfo>
+        {
+            new() { Category = BadgeCategory.Hdr, BadgeKey = "dv_atmos", ResourceFileName = "logo-dv-atmos.svg" }
+        };
+        var sizes = new List<SkiaSharp.SKSizeI>();
+        var sourceBitmaps = new List<SkiaSharp.SKBitmap>();
+        var filtered = new List<BadgeInfo>();
+        var ownedBitmaps = new List<SkiaSharp.SKBitmap>();
+
+        try
+        {
+            await service.PrepareBadgeGroup(badges, 15, 600, false, sizes, sourceBitmaps, filtered, ownedBitmaps, panel);
+
+            Assert.HasCount(1, filtered);
+            Assert.HasCount(1, sourceBitmaps);
+            Assert.IsGreaterThan(0, sizes[0].Height);
+            Assert.AreEqual(40, sizes[0].Height, "The cropped combined logo should retain its source aspect ratio.");
+        }
+        finally
+        {
+            foreach (var bitmap in ownedBitmaps)
+            {
+                bitmap.Dispose();
+            }
+
+            service.Dispose();
+        }
+    }
+
+    [TestMethod]
     public void ComputeConfigFingerprint_ChangesWhenPanelWhiteLogoBackgroundChanges()
     {
         var config1 = new PluginConfiguration();

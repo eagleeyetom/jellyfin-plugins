@@ -188,6 +188,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public bool UseOriginalAacLogo { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether Dolby Vision and Dolby Atmos brand logos are combined when both are present.
+    /// </summary>
+    public bool CombineDolbyVisionAtmosLogos { get; set; }
+
     public ImageTypeConfig PosterConfig { get; set; }
     public ImageTypeConfig ThumbnailConfig { get; set; }
     public bool ThumbnailSameAsPoster { get; set; }
