@@ -27,7 +27,8 @@ changelog: |
   - Add option to use white background for brand logos
   - Redesign AAC logo to horizontal layout matching other audio badges with toggle for original square logo
   - Crop excess whitespace from H.264 logo badges and implement horizontal logo fitting
-  - Add option to hide Dolby Vision badges on Fire TV clients
+  - Add option to hide Dolby Vision badges on Fire TV clients (fallback to HDR10/HDR10+) with robust session, header, and IP-based client detection
+  - Improve HDR10+ detection supporting Hdr10PlusPresentFlag and expanded filename patterns
   - Dual-key index raster cache and optimize badge caching performance
   ## v2.5.0.0 (2026-09-28)
   - Separate Audio Channel Badges (7.1, 5.1, Stereo, Mono) into a dedicated panel with independent positioning, styling, ordering, and badge selection

@@ -68,8 +68,31 @@ public class QualityDetectionTests
         Assert.IsTrue(QualityDetectionService.IsHdr10Plus(VideoRangeType.HDR10Plus, "", "", "", "", "", ""));
         Assert.IsTrue(QualityDetectionService.IsHdr10Plus(VideoRangeType.DOVIWithHDR10Plus, "", "", "", "", "", ""));
         Assert.IsTrue(QualityDetectionService.IsHdr10Plus(VideoRangeType.Unknown, "", "", "", "", "Movie.2022.HDR10+.mkv", "Movie"));
+        Assert.IsTrue(QualityDetectionService.IsHdr10Plus(VideoRangeType.Unknown, "", "", "", "", "Movie.2022.HDR10Plus.mkv", "Movie"));
+        Assert.IsTrue(QualityDetectionService.IsHdr10Plus(VideoRangeType.Unknown, "", "", "", "", "Movie.2022.HDR10-Plus.mkv", "Movie"));
+        Assert.IsTrue(QualityDetectionService.IsHdr10Plus(VideoRangeType.Unknown, "", "", "", "", "Movie.2022.HDR10_Plus.mkv", "Movie"));
+        Assert.IsTrue(QualityDetectionService.IsHdr10Plus(VideoRangeType.Unknown, "", "", "", "", "Movie.2022.HDR10.Plus.mkv", "Movie"));
         Assert.IsTrue(QualityDetectionService.IsHdr10Plus(VideoRangeType.Unknown, "", "", "", "SMPTE ST 2094 metadata", "", ""));
+        Assert.IsTrue(QualityDetectionService.IsHdr10Plus(VideoRangeType.Unknown, "", "", "", "", "Movie.mkv", "Movie", hdr10PlusPresentFlag: true));
         Assert.IsFalse(QualityDetectionService.IsHdr10Plus(VideoRangeType.HDR10, "", "", "", "", "Movie.2022.HDR10.mkv", "Movie"));
+        Assert.IsFalse(QualityDetectionService.IsHdr10Plus(VideoRangeType.Unknown, "", "", "", "", "Movie.mkv", "Movie", hdr10PlusPresentFlag: false));
+    }
+
+    [TestMethod]
+    public void DetectHdr_DolbyVisionWithHdr10PlusPresentFlag_DetectsBothBadges()
+    {
+        var stream = new MediaStream
+        {
+            Type = MediaStreamType.Video,
+            Title = "Dolby Vision",
+            Hdr10PlusPresentFlag = true,
+            ColorTransfer = "smpte2084"
+        };
+
+        var badges = QualityDetectionService.DetectHdr(stream, "", "");
+
+        Assert.IsTrue(badges.Any(b => b.BadgeKey == "dv"));
+        Assert.IsTrue(badges.Any(b => b.BadgeKey == "hdr10plus"));
     }
 
     [TestMethod]

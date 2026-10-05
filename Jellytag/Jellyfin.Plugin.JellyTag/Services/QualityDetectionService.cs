@@ -542,6 +542,9 @@ public partial class QualityDetectionService : IQualityDetectionService
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     internal static partial Regex DolbyVisionRegex();
 
+    [GeneratedRegex(@"(?:[\\/\s\.\-_\[\(]|^)HDR10[\.\-_ ]?(?:\+|Plus)(?=[\\/\s\.\-_\]\)]|$)", RegexOptions.IgnoreCase)]
+    internal static partial Regex Hdr10PlusPathRegex();
+
     internal static List<BadgeInfo> DetectHdr(MediaStream videoStream, string path, string name)
     {
         var badges = new List<BadgeInfo>();
@@ -569,7 +572,7 @@ public partial class QualityDetectionService : IQualityDetectionService
         }
 
         // 2. HDR10+ (Priority 3)
-        if (IsHdr10Plus(rangeType, profile, title, displayTitle, comment, path, name))
+        if (IsHdr10Plus(rangeType, profile, title, displayTitle, comment, path, name, videoStream.Hdr10PlusPresentFlag))
         {
             AddHdrBadge("hdr10plus", "badge-hdr10plus.svg");
         }
@@ -579,6 +582,7 @@ public partial class QualityDetectionService : IQualityDetectionService
         var isHdr10 = rangeType == VideoRangeType.HDR10
             || rangeType is VideoRangeType.DOVIWithHDR10 or VideoRangeType.DOVIWithEL
             || rangeType is VideoRangeType.HDR10Plus or VideoRangeType.DOVIWithHDR10Plus or VideoRangeType.DOVIWithELHDR10Plus
+            || videoStream.Hdr10PlusPresentFlag == true
             || string.Equals(colorTransfer, "smpte2084", StringComparison.OrdinalIgnoreCase)
             || combinedText.Contains("HDR10", StringComparison.OrdinalIgnoreCase);
 
@@ -639,8 +643,21 @@ public partial class QualityDetectionService : IQualityDetectionService
         return false;
     }
 
-    internal static bool IsHdr10Plus(VideoRangeType rangeType, string profile, string title, string displayTitle, string comment, string path, string name)
+    internal static bool IsHdr10Plus(
+        VideoRangeType rangeType,
+        string profile,
+        string title,
+        string displayTitle,
+        string comment,
+        string path,
+        string name,
+        bool? hdr10PlusPresentFlag = null)
     {
+        if (hdr10PlusPresentFlag == true)
+        {
+            return true;
+        }
+
         if (rangeType is VideoRangeType.HDR10Plus
                 or VideoRangeType.DOVIWithHDR10Plus
                 or VideoRangeType.DOVIWithELHDR10Plus)
@@ -653,17 +670,18 @@ public partial class QualityDetectionService : IQualityDetectionService
             || combined.Contains("HDR10 PLUS", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase)
             || combined.Contains("ST 2094-40", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("SMPTE ST 2094", StringComparison.OrdinalIgnoreCase))
+            || combined.Contains("SMPTE ST 2094", StringComparison.OrdinalIgnoreCase)
+            || Hdr10PlusPathRegex().IsMatch(combined))
         {
             return true;
         }
 
-        if (!string.IsNullOrEmpty(path) && (path.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) || path.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase) || path.Contains("HDR10.Plus", StringComparison.OrdinalIgnoreCase)))
+        if (!string.IsNullOrEmpty(path) && (path.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) || Hdr10PlusPathRegex().IsMatch(path)))
         {
             return true;
         }
 
-        if (!string.IsNullOrEmpty(name) && (name.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) || name.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase) || name.Contains("HDR10.Plus", StringComparison.OrdinalIgnoreCase)))
+        if (!string.IsNullOrEmpty(name) && (name.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) || Hdr10PlusPathRegex().IsMatch(name)))
         {
             return true;
         }

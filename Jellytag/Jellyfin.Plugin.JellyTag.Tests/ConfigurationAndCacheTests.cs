@@ -660,4 +660,49 @@ public class ConfigurationAndCacheTests
 
         Assert.AreEqual(imageWidth - 150 - margin - cropX, topRightPositions[0].X, "TopRight X should be offset by imageWidth - width - margin - cropX");
     }
+
+    [TestMethod]
+    public void IsFireTvClient_WithJellyfinAndroidTvAuthorizationHeader_ReturnsTrue()
+    {
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.Request.Headers["Authorization"] = "MediaBrowser Client=\"Jellyfin for Android TV\", Device=\"eagleeyetom's Fire TV\", DeviceId=\"abc\", Version=\"0.17.11\"";
+
+        Assert.IsTrue(ImageOverlayMiddleware.IsFireTvClient(context));
+    }
+
+    [TestMethod]
+    public void IsFireTvClient_WithKodiXEmbyAuthorizationHeader_ReturnsTrue()
+    {
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.Request.Headers["X-Emby-Authorization"] = "MediaBrowser Client=\"Kodi\", Device=\"Kodi (fire-tv.lan)\", DeviceId=\"123\", Version=\"21.0\"";
+
+        Assert.IsTrue(ImageOverlayMiddleware.IsFireTvClient(context));
+    }
+
+    [TestMethod]
+    public void IsFireTvClient_WithAftModelUserAgent_ReturnsTrue()
+    {
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.Request.Headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 11; AFTKMST Build/RS8244.2081N; wv) AppleWebKit/537.36";
+
+        Assert.IsTrue(ImageOverlayMiddleware.IsFireTvClient(context));
+    }
+
+    [TestMethod]
+    public void IsFireTvClient_WithFirefoxUserAgent_ReturnsFalse()
+    {
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.Request.Headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/110.0";
+
+        Assert.IsFalse(ImageOverlayMiddleware.IsFireTvClient(context));
+    }
+
+    [TestMethod]
+    public void IsFireTvClient_WithStandardWebClient_ReturnsFalse()
+    {
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.Request.Headers["Authorization"] = "MediaBrowser Client=\"Jellyfin Web\", Device=\"Chrome\", DeviceId=\"xyz\"";
+
+        Assert.IsFalse(ImageOverlayMiddleware.IsFireTvClient(context));
+    }
 }

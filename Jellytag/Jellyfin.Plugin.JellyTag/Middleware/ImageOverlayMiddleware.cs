@@ -4,6 +4,8 @@ using Jellyfin.Plugin.JellyTag.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Session;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -20,6 +22,12 @@ public partial class ImageOverlayMiddleware
     [GeneratedRegex(@"/Items/([0-9a-f]{32}|[0-9a-f-]{36})/Images/(Primary|Thumb)(/\d+)?$", RegexOptions.IgnoreCase)]
     private static partial Regex ImagePathRegex();
 
+    [GeneratedRegex(@"\bAFT[A-Z0-9]+\b", RegexOptions.IgnoreCase)]
+    private static partial Regex AftModelRegex();
+
+    [GeneratedRegex(@"\bFire\b", RegexOptions.IgnoreCase)]
+    private static partial Regex FireWordRegex();
+
     public ImageOverlayMiddleware(RequestDelegate next, ILogger<ImageOverlayMiddleware> logger)
     {
         _next = next;
@@ -31,7 +39,8 @@ public partial class ImageOverlayMiddleware
         IQualityDetectionService qualityService,
         IImageOverlayService overlayService,
         IImageCacheService cacheService,
-        MediaBrowser.Controller.Library.ILibraryManager libraryManager)
+        MediaBrowser.Controller.Library.ILibraryManager libraryManager,
+        ISessionManager? sessionManager = null)
     {
         if (!HttpMethods.IsGet(context.Request.Method))
         {
@@ -114,13 +123,14 @@ public partial class ImageOverlayMiddleware
         _logger.LogDebug("DetectAllBadges for {Item}: {Count} badges found: {Badges}",
             item.Name, allBadges.Count, string.Join(", ", allBadges.Select(b => $"{b.Category}:{b.BadgeKey}")));
 
-        var client = context.Request.Headers["X-Emby-Client"].ToString();
-        var deviceName = context.Request.Headers["X-Emby-Device-Name"].ToString();
-        var userAgent = context.Request.Headers.UserAgent.ToString();
+        sessionManager ??= context.RequestServices?.GetService(typeof(ISessionManager)) as ISessionManager;
 
-        var isSamsung = ContainsSamsungIndicator(client) || ContainsSamsungIndicator(deviceName) || ContainsSamsungIndicator(userAgent);
-        var isFireTv = ContainsFireTvIndicator(client) || ContainsFireTvIndicator(deviceName) || ContainsFireTvIndicator(userAgent);
-        var isWindows = ContainsWindowsIndicator(client) || ContainsWindowsIndicator(deviceName) || ContainsWindowsIndicator(userAgent);
+        var isSamsung = IsSamsungClient(context, sessionManager);
+        var isFireTv = IsFireTvClient(context, sessionManager);
+        var isWindows = IsWindowsClient(context, sessionManager);
+
+        _logger.LogDebug("Client identification for {Item} - isFireTv: {IsFireTv}, isSamsung: {IsSamsung}, isWindows: {IsWindows}",
+            item.Name, isFireTv, isSamsung, isWindows);
 
         var hideDolbyVision = (config.HideDolbyVisionOnSamsungClients && isSamsung)
             || (config.HideDolbyVisionOnFireTvClients && isFireTv);
@@ -262,52 +272,293 @@ public partial class ImageOverlayMiddleware
         };
     }
 
-    internal static bool IsSamsungClient(HttpContext context)
+    internal static bool IsSamsungClient(HttpContext context, ISessionManager? sessionManager = null)
     {
-        var client = context.Request.Headers["X-Emby-Client"].ToString();
-        var deviceName = context.Request.Headers["X-Emby-Device-Name"].ToString();
-        var userAgent = context.Request.Headers.UserAgent.ToString();
-        return ContainsSamsungIndicator(client)
-            || ContainsSamsungIndicator(deviceName)
-            || ContainsSamsungIndicator(userAgent);
+        return GetClientIdentifiers(context, sessionManager).Any(ContainsSamsungIndicator);
     }
 
-    internal static bool ContainsSamsungIndicator(string value)
+    internal static bool ContainsSamsungIndicator(string? value)
     {
-        return value.Contains("Samsung", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("Tizen", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        if (value.Contains("Tizen", StringComparison.OrdinalIgnoreCase)) return true;
+        if (value.Contains("Samsung", StringComparison.OrdinalIgnoreCase))
+        {
+            if (value.Contains("Galaxy", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("SM-", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+            return true;
+        }
+        return false;
     }
 
-    internal static bool IsFireTvClient(HttpContext context)
+    internal static bool IsFireTvClient(HttpContext context, ISessionManager? sessionManager = null)
     {
-        var client = context.Request.Headers["X-Emby-Client"].ToString();
-        var deviceName = context.Request.Headers["X-Emby-Device-Name"].ToString();
-        var userAgent = context.Request.Headers.UserAgent.ToString();
-        return ContainsFireTvIndicator(client)
-            || ContainsFireTvIndicator(deviceName)
-            || ContainsFireTvIndicator(userAgent);
+        return GetClientIdentifiers(context, sessionManager).Any(ContainsFireTvIndicator);
     }
 
-    internal static bool ContainsFireTvIndicator(string value)
+    internal static bool ContainsFireTvIndicator(string? value)
     {
-        return value.Contains("Fire", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("AFT", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("Amazon", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(value)) return false;
+
+        if (value.Contains("Fire TV", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("FireTV", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("fire-tv", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("fire_tv", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("FireStick", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Fire Stick", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("FireOS", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Silk/", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Silk ", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (AftModelRegex().IsMatch(value))
+        {
+            return true;
+        }
+
+        if (FireWordRegex().IsMatch(value) && !value.Contains("Firefox", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
     }
 
-    internal static bool IsWindowsClient(HttpContext context)
+    internal static bool IsWindowsClient(HttpContext context, ISessionManager? sessionManager = null)
     {
-        var client = context.Request.Headers["X-Emby-Client"].ToString();
-        var deviceName = context.Request.Headers["X-Emby-Device-Name"].ToString();
-        var userAgent = context.Request.Headers.UserAgent.ToString();
-        return ContainsWindowsIndicator(client)
-            || ContainsWindowsIndicator(deviceName)
-            || ContainsWindowsIndicator(userAgent);
+        return GetClientIdentifiers(context, sessionManager).Any(ContainsWindowsIndicator);
     }
 
-    internal static bool ContainsWindowsIndicator(string value)
+    internal static bool ContainsWindowsIndicator(string? value)
     {
+        if (string.IsNullOrWhiteSpace(value)) return false;
         return value.Contains("Windows", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static IEnumerable<string> GetClientIdentifiers(HttpContext context, ISessionManager? sessionManager = null)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddIfValid(string? str)
+        {
+            if (!string.IsNullOrWhiteSpace(str))
+            {
+                seen.Add(str.Trim());
+            }
+        }
+
+        // 1. Direct request headers
+        AddIfValid(context.Request.Headers["X-Emby-Client"].ToString());
+        AddIfValid(context.Request.Headers["X-Emby-Device-Name"].ToString());
+        AddIfValid(context.Request.Headers["X-Emby-Device"].ToString());
+        AddIfValid(context.Request.Headers["X-Emby-Device-Id"].ToString());
+        AddIfValid(context.Request.Headers.UserAgent.ToString());
+
+        // 2. Authorization and X-Emby-Authorization headers
+        var authHeader = context.Request.Headers.Authorization.ToString();
+        var embyAuthHeader = context.Request.Headers["X-Emby-Authorization"].ToString();
+        var authDict = ParseAuthorizationHeader(authHeader);
+        foreach (var kvp in ParseAuthorizationHeader(embyAuthHeader))
+        {
+            authDict.TryAdd(kvp.Key, kvp.Value);
+        }
+
+        if (authDict.TryGetValue("Client", out var authClient)) AddIfValid(authClient);
+        if (authDict.TryGetValue("Device", out var authDevice)) AddIfValid(authDevice);
+        if (authDict.TryGetValue("DeviceName", out var authDeviceName)) AddIfValid(authDeviceName);
+        if (authDict.TryGetValue("DeviceId", out var authDeviceId)) AddIfValid(authDeviceId);
+
+        // 3. Query string parameters
+        AddIfValid(context.Request.Query["client"].ToString());
+        AddIfValid(context.Request.Query["Client"].ToString());
+        AddIfValid(context.Request.Query["device"].ToString());
+        AddIfValid(context.Request.Query["Device"].ToString());
+        AddIfValid(context.Request.Query["deviceName"].ToString());
+        AddIfValid(context.Request.Query["DeviceName"].ToString());
+        AddIfValid(context.Request.Query["deviceId"].ToString());
+        AddIfValid(context.Request.Query["DeviceId"].ToString());
+
+        // 4. SessionManager lookup
+        sessionManager ??= context.RequestServices?.GetService(typeof(ISessionManager)) as ISessionManager;
+        if (sessionManager != null)
+        {
+            var token = authDict.GetValueOrDefault("Token");
+            if (string.IsNullOrEmpty(token)) token = context.Request.Headers["X-Emby-Token"].ToString();
+            if (string.IsNullOrEmpty(token)) token = context.Request.Headers["X-MediaBrowser-Token"].ToString();
+            if (string.IsNullOrEmpty(token)) token = context.Request.Query["api_key"].ToString();
+            if (string.IsNullOrEmpty(token)) token = context.Request.Query["token"].ToString();
+            if (string.IsNullOrEmpty(token)) token = context.Request.Query["X-Emby-Token"].ToString();
+
+            var deviceId = authDict.GetValueOrDefault("DeviceId");
+            if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Headers["X-Emby-Device-Id"].ToString();
+            if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Query["deviceId"].ToString();
+            if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Query["DeviceId"].ToString();
+
+            var clientIp = GetClientIp(context);
+
+            try
+            {
+                var sessions = sessionManager.Sessions;
+                if (sessions != null)
+                {
+                    SessionInfo? matchedSession = null;
+                    if (!string.IsNullOrEmpty(deviceId))
+                    {
+                        matchedSession = sessions.FirstOrDefault(s => string.Equals(s.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    if (matchedSession == null && !string.IsNullOrEmpty(token))
+                    {
+                        matchedSession = sessions.FirstOrDefault(s => string.Equals(s.Id, token, StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    if (matchedSession != null)
+                    {
+                        AddSessionIdentifiers(matchedSession, AddIfValid);
+                    }
+                    else if (!string.IsNullOrEmpty(clientIp))
+                    {
+                        var ipSessions = sessions
+                            .Where(s => IsIpMatch(s.RemoteEndPoint, clientIp))
+                            .OrderByDescending(s => s.IsActive)
+                            .ThenByDescending(s => s.LastActivityDate)
+                            .ToList();
+
+                        foreach (var session in ipSessions)
+                        {
+                            AddSessionIdentifiers(session, AddIfValid);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore any session query exceptions to avoid breaking image serving
+            }
+        }
+
+        return seen;
+    }
+
+    private static void AddSessionIdentifiers(SessionInfo session, Action<string?> addIfValid)
+    {
+        addIfValid(session.DeviceName);
+        addIfValid(session.Client);
+        addIfValid(session.DeviceType);
+        addIfValid(session.ApplicationVersion);
+        if (session.Capabilities?.DeviceProfile != null)
+        {
+            addIfValid(session.Capabilities.DeviceProfile.Name);
+        }
+    }
+
+    internal static Dictionary<string, string> ParseAuthorizationHeader(string? authHeader)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(authHeader))
+        {
+            return dict;
+        }
+
+        var header = authHeader.Trim();
+        if (header.StartsWith("MediaBrowser ", StringComparison.OrdinalIgnoreCase))
+        {
+            header = header["MediaBrowser ".Length..].Trim();
+        }
+        else if (header.StartsWith("Custom ", StringComparison.OrdinalIgnoreCase))
+        {
+            header = header["Custom ".Length..].Trim();
+        }
+
+        var parts = header.Split(',');
+        foreach (var part in parts)
+        {
+            var eqIdx = part.IndexOf('=');
+            if (eqIdx <= 0) continue;
+
+            var key = part[..eqIdx].Trim();
+            var val = part[(eqIdx + 1)..].Trim().Trim('"', '\'');
+            if (!string.IsNullOrEmpty(key))
+            {
+                dict[key] = val;
+            }
+        }
+
+        return dict;
+    }
+
+    internal static string? GetClientIp(HttpContext context)
+    {
+        var forwardedFor = context.Request.Headers["X-Forwarded-For"].ToString();
+        if (!string.IsNullOrWhiteSpace(forwardedFor))
+        {
+            var firstIp = forwardedFor.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if (!string.IsNullOrEmpty(firstIp))
+            {
+                return firstIp;
+            }
+        }
+
+        var realIp = context.Request.Headers["X-Real-IP"].ToString();
+        if (!string.IsNullOrWhiteSpace(realIp))
+        {
+            return realIp.Trim();
+        }
+
+        var remoteIp = context.Connection.RemoteIpAddress;
+        if (remoteIp != null)
+        {
+            if (remoteIp.IsIPv4MappedToIPv6)
+            {
+                return remoteIp.MapToIPv4().ToString();
+            }
+
+            return remoteIp.ToString();
+        }
+
+        return null;
+    }
+
+    internal static bool IsIpMatch(string? sessionRemoteEndPoint, string? requestIp)
+    {
+        if (string.IsNullOrWhiteSpace(sessionRemoteEndPoint) || string.IsNullOrWhiteSpace(requestIp))
+        {
+            return false;
+        }
+
+        sessionRemoteEndPoint = sessionRemoteEndPoint.Trim();
+        requestIp = requestIp.Trim();
+
+        if (string.Equals(sessionRemoteEndPoint, requestIp, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var colonIdx = sessionRemoteEndPoint.LastIndexOf(':');
+        if (colonIdx > 0 && !sessionRemoteEndPoint.Contains(']'))
+        {
+            var epIp = sessionRemoteEndPoint[..colonIdx];
+            if (string.Equals(epIp, requestIp, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        else if (sessionRemoteEndPoint.StartsWith('[') && sessionRemoteEndPoint.Contains("]:"))
+        {
+            var closeBracket = sessionRemoteEndPoint.IndexOf(']');
+            var epIp = sessionRemoteEndPoint.Substring(1, closeBracket - 1);
+            if (string.Equals(epIp, requestIp, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsHdrBadge(string badgeKey)
