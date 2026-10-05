@@ -125,11 +125,11 @@
     "versions": [
       {
         "version": "2.6.0.0",
-        "changelog": "Overhaul configuration menu into 5 streamlined accordion sections, add global Badge Style (Image/Brand Logo/Text) and corner shape controls, compensate for client-side card cropping on TVDB poster aspect ratios, add per-element custom badge colors, add white background option for brand logos, redesign AAC logo horizontally with legacy square toggle, crop whitespace on H.264 logos, add Fire TV Dolby Vision toggle, and optimize caching.",
+        "changelog": "Overhaul configuration menu into 5 streamlined accordion sections, add global Badge Style and corner shape controls, compensate for TVDB poster cropping, add per-element badge colors and white logo backgrounds, add the optional official combined Dolby Vision + Dolby Atmos logo, redesign AAC logo, crop H.264 logo whitespace, add Fire TV Dolby Vision filtering, and optimize caching.",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.6.0.0/jellytag-2.6.0.0.zip",
         "checksum": "00000000000000000000000000000000",
-        "timestamp": "2026-10-04T00:00:00Z"
+        "timestamp": "2026-10-05T00:00:00Z"
       },
       {
         "version": "2.5.0.0",
