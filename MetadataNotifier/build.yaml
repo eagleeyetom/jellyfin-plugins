@@ -9,7 +9,7 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
-  ## v1.4.3.0 (2026-10-04)
+  ## v1.4.3.0 (2026-10-05)
   - Add option to hide Dolby Vision notifications on Fire TV clients
   - Improve HDR10+ detection on Fire TV clients
   - Add configuration export, import, and reset to defaults

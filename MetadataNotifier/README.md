@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 
 <p align="center">
-    <img src="https://github.com/eagleeyetom/jellyfin-plugins/raw/test/MetadataNotifier/Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png" alt="Metadata Notifier Logo" width="200" />
+    <img src="https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/main/MetadataNotifier/Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png" alt="Metadata Notifier Logo" width="200" />
 </p>
 
 Sends on-screen toast notifications when playback starts on any Jellyfin client, displaying HDR metadata systems (HDR10+, Dolby Vision, HDR10, HLG, and SDR), audio codecs (TrueHD Atmos, DTS-HD MA, etc.), and transcoding status.

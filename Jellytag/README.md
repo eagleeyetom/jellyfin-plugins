@@ -49,7 +49,7 @@ The fork contains practical fixes and maintenance changes for a personal Jellyfi
 1. In Jellyfin, go to **Dashboard** → **Plugins** → **Repositories**
 2. Add a new repository with this URL:
    ```
-    https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/refs/heads/samsung-client-filter-test/manifest.json
+    https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/refs/heads/main/manifest.json
    ```
 3. Go to **Catalog**, find **JellyTag** and install it
 4. Restart Jellyfin
