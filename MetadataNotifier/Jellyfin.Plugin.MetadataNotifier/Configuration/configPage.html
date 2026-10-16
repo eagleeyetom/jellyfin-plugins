@@ -15,6 +15,10 @@
             .meta-section > summary::before { content: '\25B6'; font-size: .65em; transition: transform .2s ease; }
             .meta-section[open] > summary::before { transform: rotate(90deg); }
             .meta-section-body { padding: .8em 1.2em 1.2em; }
+            .meta-subtitle { margin: .4em 0 .8em; font-size: .95em; font-weight: 600; opacity: .7; text-transform: uppercase; letter-spacing: .04em; }
+            .meta-subtitle:not(:first-child) { margin-top: 1.4em; }
+            .meta-check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10em, 1fr)); column-gap: 1em; }
+            .meta-check-grid .checkboxContainer { margin-bottom: .6em; }
         </style>
         <div data-role="content">
             <div class="content-primary">
@@ -81,17 +85,30 @@
                         <details class="meta-section" open>
                             <summary>HDR Systems & Fallbacks</summary>
                             <div class="meta-section-body">
-                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowSdr" is="emby-checkbox" /><span>Show SDR</span></label></div>
-                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowHdr10Plus" is="emby-checkbox" /><span>Show HDR10+</span></label></div>
-                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowHdr10" is="emby-checkbox" /><span>Show HDR10</span></label></div>
-                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowDolbyVision" is="emby-checkbox" /><span>Show Dolby Vision</span></label></div>
-                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowHlg" is="emby-checkbox" /><span>Show HLG</span></label></div>
-                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressDvOnSamsung" is="emby-checkbox" /><span>Report the Dolby Vision fallback on clients that cannot decode DV (HDR10+/HDR10/HLG/SDR)</span></label><div class="fieldDescription">Decided from the device profile the client sends when starting playback. Clients that send none (e.g. some Kodi add-ons) fall back to name matching (Samsung TVs, Android phones).</div></div>
-                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressDvOnFireTv" is="emby-checkbox" /><span>Always report the fallback on Fire TV (when it is connected to a TV without Dolby Vision)</span></label><div class="fieldDescription">The device profile describes the Fire TV itself, not the TV it is plugged into.</div></div>
-                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="SuppressHdr10PlusOnLg" is="emby-checkbox" /><span>Report the HDR10+ fallback on clients without HDR10+ (fallback to Dolby Vision/HDR10)</span></label><div class="fieldDescription">Uses the device profile when it rules HDR10+ out. Web-based clients claim HDR10+ wherever they support HDR10, so LG, Sony, Roku, Shield, Sharp and Toshiba are also matched by name.</div></div>
-                                <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="DesktopSdrMode" is="emby-checkbox" /><span>Tone-mapped SDR detection (when HDR range is unsupported)</span></label></div>
-                                <div class="fieldDescription">
-                                    Only detects server-side tone-mapping. If Jellyfin sends HDR/Dolby Vision directly (no transcode) to a display that can't render it, the client itself does the tone-mapping and this plugin has no way to know — it will still report the source format.
+                                <h4 class="meta-subtitle">Formats to show</h4>
+                                <div class="meta-check-grid">
+                                    <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowDolbyVision" is="emby-checkbox" /><span>Dolby Vision</span></label></div>
+                                    <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowHdr10Plus" is="emby-checkbox" /><span>HDR10+</span></label></div>
+                                    <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowHdr10" is="emby-checkbox" /><span>HDR10</span></label></div>
+                                    <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowHlg" is="emby-checkbox" /><span>HLG</span></label></div>
+                                    <div class="checkboxContainer"><label class="emby-checkbox-label"><input type="checkbox" id="ShowSdr" is="emby-checkbox" /><span>SDR</span></label></div>
+                                </div>
+                                <h4 class="meta-subtitle">Match what the client shows</h4>
+                                <div class="checkboxContainer checkboxContainer-withDescription">
+                                    <label class="emby-checkbox-label"><input type="checkbox" id="SuppressDvOnSamsung" is="emby-checkbox" /><span>Show the fallback when the client can't play Dolby Vision</span></label>
+                                    <div class="fieldDescription">For example HDR10 on Samsung TVs. Read from what the client reports at playback start.</div>
+                                </div>
+                                <div class="checkboxContainer checkboxContainer-withDescription">
+                                    <label class="emby-checkbox-label"><input type="checkbox" id="SuppressHdr10PlusOnLg" is="emby-checkbox" /><span>Show the fallback when the client can't play HDR10+</span></label>
+                                    <div class="fieldDescription">For example HDR10 on LG and Sony TVs.</div>
+                                </div>
+                                <div class="checkboxContainer checkboxContainer-withDescription">
+                                    <label class="emby-checkbox-label"><input type="checkbox" id="SuppressDvOnFireTv" is="emby-checkbox" /><span>Treat Fire TV as unable to play Dolby Vision</span></label>
+                                    <div class="fieldDescription">For a Fire TV connected to a TV without Dolby Vision.</div>
+                                </div>
+                                <div class="checkboxContainer checkboxContainer-withDescription">
+                                    <label class="emby-checkbox-label"><input type="checkbox" id="DesktopSdrMode" is="emby-checkbox" /><span>Show SDR when the server tone-maps HDR</span></label>
+                                    <div class="fieldDescription">Tone-mapping done by the client or TV itself cannot be detected.</div>
                                 </div>
                             </div>
                         </details>
