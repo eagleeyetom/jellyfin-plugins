@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.JellyTag.Configuration;
+using Jellyfin.Plugin.Shared.MediaDetection;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
@@ -545,14 +546,6 @@ public partial class QualityDetectionService : IQualityDetectionService
         return badges;
     }
 
-    [GeneratedRegex(
-        @"(?:[\.\-_\(\[](?:DV|DOVI|Dolby[\.\-_ ]?Vision)[\.\-_\)\]]|\b(?:DV|DOVI|Dolby[\.\-_ ]?Vision)\b)",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    internal static partial Regex DolbyVisionRegex();
-
-    [GeneratedRegex(@"(?:[\\/\s\.\-_\[\(]|^)HDR10[\.\-_ ]?(?:\+|Plus)(?=[\\/\s\.\-_\]\)]|$)", RegexOptions.IgnoreCase)]
-    internal static partial Regex Hdr10PlusPathRegex();
-
     internal static List<BadgeInfo> DetectHdr(MediaStream videoStream, string path, string name)
     {
         var badges = new List<BadgeInfo>();
@@ -574,19 +567,21 @@ public partial class QualityDetectionService : IQualityDetectionService
         }
 
         // 1. Dolby Vision (Priority 4)
-        if (IsDolbyVision(rangeType, profile, title, displayTitle, path, name))
+        if (HdrFormatDetection.IsDolbyVision(videoStream, path, name))
         {
             AddHdrBadge("dv", "badge-dv.svg");
         }
 
         // 2. HDR10+ (Priority 3)
-        if (IsHdr10Plus(rangeType, profile, title, displayTitle, comment, path, name, videoStream.Hdr10PlusPresentFlag))
+        if (HdrFormatDetection.IsHdr10Plus(videoStream, path, name))
         {
             AddHdrBadge("hdr10plus", "badge-hdr10plus.svg");
         }
 
         // 3. HDR10 (Priority 2)
-        var combinedText = $"{profile} {title} {displayTitle} {comment} {path} {name}";
+        // Only the file name takes part in these loose substring checks, never the folders above it.
+        var fileName = HdrFormatDetection.GetFileNameForDetection(path);
+        var combinedText = $"{profile} {title} {displayTitle} {comment} {fileName} {name}";
         var isHdr10 = rangeType == VideoRangeType.HDR10
             || rangeType is VideoRangeType.DOVIWithHDR10 or VideoRangeType.DOVIWithEL
             || rangeType is VideoRangeType.HDR10Plus or VideoRangeType.DOVIWithHDR10Plus or VideoRangeType.DOVIWithELHDR10Plus
@@ -621,34 +616,7 @@ public partial class QualityDetectionService : IQualityDetectionService
 
     internal static bool IsDolbyVision(VideoRangeType rangeType, string profile, string title, string displayTitle, string path, string name)
     {
-        if (rangeType is VideoRangeType.DOVI
-                or VideoRangeType.DOVIWithHDR10
-                or VideoRangeType.DOVIWithHLG
-                or VideoRangeType.DOVIWithSDR
-                or VideoRangeType.DOVIWithEL
-                or VideoRangeType.DOVIWithHDR10Plus
-                or VideoRangeType.DOVIWithELHDR10Plus)
-        {
-            return true;
-        }
-
-        var combinedMeta = $"{profile} {title} {displayTitle}";
-        if (DolbyVisionRegex().IsMatch(combinedMeta))
-        {
-            return true;
-        }
-
-        if (!string.IsNullOrEmpty(path) && DolbyVisionRegex().IsMatch(path))
-        {
-            return true;
-        }
-
-        if (!string.IsNullOrEmpty(name) && DolbyVisionRegex().IsMatch(name))
-        {
-            return true;
-        }
-
-        return false;
+        return HdrFormatDetection.IsDolbyVision(rangeType, dvProfile: null, profile, title, displayTitle, path, name);
     }
 
     internal static bool IsHdr10Plus(
@@ -661,40 +629,7 @@ public partial class QualityDetectionService : IQualityDetectionService
         string name,
         bool? hdr10PlusPresentFlag = null)
     {
-        if (hdr10PlusPresentFlag == true)
-        {
-            return true;
-        }
-
-        if (rangeType is VideoRangeType.HDR10Plus
-                or VideoRangeType.DOVIWithHDR10Plus
-                or VideoRangeType.DOVIWithELHDR10Plus)
-        {
-            return true;
-        }
-
-        var combined = $"{profile} {title} {displayTitle} {comment}";
-        if (combined.Contains("HDR10+", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("HDR10 PLUS", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("ST 2094-40", StringComparison.OrdinalIgnoreCase)
-            || combined.Contains("SMPTE ST 2094", StringComparison.OrdinalIgnoreCase)
-            || Hdr10PlusPathRegex().IsMatch(combined))
-        {
-            return true;
-        }
-
-        if (!string.IsNullOrEmpty(path) && (path.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) || Hdr10PlusPathRegex().IsMatch(path)))
-        {
-            return true;
-        }
-
-        if (!string.IsNullOrEmpty(name) && (name.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) || Hdr10PlusPathRegex().IsMatch(name)))
-        {
-            return true;
-        }
-
-        return false;
+        return HdrFormatDetection.IsHdr10Plus(rangeType, hdr10PlusPresentFlag, profile, title, displayTitle, comment, path, name);
     }
 
     internal static void DeduplicateBadges(List<BadgeInfo> badges)

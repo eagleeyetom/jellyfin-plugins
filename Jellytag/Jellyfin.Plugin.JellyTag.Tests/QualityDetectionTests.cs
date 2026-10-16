@@ -146,6 +146,42 @@ public class QualityDetectionTests
     }
 
     [TestMethod]
+    [DataRow("/media/4K HDR/Movie (2020)/Movie (2020).mkv")]
+    [DataRow("/media/4K HDR10/Movie (2020).mkv")]
+    [DataRow("/media/HLG Broadcasts/Show/Episode.ts")]
+    [DataRow("/media/Dolby Vision/Movies/Movie (2020)/Movie (2020).mkv")]
+    [DataRow(@"D:\HDR10+ Rips\Films\Movie (2020)\Movie (2020).mkv")]
+    public void DetectHdr_SdrFileUnderHdrNamedFolder_AddsNoHdrBadge(string path)
+    {
+        var stream = new MediaStream { Type = MediaStreamType.Video };
+
+        var badges = QualityDetectionService.DetectHdr(stream, path, "Movie");
+
+        Assert.IsEmpty(badges, $"Unexpected HDR badges for '{path}': {string.Join(", ", badges.Select(b => b.BadgeKey))}");
+    }
+
+    [TestMethod]
+    public void DetectHdr_HdrTagsInFileName_StillDetected()
+    {
+        var stream = new MediaStream { Type = MediaStreamType.Video };
+
+        var badges = QualityDetectionService.DetectHdr(stream, "/media/Movies/Movie.2020.2160p.DV.HDR10.mkv", "Movie");
+
+        Assert.IsTrue(badges.Any(b => b.BadgeKey == "dv"));
+        Assert.IsTrue(badges.Any(b => b.BadgeKey == "hdr10"));
+    }
+
+    [TestMethod]
+    public void DetectHdr_ProbedDvProfile_DetectsDolbyVision()
+    {
+        var stream = new MediaStream { Type = MediaStreamType.Video, DvProfile = 8, ColorTransfer = "smpte2084" };
+
+        var badges = QualityDetectionService.DetectHdr(stream, "/media/Movies/Movie.mkv", "Movie");
+
+        Assert.IsTrue(badges.Any(b => b.BadgeKey == "dv"));
+    }
+
+    [TestMethod]
     public void GetHdrQualityScore_RespectsHierarchy()
     {
         var dvBadge = new List<BadgeInfo> { new() { BadgeKey = "dv" } };

@@ -512,6 +512,48 @@ public class MetadataNotifierServiceTests
     }
 
     [TestMethod]
+    [DataRow("/media/Dolby Vision/Movies/Sample (2020)/Sample (2020).mkv")]
+    [DataRow("/media/DV/Sample (2020)/Sample (2020).mkv")]
+    [DataRow(@"D:\HDR10+ Rips\Films\Sample (2020)\Sample (2020).mkv")]
+    public void GetHdrInfo_SdrFileUnderHdrNamedFolder_ReportsSdr(string path)
+    {
+        var videoStream = new MediaStream { Type = MediaStreamType.Video };
+        var config = new PluginConfiguration
+        {
+            ShowDolbyVision = true,
+            ShowHdr10Plus = true,
+            ShowHdr10 = true,
+            ShowSdr = true
+        };
+
+        var result = MetadataNotifierService.GetHdrInfo(videoStream, path, "Sample", CreateSession("Jellyfin Web", "Chrome"), config);
+
+        Assert.AreEqual("SDR", result.Value, path);
+    }
+
+    [TestMethod]
+    public void GetHdrInfo_DolbyVisionTagInReleaseFolder_ReportsDolbyVision()
+    {
+        var videoStream = new MediaStream { Type = MediaStreamType.Video };
+        var config = new PluginConfiguration { ShowDolbyVision = true, ShowSdr = true };
+
+        var result = MetadataNotifierService.GetHdrInfo(videoStream, "/downloads/Sample.2020.2160p.DV.HDR10-GRP/grp-sample.mkv", "Sample", CreateSession("Jellyfin Web", "Chrome"), config);
+
+        Assert.AreEqual("Dolby Vision", result.Value);
+    }
+
+    [TestMethod]
+    [DataRow("Jellyfin for Tizen", "Living Room", true)]
+    [DataRow("Jellyfin Web", "Samsung Smart TV", true)]
+    [DataRow("Jellyfin Android", "Samsung Galaxy S23", false)]
+    [DataRow("Jellyfin Android", "SM-S918B", false)]
+    [DataRow("Jellyfin Web", "Firefox", false)]
+    public void IsSamsungClient_UsesSharedDetection(string client, string deviceName, bool expected)
+    {
+        Assert.AreEqual(expected, MetadataNotifierService.IsSamsungClient(CreateSession(client, deviceName)));
+    }
+
+    [TestMethod]
     public void ShouldIgnoreItem_MatchesCollectionFolderIdFromVirtualFolders()
     {
         var libraryId = Guid.NewGuid();

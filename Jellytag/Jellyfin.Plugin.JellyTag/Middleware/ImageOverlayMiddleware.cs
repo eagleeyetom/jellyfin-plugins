@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Jellyfin.Plugin.JellyTag.Configuration;
 using Jellyfin.Plugin.JellyTag.Services;
+using Jellyfin.Plugin.Shared.MediaDetection;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -21,12 +22,6 @@ public partial class ImageOverlayMiddleware
 
     [GeneratedRegex(@"/Items/([0-9a-f]{32}|[0-9a-f-]{36})/Images/(Primary|Thumb)(/\d+)?$", RegexOptions.IgnoreCase)]
     private static partial Regex ImagePathRegex();
-
-    [GeneratedRegex(@"\bAFT[A-Z0-9]+\b", RegexOptions.IgnoreCase)]
-    private static partial Regex AftModelRegex();
-
-    [GeneratedRegex(@"\bFire\b", RegexOptions.IgnoreCase)]
-    private static partial Regex FireWordRegex();
 
     public ImageOverlayMiddleware(RequestDelegate next, ILogger<ImageOverlayMiddleware> logger)
     {
@@ -295,57 +290,14 @@ public partial class ImageOverlayMiddleware
         return GetClientIdentifiers(context, sessionManager).Any(ContainsSamsungIndicator);
     }
 
-    internal static bool ContainsSamsungIndicator(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return false;
-        if (value.Contains("Tizen", StringComparison.OrdinalIgnoreCase)) return true;
-        if (value.Contains("Samsung", StringComparison.OrdinalIgnoreCase))
-        {
-            if (value.Contains("Galaxy", StringComparison.OrdinalIgnoreCase)
-                || value.Contains("SM-", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-            return true;
-        }
-        return false;
-    }
+    internal static bool ContainsSamsungIndicator(string? value) => ClientDeviceDetection.ContainsSamsungTvIndicator(value);
 
     internal static bool IsFireTvClient(HttpContext context, ISessionManager? sessionManager = null)
     {
         return GetClientIdentifiers(context, sessionManager).Any(ContainsFireTvIndicator);
     }
 
-    internal static bool ContainsFireTvIndicator(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return false;
-
-        if (value.Contains("Fire TV", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("FireTV", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("fire-tv", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("fire_tv", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("FireStick", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("Fire Stick", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("FireOS", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("Silk/", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("Silk ", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (AftModelRegex().IsMatch(value))
-        {
-            return true;
-        }
-
-        if (FireWordRegex().IsMatch(value) && !value.Contains("Firefox", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return false;
-    }
+    internal static bool ContainsFireTvIndicator(string? value) => ClientDeviceDetection.ContainsFireTvIndicator(value);
 
     internal static bool IsWindowsClient(HttpContext context, ISessionManager? sessionManager = null)
     {

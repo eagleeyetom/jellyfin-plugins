@@ -18,6 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Tests for the detection helpers shared by both plugins; they run against this plugin's copy. -->
+    <Compile Include="..\..\Shared\MediaDetection.Tests\*.cs" Link="Shared\MediaDetection.Tests\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Jellyfin.Plugin.JellyTag\Jellyfin.Plugin.JellyTag.csproj" />
   </ItemGroup>
 

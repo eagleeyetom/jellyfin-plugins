@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.MetadataNotifier.Configuration;
+using Jellyfin.Plugin.Shared.MediaDetection;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.TV;
@@ -35,23 +36,8 @@ public partial class MetadataNotifierService : IHostedService
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pendingStartupToasts = new(StringComparer.Ordinal);
     private CancellationTokenSource? _serviceCancellation;
 
-    [GeneratedRegex(@"(?:[\\/\s\.\-_\[\(]|^)HDR10[\.\-_ ]?(?:\+|Plus)(?=[\\/\s\.\-_\]\)]|$)", RegexOptions.IgnoreCase)]
-    private static partial Regex CreateHdr10PlusPathRegex();
-
-    [GeneratedRegex(@"(?:[\.\-_\[\(](?:DV|DOVI|Dolby[\.\-_ ]?Vision)[\.\-_\]\)]|\b(?:DV|DOVI|Dolby[\.\-_ ]?Vision)\b)", RegexOptions.IgnoreCase)]
-    private static partial Regex CreateDolbyVisionPathRegex();
-
     [GeneratedRegex(@"\bLG\b", RegexOptions.IgnoreCase)]
     private static partial Regex LgWordRegex();
-
-    // Amazon model codes are upper-case (AFTMM, AFTKA, ...); matching them case-insensitively
-    // would also catch ordinary words such as "Aftermath".
-    [GeneratedRegex(@"\bAFT[A-Z0-9]{1,8}\b")]
-    private static partial Regex AftModelRegex();
-
-    // Whole-word "Fire" only, so "Firefox" is not mistaken for a Fire TV device.
-    [GeneratedRegex(@"\bFire\b|\bAmazon\b", RegexOptions.IgnoreCase)]
-    private static partial Regex FireWordRegex();
 
     [GeneratedRegex(@"(?:Profile|dvhe|dvh1)[\s\.]*8\.1\b", RegexOptions.IgnoreCase)]
     private static partial Regex Profile81Regex();
@@ -62,9 +48,9 @@ public partial class MetadataNotifierService : IHostedService
     [GeneratedRegex(@"(?:Profile|dvhe|dvh1)[\s\.]*7\.6\b", RegexOptions.IgnoreCase)]
     private static partial Regex Profile76Regex();
 
-    internal static Regex Hdr10PlusPathRegex => CreateHdr10PlusPathRegex();
+    internal static Regex Hdr10PlusPathRegex => HdrFormatDetection.Hdr10PlusTokenRegex();
 
-    internal static Regex DolbyVisionPathRegex => CreateDolbyVisionPathRegex();
+    internal static Regex DolbyVisionPathRegex => HdrFormatDetection.DolbyVisionTokenRegex();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MetadataNotifierService"/> class.
@@ -642,27 +628,8 @@ public partial class MetadataNotifierService : IHostedService
 
     internal static bool IsSamsungClient(SessionInfo session)
     {
-        var client = session.Client ?? string.Empty;
-        var deviceName = session.DeviceName ?? string.Empty;
-
-        // Explicit Tizen or Samsung Smart TV client
-        if (client.Contains("Tizen", StringComparison.OrdinalIgnoreCase)
-            || client.Contains("Samsung Smart TV", StringComparison.OrdinalIgnoreCase)
-            || client.Contains("Samsung TV", StringComparison.OrdinalIgnoreCase)
-            || deviceName.Contains("Tizen", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        // Exclude Samsung Galaxy phones/tablets running mobile apps
-        if (deviceName.Contains("Samsung", StringComparison.OrdinalIgnoreCase)
-            && !deviceName.Contains("Galaxy", StringComparison.OrdinalIgnoreCase)
-            && !deviceName.Contains("SM-", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return false;
+        return ClientDeviceDetection.ContainsSamsungTvIndicator(session.Client)
+            || ClientDeviceDetection.ContainsSamsungTvIndicator(session.DeviceName);
     }
 
     internal static bool IsFireTvClient(SessionInfo session)
@@ -670,23 +637,7 @@ public partial class MetadataNotifierService : IHostedService
         return ContainsFireTvIndicator(session.Client) || ContainsFireTvIndicator(session.DeviceName);
     }
 
-    internal static bool ContainsFireTvIndicator(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        return value.Contains("Fire TV", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("FireTV", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("Fire-TV", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("Fire_TV", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("FireStick", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("Fire Stick", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("FireOS", StringComparison.OrdinalIgnoreCase)
-            || AftModelRegex().IsMatch(value)
-            || FireWordRegex().IsMatch(value);
-    }
+    internal static bool ContainsFireTvIndicator(string? value) => ClientDeviceDetection.ContainsFireTvIndicator(value);
 
     internal static bool IsNonHdr10PlusClient(SessionInfo session)
     {
@@ -944,103 +895,12 @@ public partial class MetadataNotifierService : IHostedService
 
     internal static bool IsDolbyVision(MediaStream? videoStream, string itemPath, string itemName)
     {
-        if (videoStream == null)
-        {
-            return false;
-        }
-
-        // 1. Jellyfin probe DV profile
-        if (videoStream.DvProfile.HasValue && videoStream.DvProfile.Value > 0)
-        {
-            return true;
-        }
-
-        // 2. Jellyfin probe enum
-        var rangeType = videoStream.VideoRangeType;
-        if (rangeType is VideoRangeType.DOVI
-            or VideoRangeType.DOVIWithHDR10
-            or VideoRangeType.DOVIWithHLG
-            or VideoRangeType.DOVIWithSDR
-            or VideoRangeType.DOVIWithEL
-            or VideoRangeType.DOVIWithHDR10Plus
-            or VideoRangeType.DOVIWithELHDR10Plus)
-        {
-            return true;
-        }
-
-        // 3. Stream metadata
-        var profile = videoStream.Profile ?? string.Empty;
-        var displayTitle = videoStream.DisplayTitle ?? string.Empty;
-        var title = videoStream.Title ?? string.Empty;
-
-        var combinedMeta = $"{profile} {title} {displayTitle}";
-        if (combinedMeta.Contains("DOVI", StringComparison.OrdinalIgnoreCase)
-            || combinedMeta.Contains("DOLBY VISION", StringComparison.OrdinalIgnoreCase)
-            || DolbyVisionPathRegex.IsMatch(combinedMeta))
-        {
-            return true;
-        }
-
-        // 4. File path / release name
-        if (!string.IsNullOrEmpty(itemPath) && DolbyVisionPathRegex.IsMatch(itemPath))
-        {
-            return true;
-        }
-
-        if (!string.IsNullOrEmpty(itemName) && DolbyVisionPathRegex.IsMatch(itemName))
-        {
-            return true;
-        }
-
-        return false;
+        return HdrFormatDetection.IsDolbyVision(videoStream, itemPath, itemName);
     }
 
     internal static bool IsHdr10Plus(MediaStream? videoStream, string itemPath, string itemName)
     {
-        if (videoStream == null)
-        {
-            return false;
-        }
-
-        // 1. Jellyfin probe flag
-        if (videoStream.Hdr10PlusPresentFlag == true)
-        {
-            return true;
-        }
-
-        // 2. Jellyfin probe enum
-        var rangeType = videoStream.VideoRangeType;
-        if (rangeType is VideoRangeType.HDR10Plus
-            or VideoRangeType.DOVIWithHDR10Plus
-            or VideoRangeType.DOVIWithELHDR10Plus)
-        {
-            return true;
-        }
-
-        // 3. Stream metadata
-        var combinedMeta = $"{videoStream.Profile} {videoStream.Title} {videoStream.DisplayTitle} {videoStream.Comment}";
-        if (combinedMeta.Contains("HDR10+", StringComparison.OrdinalIgnoreCase)
-            || combinedMeta.Contains("HDR10 PLUS", StringComparison.OrdinalIgnoreCase)
-            || combinedMeta.Contains("HDR10PLUS", StringComparison.OrdinalIgnoreCase)
-            || combinedMeta.Contains("ST 2094-40", StringComparison.OrdinalIgnoreCase)
-            || combinedMeta.Contains("SMPTE ST 2094", StringComparison.OrdinalIgnoreCase)
-            || Hdr10PlusPathRegex.IsMatch(combinedMeta))
-        {
-            return true;
-        }
-
-        // 4. File path / release name
-        if (!string.IsNullOrEmpty(itemPath) && (itemPath.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) || Hdr10PlusPathRegex.IsMatch(itemPath)))
-        {
-            return true;
-        }
-
-        if (!string.IsNullOrEmpty(itemName) && (itemName.Contains("HDR10+", StringComparison.OrdinalIgnoreCase) || Hdr10PlusPathRegex.IsMatch(itemName)))
-        {
-            return true;
-        }
-
-        return false;
+        return HdrFormatDetection.IsHdr10Plus(videoStream, itemPath, itemName);
     }
 
     private static string GetDetailedDolbyVisionInfo(MediaStream videoStream)

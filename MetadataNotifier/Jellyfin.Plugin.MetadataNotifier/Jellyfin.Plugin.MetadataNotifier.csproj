@@ -24,6 +24,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Detection helpers shared with the other plugin. Compiled in (not referenced as a DLL)
+         so this plugin stays a single self-contained assembly. -->
+    <Compile Include="..\..\Shared\MediaDetection\*.cs" Link="Shared\MediaDetection\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="Configuration\configPage.html" />
   </ItemGroup>
 
