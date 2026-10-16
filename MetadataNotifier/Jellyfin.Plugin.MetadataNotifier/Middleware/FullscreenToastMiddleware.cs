@@ -111,13 +111,7 @@ public class FullscreenToastMiddleware
 
         var path = context.Request.Path.Value ?? string.Empty;
 
-        // Only intercept the web-client root index.html (served at "/" or "/index.html").
-        bool isIndexHtml = string.Equals(path, "/", System.StringComparison.Ordinal)
-            || string.Equals(path, "/index.html", System.StringComparison.OrdinalIgnoreCase)
-            || string.Equals(path, "/web/index.html", System.StringComparison.OrdinalIgnoreCase)
-            || string.Equals(path, "/web/", System.StringComparison.Ordinal);
-
-        if (!isIndexHtml || !string.Equals(context.Request.Method, "GET", System.StringComparison.OrdinalIgnoreCase))
+        if (!IsIndexHtmlPath(path) || !string.Equals(context.Request.Method, "GET", System.StringComparison.OrdinalIgnoreCase))
         {
             await _next(context).ConfigureAwait(false);
             return;
@@ -185,5 +179,18 @@ public class FullscreenToastMiddleware
         {
             context.Response.Body = originalBody;
         }
+    }
+
+    /// <summary>
+    /// Returns whether the path points at the web client's <c>index.html</c>.
+    /// This middleware runs before Jellyfin's <c>UsePathBase</c>, so the path still carries
+    /// any configured BaseUrl (e.g. <c>/jellyfin/web/index.html</c>); match on the suffix.
+    /// </summary>
+    internal static bool IsIndexHtmlPath(string path)
+    {
+        return string.Equals(path, "/", System.StringComparison.Ordinal)
+            || string.Equals(path, "/index.html", System.StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith("/web/", System.StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith("/web/index.html", System.StringComparison.OrdinalIgnoreCase);
     }
 }

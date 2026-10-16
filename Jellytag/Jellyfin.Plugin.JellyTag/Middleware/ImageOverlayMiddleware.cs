@@ -123,9 +123,10 @@ public partial class ImageOverlayMiddleware
 
         sessionManager ??= context.RequestServices?.GetService(typeof(ISessionManager)) as ISessionManager;
 
-        var isSamsung = IsSamsungClient(context, sessionManager);
-        var isFireTv = IsFireTvClient(context, sessionManager);
-        var isWindows = IsWindowsClient(context, sessionManager);
+        var clientIdentifiers = GetClientIdentifiers(context, sessionManager);
+        var isSamsung = clientIdentifiers.Any(ContainsSamsungIndicator);
+        var isFireTv = clientIdentifiers.Any(ContainsFireTvIndicator);
+        var isWindows = clientIdentifiers.Any(ContainsWindowsIndicator);
 
         _logger.LogDebug("Client identification for {Item} - isFireTv: {IsFireTv}, isSamsung: {IsSamsung}, isWindows: {IsWindows}",
             item.Name, isFireTv, isSamsung, isWindows);
@@ -173,6 +174,45 @@ public partial class ImageOverlayMiddleware
         context.Request.Headers.Remove("If-None-Match");
         context.Request.Headers.Remove("If-Modified-Since");
 
+        await ServeBadgedImageAsync(context, overlayService, cacheService, itemId, badgeKey, imageTag, visibleBadges, imageConfig, etag, outputFormat)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Serves the badged image from the disk cache when possible; otherwise lets Jellyfin
+    /// produce the original image, overlays the badges and caches the result.
+    /// </summary>
+    internal async Task ServeBadgedImageAsync(
+        HttpContext context,
+        IImageOverlayService overlayService,
+        IImageCacheService cacheService,
+        Guid itemId,
+        string badgeKey,
+        string imageTag,
+        List<BadgeInfo> visibleBadges,
+        ImageTypeConfig imageConfig,
+        string etag,
+        OutputImageFormat outputFormat)
+    {
+        // A cache entry only exists if the original image was served before, so a hit
+        // skips Jellyfin's own image read/resize entirely.
+        var cachedImage = await cacheService.GetCachedImageAsync(itemId, badgeKey, imageTag).ConfigureAwait(false);
+        if (cachedImage != null)
+        {
+            await using (cachedImage.ConfigureAwait(false))
+            {
+                cachedImage.Position = 0;
+                var cachedContentType = ImageOverlayService.DetectImageContentType(cachedImage);
+                context.Response.StatusCode = StatusCodes.Status200OK;
+                ClearEntityHeaders(context.Response, etag);
+                context.Response.ContentType = cachedContentType;
+                context.Response.ContentLength = cachedImage.Length;
+                await cachedImage.CopyToAsync(context.Response.Body).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
         var originalBody = context.Response.Body;
         using var capturedBody = new MemoryStream();
         context.Response.Body = capturedBody;
@@ -189,22 +229,6 @@ public partial class ImageOverlayMiddleware
             }
 
             capturedBody.Position = 0;
-
-            var cachedImage = await cacheService.GetCachedImageAsync(itemId, badgeKey, imageTag).ConfigureAwait(false);
-            if (cachedImage != null)
-            {
-                await using (cachedImage.ConfigureAwait(false))
-                {
-                    cachedImage.Position = 0;
-                    var cachedContentType = ImageOverlayService.DetectImageContentType(cachedImage);
-                    ClearEntityHeaders(context.Response, etag);
-                    context.Response.ContentType = cachedContentType;
-                    context.Response.ContentLength = cachedImage.Length;
-                    await cachedImage.CopyToAsync(originalBody).ConfigureAwait(false);
-                }
-
-                return;
-            }
 
             (Stream resultStream, string contentType) result;
             try
@@ -410,7 +434,7 @@ public partial class ImageOverlayMiddleware
         return value.Contains("Windows", StringComparison.OrdinalIgnoreCase);
     }
 
-    internal static IEnumerable<string> GetClientIdentifiers(HttpContext context, ISessionManager? sessionManager = null)
+    internal static IReadOnlyCollection<string> GetClientIdentifiers(HttpContext context, ISessionManager? sessionManager = null)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -457,13 +481,6 @@ public partial class ImageOverlayMiddleware
         sessionManager ??= context.RequestServices?.GetService(typeof(ISessionManager)) as ISessionManager;
         if (sessionManager != null)
         {
-            var token = authDict.GetValueOrDefault("Token");
-            if (string.IsNullOrEmpty(token)) token = context.Request.Headers["X-Emby-Token"].ToString();
-            if (string.IsNullOrEmpty(token)) token = context.Request.Headers["X-MediaBrowser-Token"].ToString();
-            if (string.IsNullOrEmpty(token)) token = context.Request.Query["api_key"].ToString();
-            if (string.IsNullOrEmpty(token)) token = context.Request.Query["token"].ToString();
-            if (string.IsNullOrEmpty(token)) token = context.Request.Query["X-Emby-Token"].ToString();
-
             var deviceId = authDict.GetValueOrDefault("DeviceId");
             if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Headers["X-Emby-Device-Id"].ToString();
             if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Query["deviceId"].ToString();
@@ -482,27 +499,14 @@ public partial class ImageOverlayMiddleware
                         matchedSession = sessions.FirstOrDefault(s => string.Equals(s.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
                     }
 
-                    if (matchedSession == null && !string.IsNullOrEmpty(token))
+                    if (matchedSession == null && !string.IsNullOrEmpty(clientIp))
                     {
-                        matchedSession = sessions.FirstOrDefault(s => string.Equals(s.Id, token, StringComparison.OrdinalIgnoreCase));
+                        matchedSession = FindUnambiguousIpSession(sessions, clientIp);
                     }
 
                     if (matchedSession != null)
                     {
                         AddSessionIdentifiers(matchedSession, AddIfValid);
-                    }
-                    else if (!string.IsNullOrEmpty(clientIp))
-                    {
-                        var ipSessions = sessions
-                            .Where(s => IsIpMatch(s.RemoteEndPoint, clientIp))
-                            .OrderByDescending(s => s.IsActive)
-                            .ThenByDescending(s => s.LastActivityDate)
-                            .ToList();
-
-                        foreach (var session in ipSessions)
-                        {
-                            AddSessionIdentifiers(session, AddIfValid);
-                        }
                     }
                 }
             }
@@ -513,6 +517,23 @@ public partial class ImageOverlayMiddleware
         }
 
         return seen;
+    }
+
+    /// <summary>
+    /// Picks the session for a request IP only when it is unambiguous. Several sessions behind
+    /// one NAT or a reverse proxy without X-Forwarded-For share an IP; mixing their identifiers
+    /// would apply one TV's badge filtering to every client, so an ambiguous IP yields no session.
+    /// </summary>
+    private static SessionInfo? FindUnambiguousIpSession(IEnumerable<SessionInfo> sessions, string clientIp)
+    {
+        var ipSessions = sessions.Where(s => IsIpMatch(s.RemoteEndPoint, clientIp)).ToList();
+        if (ipSessions.Count == 1)
+        {
+            return ipSessions[0];
+        }
+
+        var activeSessions = ipSessions.Where(s => s.IsActive).ToList();
+        return activeSessions.Count == 1 ? activeSessions[0] : null;
     }
 
     private static void AddSessionIdentifiers(SessionInfo session, Action<string?> addIfValid)
