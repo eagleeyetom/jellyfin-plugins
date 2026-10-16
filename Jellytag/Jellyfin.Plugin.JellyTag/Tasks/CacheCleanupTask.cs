@@ -84,6 +84,24 @@ public class CacheCleanupTask : IScheduledTask
             progress.Report((double)(i + 1) / files.Length * 100);
         }
 
+        // Temp files left behind by an interrupted write (e.g. server shutdown mid-request).
+        var staleTempCutoff = DateTime.UtcNow.AddHours(-1);
+        foreach (var tempFile in Directory.EnumerateFiles(cacheDir, "*" + ImageCacheService.TempFileExtension))
+        {
+            try
+            {
+                if (File.GetLastWriteTimeUtc(tempFile) < staleTempCutoff)
+                {
+                    File.Delete(tempFile);
+                    deletedCount++;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to delete stale temp file: {Path}", tempFile);
+            }
+        }
+
         _logger.LogInformation("JellyTag cache cleanup complete. Deleted {Count} expired files", deletedCount);
         return Task.CompletedTask;
     }

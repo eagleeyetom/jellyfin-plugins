@@ -26,18 +26,35 @@ internal static partial class MetadataFormatter
     {
         if (!string.IsNullOrWhiteSpace(config.CustomTemplate))
         {
-            var formatted = config.CustomTemplate
-                .Replace("{hdr}", hdrInfo, StringComparison.OrdinalIgnoreCase)
-                .Replace("{audio}", audioInfo, StringComparison.OrdinalIgnoreCase)
-                .Replace("{playback}", playbackInfo, StringComparison.OrdinalIgnoreCase)
-                .Replace("{mode}", playbackInfo, StringComparison.OrdinalIgnoreCase)
-                .Replace("{bitrate}", bitrateInfo, StringComparison.OrdinalIgnoreCase)
-                .Replace("{title}", header, StringComparison.OrdinalIgnoreCase);
+            var placeholders = new (string Token, string? Value)[]
+            {
+                ("{hdr}", hdrInfo),
+                ("{audio}", audioInfo),
+                ("{playback}", playbackInfo),
+                ("{mode}", playbackInfo),
+                ("{bitrate}", bitrateInfo),
+                ("{title}", header)
+            };
+
+            // Values go in as private-use markers so separator cleanup only touches the
+            // template itself, never text inside a value (e.g. "Mission: Impossible - Fallout").
+            var formatted = config.CustomTemplate;
+            for (var i = 0; i < placeholders.Length; i++)
+            {
+                var marker = string.IsNullOrEmpty(placeholders[i].Value) ? string.Empty : PlaceholderMarker(i);
+                formatted = formatted.Replace(placeholders[i].Token, marker, StringComparison.OrdinalIgnoreCase);
+            }
 
             formatted = TemplateSeparatorRegex().Replace(formatted, " • ")
                 .Trim()
                 .Trim('•', '|')
                 .Trim();
+
+            for (var i = 0; i < placeholders.Length; i++)
+            {
+                formatted = formatted.Replace(PlaceholderMarker(i), placeholders[i].Value, StringComparison.Ordinal);
+            }
+
             if (!string.IsNullOrWhiteSpace(formatted))
             {
                 return formatted;
@@ -52,6 +69,8 @@ internal static partial class MetadataFormatter
 
         return string.Join(" • ", parts);
     }
+
+    private static string PlaceholderMarker(int index) => $"{index}";
 
     internal static string FormatChannelCount(int channels)
     {

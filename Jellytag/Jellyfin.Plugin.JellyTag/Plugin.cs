@@ -29,8 +29,19 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         Instance = this;
 
         // Run legacy migration once at startup
-        Configuration.MigrateFromLegacy();
-        Configuration.BackfillNewBadges();
+        Configuration.EnsureValid();
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Every path that replaces the configuration (dashboard save, import, reset) goes
+    /// through here, so the image pipeline never sees null sections or lists.
+    /// </remarks>
+    public override void UpdateConfiguration(BasePluginConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ((PluginConfiguration)configuration).EnsureValid();
+        base.UpdateConfiguration(configuration);
     }
 
     /// <inheritdoc />

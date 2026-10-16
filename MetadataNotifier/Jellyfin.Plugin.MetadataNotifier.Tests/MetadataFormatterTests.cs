@@ -45,6 +45,63 @@ public class MetadataFormatterTests
     }
 
     [TestMethod]
+    public void BuildMessageText_KeepsHyphenInsideTitleValue()
+    {
+        var config = new PluginConfiguration
+        {
+            CustomTemplate = "{title} - {hdr}"
+        };
+
+        var result = MetadataFormatter.BuildMessageText(
+            config,
+            "HDR10",
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            "Mission: Impossible - Fallout");
+
+        Assert.AreEqual("Mission: Impossible - Fallout • HDR10", result);
+    }
+
+    [TestMethod]
+    public void BuildMessageText_KeepsSeparatorsInsideValuesWhenNeighbourIsEmpty()
+    {
+        var config = new PluginConfiguration
+        {
+            CustomTemplate = "{title} | {hdr} | {audio}"
+        };
+
+        var result = MetadataFormatter.BuildMessageText(
+            config,
+            string.Empty,
+            "Dolby Atmos | Dolby TrueHD 7.1",
+            string.Empty,
+            string.Empty,
+            "Lost - S01E01");
+
+        Assert.AreEqual("Lost - S01E01 • Dolby Atmos | Dolby TrueHD 7.1", result);
+    }
+
+    [TestMethod]
+    public void BuildMessageText_DoesNotExpandPlaceholdersFoundInsideValues()
+    {
+        var config = new PluginConfiguration
+        {
+            CustomTemplate = "{title} • {audio}"
+        };
+
+        var result = MetadataFormatter.BuildMessageText(
+            config,
+            string.Empty,
+            "AAC 2.0",
+            string.Empty,
+            string.Empty,
+            "Movie {audio}");
+
+        Assert.AreEqual("Movie {audio} • AAC 2.0", result);
+    }
+
+    [TestMethod]
     [DataRow(1, "Mono")]
     [DataRow(2, "2.0")]
     [DataRow(6, "5.1")]

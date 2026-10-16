@@ -199,7 +199,7 @@ public partial class ImageOverlayMiddleware
             (Stream resultStream, string contentType) result;
             try
             {
-                result = await overlayService.AddBadgeOverlaysAsync(capturedBody, visibleBadges, imageConfig).ConfigureAwait(false);
+                result = await overlayService.AddBadgeOverlaysAsync(capturedBody, visibleBadges, imageConfig, GetDisplayContext(context.Request.Query)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -227,6 +227,24 @@ public partial class ImageOverlayMiddleware
         }
     }
 
+    /// <summary>
+    /// jellyfin-web's list view asks for a square box (fillWidth == fillHeight, see listview.js)
+    /// and then crops the image to a 3:2 / 11:8 frame; cards ask for a box matching their own
+    /// aspect ratio. The query is part of the cache key, so both variants are cached separately.
+    /// </summary>
+    internal static ImageDisplayContext GetDisplayContext(IQueryCollection query)
+    {
+        if (int.TryParse(query["fillWidth"].FirstOrDefault(), out var fillWidth)
+            && int.TryParse(query["fillHeight"].FirstOrDefault(), out var fillHeight)
+            && fillWidth > 0
+            && fillWidth == fillHeight)
+        {
+            return ImageDisplayContext.ListView;
+        }
+
+        return ImageDisplayContext.Card;
+    }
+
     internal static string GetCacheRelevantQuery(IQueryCollection query)
     {
         var parameters = query
@@ -247,7 +265,7 @@ public partial class ImageOverlayMiddleware
         response.Headers.CacheControl = "no-cache";
     }
 
-    private static ImageTypeConfig? GetImageTypeConfig(PluginConfiguration config, string imageType, BaseItem item)
+    internal static ImageTypeConfig? GetImageTypeConfig(PluginConfiguration config, string imageType, BaseItem item)
     {
         var type = imageType.ToUpperInvariant();
 

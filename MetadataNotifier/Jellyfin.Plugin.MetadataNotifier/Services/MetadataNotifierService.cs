@@ -29,6 +29,7 @@ public partial class MetadataNotifierService : IHostedService
     internal readonly record struct HdrDetectionResult(string Value, string Rule);
 
     private readonly ISessionManager _sessionManager;
+    private readonly ILibraryManager _libraryManager;
     private readonly ILogger<MetadataNotifierService> _logger;
     private readonly ConcurrentDictionary<string, int> _lastActiveAudioTrack = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pendingStartupToasts = new(StringComparer.Ordinal);
@@ -42,6 +43,15 @@ public partial class MetadataNotifierService : IHostedService
 
     [GeneratedRegex(@"\bLG\b", RegexOptions.IgnoreCase)]
     private static partial Regex LgWordRegex();
+
+    // Amazon model codes are upper-case (AFTMM, AFTKA, ...); matching them case-insensitively
+    // would also catch ordinary words such as "Aftermath".
+    [GeneratedRegex(@"\bAFT[A-Z0-9]{1,8}\b")]
+    private static partial Regex AftModelRegex();
+
+    // Whole-word "Fire" only, so "Firefox" is not mistaken for a Fire TV device.
+    [GeneratedRegex(@"\bFire\b|\bAmazon\b", RegexOptions.IgnoreCase)]
+    private static partial Regex FireWordRegex();
 
     [GeneratedRegex(@"(?:Profile|dvhe|dvh1)[\s\.]*8\.1\b", RegexOptions.IgnoreCase)]
     private static partial Regex Profile81Regex();
@@ -60,12 +70,15 @@ public partial class MetadataNotifierService : IHostedService
     /// Initializes a new instance of the <see cref="MetadataNotifierService"/> class.
     /// </summary>
     /// <param name="sessionManager">Session manager.</param>
+    /// <param name="libraryManager">Library manager.</param>
     /// <param name="logger">Logger.</param>
     public MetadataNotifierService(
         ISessionManager sessionManager,
+        ILibraryManager libraryManager,
         ILogger<MetadataNotifierService> logger)
     {
         _sessionManager = sessionManager;
+        _libraryManager = libraryManager;
         _logger = logger;
     }
 
@@ -176,7 +189,7 @@ public partial class MetadataNotifierService : IHostedService
             }
 
             var item = e.Item;
-            if (item == null || ShouldIgnoreItem(item, config))
+            if (item == null || ShouldIgnoreItem(item, config, _libraryManager))
             {
                 return;
             }
@@ -396,7 +409,7 @@ public partial class MetadataNotifierService : IHostedService
             }
 
             var item = e.Item;
-            if (item == null || ShouldIgnoreItem(item, config))
+            if (item == null || ShouldIgnoreItem(item, config, _libraryManager))
             {
                 return;
             }
@@ -521,7 +534,7 @@ public partial class MetadataNotifierService : IHostedService
         return session;
     }
 
-    private static bool ShouldIgnoreItem(BaseItem item, PluginConfiguration config)
+    internal static bool ShouldIgnoreItem(BaseItem item, PluginConfiguration config, ILibraryManager libraryManager)
     {
         if (config.IgnoreAudioMedia && (item is Audio || item.MediaType == MediaType.Audio))
         {
@@ -530,20 +543,45 @@ public partial class MetadataNotifierService : IHostedService
 
         if (config.ExcludedLibraryIds != null && config.ExcludedLibraryIds.Count > 0)
         {
-            var libId = GetLibraryId(item);
-            if (libId.HasValue)
-            {
-                var idStr = libId.Value.ToString();
-                var idN = libId.Value.ToString("N");
-                if (config.ExcludedLibraryIds.Contains(idStr, StringComparer.OrdinalIgnoreCase)
-                    || config.ExcludedLibraryIds.Contains(idN, StringComparer.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
+            return IsInExcludedLibrary(GetLibraryIds(item, libraryManager), config.ExcludedLibraryIds);
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The configuration page stores library IDs from <c>Library/VirtualFolders</c>, which are
+    /// collection folder IDs. The physical top-level folder an item lives in has a different ID,
+    /// so the collection folders have to come from the library manager.
+    /// </summary>
+    private static IEnumerable<Guid> GetLibraryIds(BaseItem item, ILibraryManager libraryManager)
+    {
+        IEnumerable<Guid> collectionFolderIds;
+        try
+        {
+            collectionFolderIds = libraryManager.GetCollectionFolders(item).Select(folder => folder.Id).ToList();
+        }
+        catch (Exception)
+        {
+            collectionFolderIds = Array.Empty<Guid>();
+        }
+
+        var topParentId = GetTopParentId(item);
+        return topParentId.HasValue ? collectionFolderIds.Append(topParentId.Value) : collectionFolderIds;
+    }
+
+    internal static bool IsInExcludedLibrary(IEnumerable<Guid> libraryIds, IEnumerable<string> excludedLibraryIds)
+    {
+        var excluded = new HashSet<Guid>();
+        foreach (var id in excludedLibraryIds)
+        {
+            if (Guid.TryParse(id, out var guid))
+            {
+                excluded.Add(guid);
+            }
+        }
+
+        return excluded.Count > 0 && libraryIds.Any(excluded.Contains);
     }
 
     private static bool IsUserExcluded(SessionInfo session, PluginConfiguration config)
@@ -559,7 +597,7 @@ public partial class MetadataNotifierService : IHostedService
         return false;
     }
 
-    private static Guid? GetLibraryId(BaseItem item)
+    private static Guid? GetTopParentId(BaseItem item)
     {
         var parent = item;
         while (parent != null)
@@ -629,15 +667,25 @@ public partial class MetadataNotifierService : IHostedService
 
     internal static bool IsFireTvClient(SessionInfo session)
     {
-        var client = session.Client ?? string.Empty;
-        var deviceName = session.DeviceName ?? string.Empty;
+        return ContainsFireTvIndicator(session.Client) || ContainsFireTvIndicator(session.DeviceName);
+    }
 
-        return client.Contains("Fire", StringComparison.OrdinalIgnoreCase)
-            || client.Contains("AFT", StringComparison.OrdinalIgnoreCase)
-            || client.Contains("Amazon", StringComparison.OrdinalIgnoreCase)
-            || deviceName.Contains("Fire", StringComparison.OrdinalIgnoreCase)
-            || deviceName.Contains("AFT", StringComparison.OrdinalIgnoreCase)
-            || deviceName.Contains("Amazon", StringComparison.OrdinalIgnoreCase);
+    internal static bool ContainsFireTvIndicator(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return value.Contains("Fire TV", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("FireTV", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Fire-TV", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Fire_TV", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("FireStick", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Fire Stick", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("FireOS", StringComparison.OrdinalIgnoreCase)
+            || AftModelRegex().IsMatch(value)
+            || FireWordRegex().IsMatch(value);
     }
 
     internal static bool IsNonHdr10PlusClient(SessionInfo session)
@@ -689,8 +737,7 @@ public partial class MetadataNotifierService : IHostedService
                 || client.Contains("AndroidTV", StringComparison.OrdinalIgnoreCase)
                 || client.Contains("Google TV", StringComparison.OrdinalIgnoreCase)
                 || deviceName.Contains("Shield", StringComparison.OrdinalIgnoreCase)
-                || deviceName.Contains("AFT", StringComparison.OrdinalIgnoreCase)
-                || deviceName.Contains("Fire", StringComparison.OrdinalIgnoreCase)
+                || ContainsFireTvIndicator(deviceName)
                 || deviceName.Contains("BRAVIA", StringComparison.OrdinalIgnoreCase)
                 || deviceName.Contains("TV", StringComparison.OrdinalIgnoreCase)
                 || deviceName.Contains("Box", StringComparison.OrdinalIgnoreCase);

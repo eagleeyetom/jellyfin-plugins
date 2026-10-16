@@ -3,6 +3,23 @@ using Jellyfin.Plugin.JellyTag.Configuration;
 namespace Jellyfin.Plugin.JellyTag.Services;
 
 /// <summary>
+/// How the client is going to frame the image, which decides what part of it stays visible.
+/// </summary>
+public enum ImageDisplayContext
+{
+    /// <summary>
+    /// A card whose frame matches the image type (2:3 poster, 16:9 thumbnail).
+    /// </summary>
+    Card,
+
+    /// <summary>
+    /// jellyfin-web list view (e.g. the episode list of a season): the image is shown with
+    /// <c>background-size: cover</c> in a 3:2 frame, or 11:8 on narrow screens.
+    /// </summary>
+    ListView
+}
+
+/// <summary>
 /// Interface for image overlay service.
 /// </summary>
 public interface IImageOverlayService
@@ -11,7 +28,11 @@ public interface IImageOverlayService
     /// Adds multiple badge overlays to an image using per-panel configuration.
     /// Returns the result stream and the content type.
     /// </summary>
-    Task<(Stream Stream, string ContentType)> AddBadgeOverlaysAsync(Stream originalImage, List<BadgeInfo> badges, ImageTypeConfig imageConfig);
+    Task<(Stream Stream, string ContentType)> AddBadgeOverlaysAsync(
+        Stream originalImage,
+        List<BadgeInfo> badges,
+        ImageTypeConfig imageConfig,
+        ImageDisplayContext displayContext = ImageDisplayContext.Card);
 
     /// <summary>
     /// Determines if a badge should be shown based on the image type config panels.

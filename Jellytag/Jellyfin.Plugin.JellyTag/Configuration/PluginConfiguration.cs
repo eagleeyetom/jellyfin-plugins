@@ -161,6 +161,7 @@ public class PluginConfiguration : BasePluginConfiguration
         ThumbnailConfig = CreateDefaultThumbnailConfig();
         ThumbnailSameAsPoster = true;
         ThumbnailSizeReduction = 5;
+        ListViewBadgeScalePercent = 75;
         ExcludedLibraryIds = new List<string>();
 
         CustomBadgeTexts = new List<BadgeTextOverride>();
@@ -202,6 +203,13 @@ public class PluginConfiguration : BasePluginConfiguration
     /// For example, 10 means a 15% poster badge becomes 5% on thumbnails.
     /// </summary>
     public int ThumbnailSizeReduction { get; set; }
+
+    /// <summary>
+    /// Badge size in jellyfin-web's list view (e.g. a season's episode list), as a percentage of
+    /// the normal size. The list-view frame is small and badges stack in a single column, so they
+    /// are scaled down there. Sizes in that view are measured against the visible frame.
+    /// </summary>
+    public int ListViewBadgeScalePercent { get; set; }
 
     /// <summary>
     /// Library IDs excluded from badge generation. Empty means all libraries are included.
@@ -534,6 +542,74 @@ public class PluginConfiguration : BasePluginConfiguration
         ShowChannelBadge = null;
         LanguageBadgeMode = null;
         ShowSubtitleIndicator = null;
+    }
+
+    /// <summary>
+    /// Brings any configuration (saved, imported or posted by the dashboard) into a shape the
+    /// image pipeline can rely on: no null sections or lists, legacy settings migrated and new
+    /// badges backfilled. A JSON import with <c>"ExcludedLibraryIds": null</c> would otherwise
+    /// make every poster request fail.
+    /// </summary>
+    public void EnsureValid()
+    {
+        Normalize();
+        MigrateFromLegacy();
+        BackfillNewBadges();
+    }
+
+    internal void Normalize()
+    {
+        PosterConfig = NormalizeImageType(PosterConfig, CreateDefaultPosterConfig);
+        ThumbnailConfig = NormalizeImageType(ThumbnailConfig, CreateDefaultThumbnailConfig);
+
+        ExcludedLibraryIds ??= new List<string>();
+        ExcludedLibraryIds.RemoveAll(string.IsNullOrWhiteSpace);
+        CustomBadgeTexts ??= new List<BadgeTextOverride>();
+        CustomBadgeTexts.RemoveAll(o => o == null || o.Key == null);
+        CustomBadgeColors ??= new List<BadgeTypeStyleOverride>();
+        CustomBadgeColors.RemoveAll(o => o == null || o.BadgeKey == null);
+        LanguageFlagOverrides ??= new List<LanguageFlagOverride>();
+        LanguageFlagOverrides.RemoveAll(o => o == null || o.LanguageCode == null || o.FlagCode == null);
+
+        if (ListViewBadgeScalePercent <= 0)
+        {
+            ListViewBadgeScalePercent = 75;
+        }
+    }
+
+    private static ImageTypeConfig NormalizeImageType(ImageTypeConfig? config, Func<ImageTypeConfig> createDefault)
+    {
+        if (config == null)
+        {
+            return createDefault();
+        }
+
+        var defaults = createDefault();
+        config.ResolutionPanel = NormalizePanel(config.ResolutionPanel, defaults.ResolutionPanel);
+        config.HdrPanel = NormalizePanel(config.HdrPanel, defaults.HdrPanel);
+        config.CodecPanel = NormalizePanel(config.CodecPanel, defaults.CodecPanel);
+        config.AudioPanel = NormalizePanel(config.AudioPanel, defaults.AudioPanel);
+        config.ChannelPanel = NormalizePanel(config.ChannelPanel, defaults.ChannelPanel);
+        config.LanguagePanel = NormalizePanel(config.LanguagePanel, defaults.LanguagePanel);
+        return config;
+    }
+
+    private static BadgePanelSettings NormalizePanel(BadgePanelSettings? panel, BadgePanelSettings fallback)
+    {
+        if (panel == null)
+        {
+            return fallback;
+        }
+
+        panel.EnabledBadges ??= new List<string>();
+        panel.EnabledBadges.RemoveAll(string.IsNullOrWhiteSpace);
+        panel.DisabledLogos ??= new List<string>();
+        panel.DisabledLogos.RemoveAll(string.IsNullOrWhiteSpace);
+        panel.BadgeTypeOverrides ??= new List<BadgeTypeStyleOverride>();
+        panel.BadgeTypeOverrides.RemoveAll(o => o == null || o.BadgeKey == null);
+        panel.TextBgColor ??= "#000000";
+        panel.TextColor ??= "#FFFFFF";
+        return panel;
     }
 
     internal static ImageTypeConfig CreateDefaultPosterConfig()

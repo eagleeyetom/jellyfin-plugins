@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.JellyTag.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
@@ -49,6 +50,13 @@ public partial class QualityDetectionService : IQualityDetectionService
     /// <inheritdoc />
     public List<BadgeInfo> DetectAllBadges(BaseItem item)
     {
+        // Preview renders use unsaved settings (e.g. language flag overrides), so they must
+        // neither read nor populate the cache shared with real image requests.
+        if (PluginConfigurationScope.IsOverridden)
+        {
+            return DetectAllBadgesInternal(item);
+        }
+
         if (_badgeCache.TryGetValue(item.Id, out var cached) && DateTime.UtcNow - cached.CachedAt < BadgeCacheTtl)
         {
             return new List<BadgeInfo>(cached.Badges);
@@ -337,7 +345,7 @@ public partial class QualityDetectionService : IQualityDetectionService
 
 #if DEBUG
             // Debug manual country code override
-            var config = Plugin.Instance?.Configuration;
+            var config = PluginConfigurationScope.Current;
             if (!string.IsNullOrWhiteSpace(config?.DebugCountryCode))
             {
                 var debugCodes = config.DebugCountryCode.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries);
@@ -472,7 +480,7 @@ public partial class QualityDetectionService : IQualityDetectionService
         var canonical = NormalizeLanguageCode(rawLanguage);
         if (canonical.Length == 0) return string.Empty;
 
-        var overrides = Plugin.Instance?.Configuration?.LanguageFlagOverrides;
+        var overrides = PluginConfigurationScope.Current?.LanguageFlagOverrides;
         var userFlag = overrides?.FirstOrDefault(o =>
             string.Equals(o.LanguageCode, canonical, StringComparison.OrdinalIgnoreCase))?.FlagCode;
         if (!string.IsNullOrWhiteSpace(userFlag)) return $"flag-{userFlag.Trim().ToLowerInvariant()}.svg";

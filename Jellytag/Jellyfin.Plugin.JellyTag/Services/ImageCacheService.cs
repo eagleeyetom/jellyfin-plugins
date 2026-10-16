@@ -18,9 +18,14 @@ public class ImageCacheService : IImageCacheService
     /// Initializes a new instance of the <see cref="ImageCacheService"/> class.
     /// </summary>
     public ImageCacheService(ILogger<ImageCacheService> logger)
+        : this(logger, Plugin.Instance?.CacheFolderPath ?? Path.Combine(Path.GetTempPath(), "JellyTag", "cache"))
+    {
+    }
+
+    internal ImageCacheService(ILogger<ImageCacheService> logger, string cachePath)
     {
         _logger = logger;
-        _cachePath = Plugin.Instance?.CacheFolderPath ?? Path.Combine(Path.GetTempPath(), "JellyTag", "cache");
+        _cachePath = cachePath;
         EnsureCacheDirectoryExists();
 
         if (Plugin.Instance != null)
@@ -67,9 +72,12 @@ public class ImageCacheService : IImageCacheService
     /// <inheritdoc />
     public async Task CacheImageAsync(Guid itemId, string badgeKey, string imageTag, Stream imageStream)
     {
-        var cacheKey = GenerateCacheKey(itemId, badgeKey, imageTag);
-        var cachePath = GetCachePath(cacheKey);
-        var tempPath = cachePath + ".tmp";
+        var cachePath = GetCacheFilePath(itemId, badgeKey, imageTag);
+
+        // Unique per write: two requests rendering the same image at once must not share (or
+        // delete) each other's temp file. The last File.Move wins, which is fine since both
+        // wrote the same content.
+        var tempPath = $"{cachePath}.{Guid.NewGuid():N}{TempFileExtension}";
 
         try
         {
@@ -104,6 +112,11 @@ public class ImageCacheService : IImageCacheService
 
     /// <inheritdoc />
     public string GetCacheDirectory() => _cachePath;
+
+    internal const string TempFileExtension = ".tmp";
+
+    internal string GetCacheFilePath(Guid itemId, string badgeKey, string imageTag)
+        => GetCachePath(GenerateCacheKey(itemId, badgeKey, imageTag));
 
     internal static IEnumerable<string> EnumerateCacheFiles(string dir)
     {
@@ -206,6 +219,7 @@ public class ImageCacheService : IImageCacheService
         AppendFingerprintValue(sb, config.WebPQuality);
         AppendFingerprintValue(sb, config.ThumbnailSameAsPoster);
         AppendFingerprintValue(sb, config.ThumbnailSizeReduction);
+        AppendFingerprintValue(sb, config.ListViewBadgeScalePercent);
         AppendFingerprintValue(sb, config.DebugCountryCode);
         AppendImageTypeFingerprint(sb, config.PosterConfig);
         AppendImageTypeFingerprint(sb, config.ThumbnailConfig);

@@ -1,6 +1,10 @@
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.MetadataNotifier.Configuration;
 using Jellyfin.Plugin.MetadataNotifier.Services;
+using System.Reflection;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
 
@@ -464,5 +468,109 @@ public class MetadataNotifierServiceTests
         Assert.AreNotEqual("DV Profile 8.1", result.Value);
         Assert.AreEqual("Dolby Vision (4K HEVC 8.1 Mbps bitrate)", result.Value);
     }
-}
 
+    [TestMethod]
+    [DataRow("Jellyfin Web", "Firefox")]
+    [DataRow("Jellyfin Web", "Firefox 131")]
+    [DataRow("Jellyfin Web", "Aftermath PC")]
+    [DataRow("Jellyfin Web", "Microsoft Edge")]
+    public void FireTv_BrowserAndLookalikeNames_AreNotFireTv(string client, string deviceName)
+    {
+        Assert.IsFalse(MetadataNotifierService.IsFireTvClient(CreateSession(client, deviceName)));
+    }
+
+    [TestMethod]
+    [DataRow("Jellyfin for Android TV", "Amazon AFTKA")]
+    [DataRow("Jellyfin for Android TV", "Fire Stick 4K Max")]
+    [DataRow("Jellyfin for Android TV", "Living Room Fire")]
+    [DataRow("Kodi", "FireTV Cube")]
+    public void FireTv_DeviceNames_AreFireTv(string client, string deviceName)
+    {
+        Assert.IsTrue(MetadataNotifierService.IsFireTvClient(CreateSession(client, deviceName)));
+    }
+
+    [TestMethod]
+    public void FirefoxBrowser_WithSuppressDvOnFireTv_StillReportsDolbyVision()
+    {
+        var videoStream = new MediaStream
+        {
+            Type = MediaStreamType.Video,
+            DvProfile = 8
+        };
+
+        var config = new PluginConfiguration
+        {
+            ShowDolbyVision = true,
+            ShowHdr10 = true,
+            SuppressDvOnFireTv = true
+        };
+
+        var result = MetadataNotifierService.GetHdrInfo(videoStream, "/media/movies/Sample.mkv", "Sample", CreateSession("Jellyfin Web", "Firefox"), config);
+
+        Assert.AreEqual("Dolby Vision", result.Value);
+        Assert.AreEqual("dolby-vision", result.Rule);
+    }
+
+    [TestMethod]
+    public void ShouldIgnoreItem_MatchesCollectionFolderIdFromVirtualFolders()
+    {
+        var libraryId = Guid.NewGuid();
+        var libraryManager = FakeLibraryManager.Create(libraryId);
+        var movie = new Movie { Id = Guid.NewGuid(), Name = "Sample" };
+        var config = new PluginConfiguration
+        {
+            ExcludedLibraryIds = [libraryId.ToString("N")]
+        };
+
+        Assert.IsTrue(MetadataNotifierService.ShouldIgnoreItem(movie, config, libraryManager));
+    }
+
+    [TestMethod]
+    public void ShouldIgnoreItem_OtherLibrary_IsNotIgnored()
+    {
+        var libraryManager = FakeLibraryManager.Create(Guid.NewGuid());
+        var movie = new Movie { Id = Guid.NewGuid(), Name = "Sample" };
+        var config = new PluginConfiguration
+        {
+            ExcludedLibraryIds = [Guid.NewGuid().ToString()]
+        };
+
+        Assert.IsFalse(MetadataNotifierService.ShouldIgnoreItem(movie, config, libraryManager));
+    }
+
+    [TestMethod]
+    public void IsInExcludedLibrary_AcceptsDashedAndCompactGuidFormats()
+    {
+        var id = Guid.NewGuid();
+
+        Assert.IsTrue(MetadataNotifierService.IsInExcludedLibrary([id], [id.ToString()]));
+        Assert.IsTrue(MetadataNotifierService.IsInExcludedLibrary([id], [id.ToString("N").ToUpperInvariant()]));
+        Assert.IsFalse(MetadataNotifierService.IsInExcludedLibrary([id], ["not-a-guid"]));
+        Assert.IsFalse(MetadataNotifierService.IsInExcludedLibrary([id], []));
+    }
+
+    /// <summary>
+    /// Minimal <see cref="ILibraryManager"/> stand-in: only GetCollectionFolders is answered.
+    /// </summary>
+    public class FakeLibraryManager : DispatchProxy
+    {
+        private Guid _collectionFolderId;
+
+        public static ILibraryManager Create(Guid collectionFolderId)
+        {
+            var proxy = DispatchProxy.Create<ILibraryManager, FakeLibraryManager>();
+            ((FakeLibraryManager)(object)proxy)._collectionFolderId = collectionFolderId;
+            return proxy;
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            if (targetMethod?.Name == nameof(ILibraryManager.GetCollectionFolders))
+            {
+                return new List<Folder> { new CollectionFolder { Id = _collectionFolderId } };
+            }
+
+            throw new NotSupportedException(targetMethod?.Name);
+        }
+    }
+}

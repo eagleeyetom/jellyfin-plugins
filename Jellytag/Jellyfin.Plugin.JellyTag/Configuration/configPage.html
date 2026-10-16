@@ -284,6 +284,11 @@
                                 <input id="ThumbnailSizeReduction" type="number" min="0" max="50" step="1" is="emby-input" />
                                 <div class="fieldDescription">Reduce badge size on thumbnails compared to posters (e.g. 10 means a 15% poster badge becomes 5% on thumbnails).</div>
                             </div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="ListViewBadgeScalePercent">List view badge size (%)</label>
+                                <input id="ListViewBadgeScalePercent" type="number" min="25" max="100" step="5" is="emby-input" />
+                                <div class="fieldDescription">Badge size in the web client's list view (e.g. a season's episode list) compared to the normal size. That view shows images in a small, cropped frame, so smaller badges take less of it.</div>
+                            </div>
                             <div id="ThumbFieldsContainer">
                                 <div class="checkboxContainer checkboxContainer-withDescription">
                                     <label class="emby-checkbox-label">
@@ -1155,6 +1160,7 @@
             }
             config.ThumbnailSameAsPoster = q('ThumbnailSameAsPoster').checked;
             config.ThumbnailSizeReduction = parseInt(q('ThumbnailSizeReduction').value, 10) || 0;
+            config.ListViewBadgeScalePercent = Math.min(100, Math.max(25, parseInt(q('ListViewBadgeScalePercent').value, 10) || 75));
             config.PosterConfig = collectImageTypeConfig('Poster');
             config.ThumbnailConfig = collectImageTypeConfig('Thumb');
             config.ExcludedLibraryIds = collectExcludedLibraries();
@@ -1640,6 +1646,7 @@
                 q('DebugCountryCode').value = config.DebugCountryCode || '';
                 q('ThumbnailSameAsPoster').checked = config.ThumbnailSameAsPoster === true;
                 q('ThumbnailSizeReduction').value = config.ThumbnailSizeReduction != null ? config.ThumbnailSizeReduction : 10;
+                q('ListViewBadgeScalePercent').value = config.ListViewBadgeScalePercent != null ? config.ListViewBadgeScalePercent : 75;
 
                 loadImageTypeConfig('Poster', config.PosterConfig || {});
                 loadImageTypeConfig('Thumb', config.ThumbnailConfig || {});
@@ -1881,15 +1888,20 @@
                         div.addEventListener('click',function(){previewItemId=item.Id;previewItemName=item.Name+(item.ProductionYear?' ('+item.ProductionYear+')':'');selectedEl.textContent=previewItemName;searchResults.style.display='none';searchInput.value='';refreshPreview();});
                         searchResults.appendChild(div);});searchResults.style.display='block';});},300);});
             document.addEventListener('click',function(e){if(!searchResults.contains(e.target)&&e.target!==searchInput)searchResults.style.display='none';});
+            // Renders the unsaved form state server-side; nothing is saved and the image cache is left alone.
+            function renderPreviewImage(config,imageType,imgEl){
+                var headers={'Content-Type':'application/json'};var token=ApiClient.accessToken();if(token)headers['Authorization']='MediaBrowser Token="'+token+'"';
+                var url=ApiClient.getUrl('JellyTag/Preview/'+previewItemId)+'?imageType='+imageType;
+                return fetch(url,{method:'POST',headers:headers,body:JSON.stringify(config)}).then(function(r){
+                    if(r.status===404){imgEl.style.display='none';return null;}
+                    if(!r.ok)throw new Error('HTTP '+r.status);
+                    return r.blob();}).then(function(blob){
+                    if(!blob)return;
+                    if(imgEl.dataset.objectUrl)URL.revokeObjectURL(imgEl.dataset.objectUrl);
+                    var objectUrl=URL.createObjectURL(blob);imgEl.dataset.objectUrl=objectUrl;imgEl.src=objectUrl;imgEl.style.display='block';});}
             function refreshPreview(){if(!previewItemId||refreshing)return;refreshing=true;errorEl.style.display='none';errorEl.textContent='';spinner.style.display='block';
-                ApiClient.getPluginConfiguration(JellyTagConfig.pluginUniqueId).then(function(config){collectConfigFromForm(config);return ApiClient.updatePluginConfiguration(JellyTagConfig.pluginUniqueId,config);}).then(function(){
-                    return ApiClient.ajax({type:'POST',url:ApiClient.getUrl('JellyTag/ClearCache')});}).then(function(){
-                    var token=ApiClient.accessToken();var bust='_t='+Date.now();var tp=token?'&api_key='+token:'';
-                    var pu=ApiClient.getUrl('Items/'+previewItemId+'/Images/Primary')+'?'+bust+tp;
-                    var tu=ApiClient.getUrl('Items/'+previewItemId+'/Images/Thumb')+'?'+bust+tp;
-                    var pl=new Promise(function(res){var img=new Image();img.onload=function(){posterImg.src=pu;posterImg.style.display='block';res();};img.onerror=function(){posterImg.style.display='none';res();};img.src=pu;});
-                    var tl=new Promise(function(res){var img=new Image();img.onload=function(){thumbImg.src=tu;thumbImg.style.display='block';res();};img.onerror=function(){thumbImg.style.display='none';res();};img.src=tu;});
-                    return Promise.all([pl,tl]);}).then(function(){spinner.style.display='none';refreshing=false;}).catch(function(err){spinner.style.display='none';refreshing=false;errorEl.textContent='Preview error: '+(err.message||err);errorEl.style.display='block';});}
+                ApiClient.getPluginConfiguration(JellyTagConfig.pluginUniqueId).then(function(config){collectConfigFromForm(config);
+                    return Promise.all([renderPreviewImage(config,'Primary',posterImg),renderPreviewImage(config,'Thumb',thumbImg)]);}).then(function(){spinner.style.display='none';refreshing=false;}).catch(function(err){spinner.style.display='none';refreshing=false;errorEl.textContent='Preview error: '+(err.message||err);errorEl.style.display='block';});}
             var form=document.querySelector('#JellyTagConfigForm');
             form.addEventListener('input',function(e){if(e.target.closest('.jellytag-preview-panel'))return;clearTimeout(refreshTimer);refreshTimer=setTimeout(refreshPreview,1500);});
             form.addEventListener('change',function(e){if(e.target.closest('.jellytag-preview-panel'))return;clearTimeout(refreshTimer);refreshTimer=setTimeout(refreshPreview,1500);});

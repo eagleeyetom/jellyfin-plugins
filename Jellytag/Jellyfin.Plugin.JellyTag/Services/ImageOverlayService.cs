@@ -13,15 +13,53 @@ namespace Jellyfin.Plugin.JellyTag.Services;
 public class ImageOverlayService : IImageOverlayService, IDisposable
 {
     private readonly ILogger<ImageOverlayService> _logger;
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> _svgCache = new();
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, SKBitmap?> _rasterCache = new();
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, float> _aspectRatioCache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> _recoloredSvgCache = new();
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, SKBitmap> _rasterizedSvgCache = new();
     private const int MaxCachedRasterBitmaps = 512;
     private readonly SemaphoreSlim _badgeLock = new(1, 1);
-    private bool _badgesLoaded;
+    private volatile BadgeAssets? _assets;
     private bool _disposed;
+
+    /// <summary>
+    /// One loaded generation of badge artwork and its derived caches. A render works on the
+    /// generation it started with; <see cref="ReloadBadges"/> only swaps in a new one, so
+    /// bitmaps a concurrent render is still drawing are never disposed underneath it.
+    /// </summary>
+    private sealed class BadgeAssets
+    {
+        public System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> Svg { get; } = new();
+
+        public System.Collections.Concurrent.ConcurrentDictionary<string, SKBitmap?> Raster { get; } = new();
+
+        public System.Collections.Concurrent.ConcurrentDictionary<string, float> AspectRatios { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> RecoloredSvg { get; } = new();
+
+        public System.Collections.Concurrent.ConcurrentDictionary<string, SKBitmap> RasterizedSvg { get; } = new();
+
+        public void DisposeBitmaps()
+        {
+            var bitmaps = new HashSet<SKBitmap>(ReferenceEqualityComparer.Instance);
+            foreach (var bmp in Raster.Values)
+            {
+                if (bmp != null) bitmaps.Add(bmp);
+            }
+
+            foreach (var bmp in RasterizedSvg.Values)
+            {
+                bitmaps.Add(bmp);
+            }
+
+            foreach (var bmp in bitmaps)
+            {
+                bmp.Dispose();
+            }
+
+            Raster.Clear();
+            RasterizedSvg.Clear();
+            RecoloredSvg.Clear();
+            AspectRatios.Clear();
+            Svg.Clear();
+        }
+    }
 
     private const int MinBadgeSizePercent = 5;
     private const int MaxBadgeSizePercent = 50;
@@ -70,7 +108,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
     /// <inheritdoc />
     public bool ShouldShowBadge(BadgeInfo badge, ImageTypeConfig imageConfig)
     {
-        var config = Plugin.Instance?.Configuration;
+        var config = PluginConfigurationScope.Current;
         if (config == null || !config.Enabled)
         {
             return false;
@@ -104,9 +142,13 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<(Stream Stream, string ContentType)> AddBadgeOverlaysAsync(Stream originalImage, List<BadgeInfo> badges, ImageTypeConfig imageConfig)
+    public async Task<(Stream Stream, string ContentType)> AddBadgeOverlaysAsync(
+        Stream originalImage,
+        List<BadgeInfo> badges,
+        ImageTypeConfig imageConfig,
+        ImageDisplayContext displayContext = ImageDisplayContext.Card)
     {
-        var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        var config = PluginConfigurationScope.Current ?? new PluginConfiguration();
         var jpegQuality = Math.Clamp(config.JpegQuality, 1, 100);
 
         originalImage.Position = 0;
@@ -151,6 +193,9 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 true);
         }
 
+        var (cropX, cropY) = CalculateSafeAreaCrop(image.Width, image.Height, displayContext);
+        var badgeReferenceWidth = GetBadgeReferenceWidth(image.Width, cropX, displayContext, config.ListViewBadgeScalePercent);
+
         // Prepare and render each panel
         var allPanelGroups = new List<PanelRenderGroup>();
         var allOwnedBitmaps = new List<SKBitmap>();
@@ -172,7 +217,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 var filtered = new List<BadgeInfo>();
                 var ownedBitmaps = new List<SKBitmap>();
 
-                await PrepareBadgeGroup(panelBadges, sizePercent, image.Width, useText, sizes, sourceBitmaps, filtered, ownedBitmaps, panel).ConfigureAwait(false);
+                await PrepareBadgeGroup(panelBadges, sizePercent, badgeReferenceWidth, useText, sizes, sourceBitmaps, filtered, ownedBitmaps, panel).ConfigureAwait(false);
                 allOwnedBitmaps.AddRange(ownedBitmaps);
 
                 if (filtered.Count == 0) continue;
@@ -202,8 +247,6 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                 { BadgePosition.TopLeft, 0 }, { BadgePosition.TopRight, 0 },
                 { BadgePosition.BottomLeft, 0 }, { BadgePosition.BottomRight, 0 }
             };
-
-            var (cropX, cropY) = CalculateSafeAreaCrop(image.Width, image.Height);
 
             foreach (var group in allPanelGroups)
             {
@@ -350,22 +393,9 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         _badgeLock.Wait();
         try
         {
-            foreach (var badge in _rasterCache.Values)
-            {
-                badge?.Dispose();
-            }
-
-            foreach (var bmp in _rasterizedSvgCache.Values)
-            {
-                bmp.Dispose();
-            }
-
-            _rasterCache.Clear();
-            _rasterizedSvgCache.Clear();
-            _recoloredSvgCache.Clear();
-            _aspectRatioCache.Clear();
-            _svgCache.Clear();
-            _badgesLoaded = false;
+            // Renders in flight may still be drawing bitmaps from the current generation, so
+            // they are not disposed here; the finalizers release them once nothing uses them.
+            _assets = null;
         }
         finally
         {
@@ -409,7 +439,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         }
         else
         {
-            await EnsureBadgesLoaded().ConfigureAwait(false);
+            var assets = await EnsureBadgesLoaded().ConfigureAwait(false);
             var isSquareOrRound = panel.IconStyle is BadgeIconStyle.Square or BadgeIconStyle.Round;
 
             foreach (var badgeInfo in badges)
@@ -435,70 +465,70 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     if (!isLogoDisabled)
                     {
                         var useOrigAac = (badgeInfo.BadgeKey.Equals("aac", StringComparison.OrdinalIgnoreCase) || fileKey.StartsWith("aac", StringComparison.OrdinalIgnoreCase))
-                            && Plugin.Instance?.Configuration?.UseOriginalAacLogo == true;
+                            && PluginConfigurationScope.Current?.UseOriginalAacLogo == true;
                         var aacSuffix = useOrigAac ? "-orig" : "";
                         var baseKey = fileKey.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? fileKey[..^4] : fileKey;
                         var logoName = "logo-" + baseKey + aacSuffix + (fileKey.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? ".svg" : "");
 
-                        var isWhite = panel.WhiteLogoBackground ?? Plugin.Instance?.Configuration?.WhiteLogoBackground == true;
+                        var isWhite = panel.WhiteLogoBackground ?? PluginConfigurationScope.Current?.WhiteLogoBackground == true;
                         if (isWhite)
                         {
                             var whiteName = "logo-" + baseKey + aacSuffix + "-white.svg";
-                            if (_svgCache.ContainsKey(whiteName) || _rasterCache.ContainsKey(whiteName))
+                            if (assets.Svg.ContainsKey(whiteName) || assets.Raster.ContainsKey(whiteName))
                             {
                                 logoName = whiteName;
                             }
                         }
 
-                        if (_svgCache.ContainsKey(logoName) || _rasterCache.ContainsKey(logoName))
+                        if (assets.Svg.ContainsKey(logoName) || assets.Raster.ContainsKey(logoName))
                         {
                             targetResource = logoName;
                         }
                     }
                 }
-                else if (panel.WhiteLogoBackground ?? Plugin.Instance?.Configuration?.WhiteLogoBackground == true)
+                else if (panel.WhiteLogoBackground ?? PluginConfigurationScope.Current?.WhiteLogoBackground == true)
                 {
                     var whiteBadge = resourceFileName.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
                         ? resourceFileName[..^4] + "-white.svg"
                         : resourceFileName + "-white";
-                    if (_svgCache.ContainsKey(whiteBadge) || _rasterCache.ContainsKey(whiteBadge))
+                    if (assets.Svg.ContainsKey(whiteBadge) || assets.Raster.ContainsKey(whiteBadge))
                     {
                         targetResource = whiteBadge;
                     }
                 }
 
                 var colorOverride = panel.BadgeTypeOverrides?.FirstOrDefault(o => string.Equals(o.BadgeKey, badgeInfo.BadgeKey, StringComparison.OrdinalIgnoreCase))
-                    ?? Plugin.Instance?.Configuration?.CustomBadgeColors?.FirstOrDefault(o => string.Equals(o.BadgeKey, badgeInfo.BadgeKey, StringComparison.OrdinalIgnoreCase));
+                    ?? PluginConfigurationScope.Current?.CustomBadgeColors?.FirstOrDefault(o => string.Equals(o.BadgeKey, badgeInfo.BadgeKey, StringComparison.OrdinalIgnoreCase));
 
                 if (colorOverride != null && (!string.IsNullOrEmpty(colorOverride.BgColor) || !string.IsNullOrEmpty(colorOverride.TextColor)))
                 {
                     if (targetResource.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                     {
                         var altSvg = "badge-" + badgeInfo.BadgeKey.Replace('.', '_') + ".svg";
-                        if (_svgCache.ContainsKey(altSvg))
+                        if (assets.Svg.ContainsKey(altSvg))
                         {
                             targetResource = altSvg;
                         }
                     }
                 }
 
-                if (_svgCache.TryGetValue(targetResource, out var svgBytes))
+                if (assets.Svg.TryGetValue(targetResource, out var svgBytes))
                 {
                     if (colorOverride != null && (!string.IsNullOrEmpty(colorOverride.BgColor) || !string.IsNullOrEmpty(colorOverride.TextColor)))
                     {
                         var recolorKey = $"{targetResource}:{colorOverride.BgColor}:{colorOverride.TextColor}";
-                        if (!_recoloredSvgCache.TryGetValue(recolorKey, out var recolored))
+                        if (!assets.RecoloredSvg.TryGetValue(recolorKey, out var recolored))
                         {
                             recolored = RecolorSvg(svgBytes, colorOverride.BgColor, colorOverride.TextColor, badgeInfo.BadgeKey);
-                            _recoloredSvgCache[recolorKey] = recolored;
+                            assets.RecoloredSvg[recolorKey] = recolored;
                         }
                         svgBytes = recolored;
                     }
 
-                    if (!_aspectRatioCache.TryGetValue(targetResource, out var ratio))
+                    if (!assets.AspectRatios.TryGetValue(targetResource, out var ratio))
                     {
                         ratio = GetSvgAspectRatio(svgBytes);
-                        _aspectRatioCache[targetResource] = ratio;
+                        assets.AspectRatios[targetResource] = ratio;
                     }
 
                     var badgeHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(badgeWidth / ratio));
@@ -507,13 +537,13 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
                     var rasterKey = $"{targetResource}:{rasterWidth}x{rasterHeight}:{colorOverride?.BgColor}:{colorOverride?.TextColor}";
                     bool wasCached = true;
-                    if (!_rasterizedSvgCache.TryGetValue(rasterKey, out var rasterized))
+                    if (!assets.RasterizedSvg.TryGetValue(rasterKey, out var rasterized))
                     {
                         wasCached = false;
                         rasterized = RasterizeSvg(svgBytes, rasterWidth, rasterHeight);
-                        if (rasterized != null && _rasterizedSvgCache.Count < MaxCachedRasterBitmaps)
+                        if (rasterized != null && assets.RasterizedSvg.Count < MaxCachedRasterBitmaps)
                         {
-                            _rasterizedSvgCache[rasterKey] = rasterized;
+                            assets.RasterizedSvg[rasterKey] = rasterized;
                             wasCached = true;
                         }
                     }
@@ -541,7 +571,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     continue;
                 }
 
-                if (_rasterCache.TryGetValue(targetResource, out var rasterBitmap) && rasterBitmap != null)
+                if (assets.Raster.TryGetValue(targetResource, out var rasterBitmap) && rasterBitmap != null)
                 {
                     var processed = ProcessBitmapStyle(rasterBitmap, isSquareOrRound);
                     if (processed != rasterBitmap)
@@ -578,16 +608,26 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         return dest;
     }
 
-    private async Task EnsureBadgesLoaded()
+    private async Task<BadgeAssets> EnsureBadgesLoaded()
     {
+        var assets = _assets;
+        if (assets != null)
+        {
+            return assets;
+        }
+
         await _badgeLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (!_badgesLoaded)
+            assets = _assets;
+            if (assets == null)
             {
-                LoadBadges();
-                _badgesLoaded = true;
+                assets = new BadgeAssets();
+                LoadBadges(assets);
+                _assets = assets;
             }
+
+            return assets;
         }
         finally
         {
@@ -660,7 +700,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         return 2f;
     }
 
-    private void LoadBadges()
+    private void LoadBadges(BadgeAssets assets)
     {
         var assembly = Assembly.GetExecutingAssembly();
         var resourceNames = assembly.GetManifestResourceNames();
@@ -701,7 +741,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     try
                     {
                         var bytes = File.ReadAllBytes(customSvg);
-                        _svgCache[svgFileName] = bytes;
+                        assets.Svg[svgFileName] = bytes;
                         _logger.LogDebug("Loaded custom SVG badge: {FileName}", svgFileName);
                         continue;
                     }
@@ -720,8 +760,8 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                         if (customBadge != null)
                         {
                             customBadge = TrimTransparent(customBadge);
-                            _rasterCache[svgFileName] = customBadge;
-                            _rasterCache[pngFileName] = customBadge;
+                            assets.Raster[svgFileName] = customBadge;
+                            assets.Raster[pngFileName] = customBadge;
                             _logger.LogDebug("Loaded custom PNG badge: {FileName}", pngFileName);
                             continue;
                         }
@@ -744,7 +784,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                             if (customBadge != null)
                             {
                                 customBadge = TrimTransparent(customBadge);
-                                _rasterCache[svgFileName] = customBadge;
+                                assets.Raster[svgFileName] = customBadge;
                                 _logger.LogDebug("Loaded custom JPEG badge: {FileName}", baseName + ext);
                                 foundJpeg = true;
                                 break;
@@ -769,7 +809,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                     {
                         using var ms = new MemoryStream();
                         stream.CopyTo(ms);
-                        _svgCache[svgFileName] = ms.ToArray();
+                        assets.Svg[svgFileName] = ms.ToArray();
                         _logger.LogDebug("Loaded embedded SVG badge: {FileName}", svgFileName);
                         continue;
                     }
@@ -791,8 +831,8 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
                         if (badge != null)
                         {
                             badge = TrimTransparent(badge);
-                            _rasterCache[svgFileName] = badge;
-                            _rasterCache[pngFileName] = badge;
+                            assets.Raster[svgFileName] = badge;
+                            assets.Raster[pngFileName] = badge;
                             _logger.LogDebug("Loaded embedded PNG fallback: {FileName}", pngFileName);
                         }
                     }
@@ -804,7 +844,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             }
         }
 
-        _logger.LogInformation("Badge loading complete. SVG: {SvgCount}, Raster: {RasterCount}", _svgCache.Count, _rasterCache.Count);
+        _logger.LogInformation("Badge loading complete. SVG: {SvgCount}, Raster: {RasterCount}", assets.Svg.Count, assets.Raster.Count);
     }
 
     private static SKBitmap TrimTransparent(SKBitmap bitmap)
@@ -854,6 +894,76 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
     private static bool ShouldReverseOrder(BadgeLayout layout, BadgePosition position) =>
         (layout == BadgeLayout.Vertical && (position == BadgePosition.BottomLeft || position == BadgePosition.BottomRight))
         || (layout == BadgeLayout.Horizontal && (position == BadgePosition.TopRight || position == BadgePosition.BottomRight));
+
+    /// <summary>
+    /// Frame aspect ratios (width / height) of jellyfin-web's large list-view image:
+    /// 22vw x 16vw below 64em, 19.5vw x 13vw on desktop and 30vw x 20vw on TV.
+    /// </summary>
+    private static readonly float[] ListViewFrameRatios = { 22f / 16f, 3f / 2f };
+
+    internal const int MinListViewBadgeScalePercent = 25;
+    internal const int MaxListViewBadgeScalePercent = 100;
+
+    /// <summary>
+    /// Width that panel size percentages are taken from. On cards that is the whole image, as
+    /// before. In the list view only the frame's visible part counts, so badges keep the same
+    /// proportion to what the viewer sees, and they are scaled by the list-view setting.
+    /// </summary>
+    internal static int GetBadgeReferenceWidth(int imageWidth, int cropX, ImageDisplayContext displayContext, int listViewScalePercent)
+    {
+        if (displayContext != ImageDisplayContext.ListView)
+        {
+            return imageWidth;
+        }
+
+        var visibleWidth = Math.Max(1, imageWidth - (2 * cropX));
+        var scale = Math.Clamp(listViewScalePercent, MinListViewBadgeScalePercent, MaxListViewBadgeScalePercent) / 100.0;
+        return Math.Max(1, (int)Math.Round(visibleWidth * scale));
+    }
+
+    internal static (int cropX, int cropY) CalculateSafeAreaCrop(int imageWidth, int imageHeight, ImageDisplayContext displayContext)
+    {
+        if (displayContext != ImageDisplayContext.ListView)
+        {
+            return CalculateSafeAreaCrop(imageWidth, imageHeight);
+        }
+
+        // The frame depends on the screen width, so keep badges inside the part that is
+        // visible in every list-view frame.
+        int cropX = 0, cropY = 0;
+        foreach (var frameRatio in ListViewFrameRatios)
+        {
+            var (x, y) = CalculateCoverCrop(imageWidth, imageHeight, frameRatio);
+            cropX = Math.Max(cropX, x);
+            cropY = Math.Max(cropY, y);
+        }
+
+        return (cropX, cropY);
+    }
+
+    /// <summary>
+    /// Returns how much of each edge <c>background-size: cover</c> hides when an image is shown
+    /// in a frame with the given aspect ratio (width / height).
+    /// </summary>
+    internal static (int cropX, int cropY) CalculateCoverCrop(int imageWidth, int imageHeight, float frameRatio)
+    {
+        if (imageHeight <= 0 || imageWidth <= 0 || frameRatio <= 0) return (0, 0);
+
+        var imageRatio = (float)imageWidth / imageHeight;
+        if (imageRatio > frameRatio)
+        {
+            var visibleWidth = (int)Math.Round(imageHeight * frameRatio);
+            return (Math.Max(0, (imageWidth - visibleWidth) / 2), 0);
+        }
+
+        if (imageRatio < frameRatio)
+        {
+            var visibleHeight = (int)Math.Round(imageWidth / frameRatio);
+            return (0, Math.Max(0, (imageHeight - visibleHeight) / 2));
+        }
+
+        return (0, 0);
+    }
 
     internal static (int cropX, int cropY) CalculateSafeAreaCrop(int imageWidth, int imageHeight)
     {
@@ -1004,7 +1114,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
     private static string GetBadgeDisplayText(string badgeKey)
     {
-        var config = Plugin.Instance?.Configuration;
+        var config = PluginConfigurationScope.Current;
         var customText = config?.CustomBadgeTexts?.FirstOrDefault(x => string.Equals(x.Key, badgeKey, StringComparison.OrdinalIgnoreCase))?.Text;
         if (!string.IsNullOrEmpty(customText)) return customText;
         return BadgeDisplayText.TryGetValue(badgeKey, out var text) ? text : badgeKey.ToUpperInvariant();
@@ -1038,7 +1148,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
     /// </summary>
     private static (string bg, string text, byte opacity, int cornerRadius) ResolveBadgeStyle(BadgeInfo badge, BadgePanelSettings panel, ImageTypeConfig imageConfig)
     {
-        var isWhite = panel.WhiteLogoBackground ?? Plugin.Instance?.Configuration?.WhiteLogoBackground == true;
+        var isWhite = panel.WhiteLogoBackground ?? PluginConfigurationScope.Current?.WhiteLogoBackground == true;
         var defaultBg = isWhite ? "#FFFFFF" : "#000000";
         var defaultText = isWhite ? "#000000" : "#FFFFFF";
 
@@ -1058,7 +1168,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
         // Per-badge-type overrides
         var typeOverride = panel.BadgeTypeOverrides?.FirstOrDefault(o => string.Equals(o.BadgeKey, badge.BadgeKey, StringComparison.OrdinalIgnoreCase))
-            ?? Plugin.Instance?.Configuration?.CustomBadgeColors?.FirstOrDefault(o => string.Equals(o.BadgeKey, badge.BadgeKey, StringComparison.OrdinalIgnoreCase));
+            ?? PluginConfigurationScope.Current?.CustomBadgeColors?.FirstOrDefault(o => string.Equals(o.BadgeKey, badge.BadgeKey, StringComparison.OrdinalIgnoreCase));
         if (typeOverride != null)
         {
             if (!string.IsNullOrEmpty(typeOverride.BgColor)) bgColor = typeOverride.BgColor;
@@ -1338,21 +1448,8 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
         if (disposing)
         {
-            foreach (var badge in _rasterCache.Values)
-            {
-                badge?.Dispose();
-            }
-
-            foreach (var bmp in _rasterizedSvgCache.Values)
-            {
-                bmp.Dispose();
-            }
-
-            _rasterCache.Clear();
-            _rasterizedSvgCache.Clear();
-            _recoloredSvgCache.Clear();
-            _aspectRatioCache.Clear();
-            _svgCache.Clear();
+            _assets?.DisposeBitmaps();
+            _assets = null;
             _badgeLock.Dispose();
         }
 

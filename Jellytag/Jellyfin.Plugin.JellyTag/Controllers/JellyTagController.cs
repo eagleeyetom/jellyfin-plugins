@@ -3,10 +3,15 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Jellyfin.Plugin.JellyTag.Configuration;
+using Jellyfin.Plugin.JellyTag.Middleware;
 using Jellyfin.Plugin.JellyTag.Services;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using SkiaSharp;
 
 namespace Jellyfin.Plugin.JellyTag.Controllers;
 
@@ -20,13 +25,17 @@ public partial class JellyTagController : ControllerBase
     private readonly IImageCacheService _cacheService;
     private readonly IImageOverlayService _overlayService;
     private readonly IQualityDetectionService _qualityService;
+    private readonly ILibraryManager _libraryManager;
+
+    private const int PreviewMaxWidth = 600;
 
     private static readonly string[] SupportedBadgeExtensions = { ".svg", ".png", ".jpg", ".jpeg" };
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         PropertyNameCaseInsensitive = true,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
         Converters = { new JsonStringEnumConverter() }
     };
 
@@ -39,11 +48,16 @@ public partial class JellyTagController : ControllerBase
     /// <summary>
     /// Initializes a new instance of the <see cref="JellyTagController"/> class.
     /// </summary>
-    public JellyTagController(IImageCacheService cacheService, IImageOverlayService overlayService, IQualityDetectionService qualityService)
+    public JellyTagController(
+        IImageCacheService cacheService,
+        IImageOverlayService overlayService,
+        IQualityDetectionService qualityService,
+        ILibraryManager libraryManager)
     {
         _cacheService = cacheService;
         _overlayService = overlayService;
         _qualityService = qualityService;
+        _libraryManager = libraryManager;
     }
 
     /// <summary>
@@ -544,6 +558,142 @@ public partial class JellyTagController : ControllerBase
         }
 
         return NotFound();
+    }
+
+    /// <summary>
+    /// Renders an item's poster or thumbnail with the configuration sent in the request body.
+    /// Used by the live preview so unsaved settings can be tried out without saving them or
+    /// touching the image cache.
+    /// </summary>
+    [HttpPost("Preview/{itemId}")]
+    [Authorize(Policy = "RequiresElevation")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RenderPreview([FromRoute] Guid itemId, [FromQuery] string imageType = "Primary")
+    {
+        ImageType type;
+        if (string.Equals(imageType, "Primary", StringComparison.OrdinalIgnoreCase))
+        {
+            type = ImageType.Primary;
+        }
+        else if (string.Equals(imageType, "Thumb", StringComparison.OrdinalIgnoreCase))
+        {
+            type = ImageType.Thumb;
+        }
+        else
+        {
+            return BadRequest("Unsupported image type");
+        }
+
+        PluginConfiguration? config;
+        try
+        {
+            config = await JsonSerializer.DeserializeAsync<PluginConfiguration>(Request.Body, JsonOptions, HttpContext.RequestAborted).ConfigureAwait(false);
+        }
+        catch (JsonException)
+        {
+            return BadRequest("Invalid configuration");
+        }
+
+        if (config == null)
+        {
+            return BadRequest("Invalid configuration");
+        }
+
+        config.EnsureValid();
+
+        var item = _libraryManager.GetItemById(itemId);
+        if (item == null)
+        {
+            return NotFound();
+        }
+
+        var imageInfo = item.GetImageInfo(type, 0);
+        if (imageInfo == null || !imageInfo.IsLocalFile || !System.IO.File.Exists(imageInfo.Path))
+        {
+            return NotFound();
+        }
+
+        using var source = LoadPreviewSource(imageInfo.Path);
+        if (source == null)
+        {
+            return NotFound();
+        }
+
+        var (bytes, contentType) = await RenderPreviewAsync(item, type.ToString(), config, source, _qualityService, _overlayService).ConfigureAwait(false);
+        Response.Headers.CacheControl = "no-store";
+        return File(bytes, contentType);
+    }
+
+    internal static async Task<(byte[] Bytes, string ContentType)> RenderPreviewAsync(
+        BaseItem item,
+        string imageType,
+        PluginConfiguration config,
+        Stream source,
+        IQualityDetectionService qualityService,
+        IImageOverlayService overlayService)
+    {
+        using var scope = PluginConfigurationScope.Override(config);
+
+        var imageConfig = ImageOverlayMiddleware.GetImageTypeConfig(config, imageType, item);
+        var visibleBadges = imageConfig != null && config.Enabled && imageConfig.Enabled
+            ? qualityService.DetectAllBadges(item).Where(b => overlayService.ShouldShowBadge(b, imageConfig)).ToList()
+            : new List<BadgeInfo>();
+
+        if (imageConfig == null || visibleBadges.Count == 0)
+        {
+            source.Position = 0;
+            using var original = new MemoryStream();
+            await source.CopyToAsync(original).ConfigureAwait(false);
+            original.Position = 0;
+            return (original.ToArray(), ImageOverlayService.DetectImageContentType(original));
+        }
+
+        var (resultStream, contentType) = await overlayService.AddBadgeOverlaysAsync(source, visibleBadges, imageConfig).ConfigureAwait(false);
+        await using (resultStream.ConfigureAwait(false))
+        {
+            using var output = new MemoryStream();
+            resultStream.Position = 0;
+            await resultStream.CopyToAsync(output).ConfigureAwait(false);
+            return (output.ToArray(), contentType);
+        }
+    }
+
+    /// <summary>
+    /// Loads the source image scaled down to preview size; badge sizes are relative to the
+    /// image width, so the result looks the same as on a full-size poster.
+    /// </summary>
+    private static MemoryStream? LoadPreviewSource(string path)
+    {
+        using var original = SKBitmap.Decode(path);
+        if (original == null)
+        {
+            return null;
+        }
+
+        SKBitmap? resized = null;
+        try
+        {
+            var bitmap = original;
+            if (original.Width > PreviewMaxWidth)
+            {
+                var height = Math.Max(1, (int)Math.Round(original.Height * (PreviewMaxWidth / (double)original.Width)));
+                resized = original.Resize(new SKImageInfo(PreviewMaxWidth, height), new SKSamplingOptions(SKCubicResampler.Mitchell));
+                bitmap = resized ?? original;
+            }
+
+            using var image = SKImage.FromBitmap(bitmap);
+            using var data = image.Encode(SKEncodedImageFormat.Jpeg, 90);
+            var stream = new MemoryStream();
+            data.SaveTo(stream);
+            stream.Position = 0;
+            return stream;
+        }
+        finally
+        {
+            resized?.Dispose();
+        }
     }
 
     /// <summary>
