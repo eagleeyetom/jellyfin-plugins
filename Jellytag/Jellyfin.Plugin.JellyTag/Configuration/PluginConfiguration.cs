@@ -43,6 +43,27 @@ public enum BadgeDisplayMode
 }
 
 /// <summary>
+/// Which users get badged images.
+/// </summary>
+public enum UserFilterMode
+{
+    /// <summary>
+    /// Everyone.
+    /// </summary>
+    AllUsers,
+
+    /// <summary>
+    /// Everyone except the selected users.
+    /// </summary>
+    AllExceptSelected,
+
+    /// <summary>
+    /// Only the selected users.
+    /// </summary>
+    OnlySelected
+}
+
+/// <summary>
 /// Output image format.
 /// </summary>
 public enum OutputImageFormat
@@ -163,6 +184,8 @@ public class PluginConfiguration : BasePluginConfiguration
         ThumbnailSizeReduction = 5;
         ListViewBadgeScalePercent = 75;
         ExcludedLibraryIds = new List<string>();
+        UserFilterMode = UserFilterMode.AllUsers;
+        FilteredUserIds = new List<string>();
 
         CustomBadgeTexts = new List<BadgeTextOverride>();
         CustomBadgeColors = new List<BadgeTypeStyleOverride>();
@@ -215,6 +238,17 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Library IDs excluded from badge generation. Empty means all libraries are included.
     /// </summary>
     public List<string> ExcludedLibraryIds { get; set; }
+
+    /// <summary>
+    /// Which users get badged images; <see cref="FilteredUserIds"/> are the selected users.
+    /// A request whose user can't be identified never counts as a selected user.
+    /// </summary>
+    public UserFilterMode UserFilterMode { get; set; }
+
+    /// <summary>
+    /// Users selected for <see cref="UserFilterMode"/>.
+    /// </summary>
+    public List<string> FilteredUserIds { get; set; }
 
     public List<BadgeTextOverride> CustomBadgeTexts { get; set; }
     public List<BadgeTypeStyleOverride> CustomBadgeColors { get; set; }
@@ -564,6 +598,8 @@ public class PluginConfiguration : BasePluginConfiguration
 
         ExcludedLibraryIds ??= new List<string>();
         ExcludedLibraryIds.RemoveAll(string.IsNullOrWhiteSpace);
+        FilteredUserIds ??= new List<string>();
+        FilteredUserIds.RemoveAll(string.IsNullOrWhiteSpace);
         CustomBadgeTexts ??= new List<BadgeTextOverride>();
         CustomBadgeTexts.RemoveAll(o => o == null || o.Key == null);
         CustomBadgeColors ??= new List<BadgeTypeStyleOverride>();

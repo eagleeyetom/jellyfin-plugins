@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -7,6 +8,7 @@ using Jellyfin.Plugin.Shared.MediaDetection;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Net;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.AspNetCore.Http;
@@ -104,6 +106,23 @@ public partial class ImageOverlayMiddleware
             var collectionFolders = libraryManager.GetCollectionFolders(item);
             if (collectionFolders.Any(f => excludedGuids.Contains(f.Id)))
             {
+                await _next(context).ConfigureAwait(false);
+                return;
+            }
+        }
+
+        if (config.UserFilterMode != UserFilterMode.AllUsers)
+        {
+            var userId = await ResolveUserIdAsync(context, sessionManager, null).ConfigureAwait(false);
+            if (!IsUserAllowed(config.UserFilterMode, config.FilteredUserIds, userId))
+            {
+                // The same URL now gets a different answer depending on who asks: keep it out of
+                // shared caches and make browsers revalidate, so changing the filter takes effect.
+                context.Response.OnStarting(() =>
+                {
+                    context.Response.Headers.CacheControl = BadgedImageCacheControl;
+                    return Task.CompletedTask;
+                });
                 await _next(context).ConfigureAwait(false);
                 return;
             }
@@ -339,7 +358,7 @@ public partial class ImageOverlayMiddleware
     {
         var ifNoneMatch = request.Headers.IfNoneMatch;
         if (ifNoneMatch.Count == 0
-            || !EntityTagHeaderValue.TryParseList(ifNoneMatch.ToArray(), out var candidates)
+            || !EntityTagHeaderValue.TryParseList(ifNoneMatch.OfType<string>().ToList(), out var candidates)
             || !EntityTagHeaderValue.TryParse(etag, out var current))
         {
             return false;
@@ -375,7 +394,7 @@ public partial class ImageOverlayMiddleware
     internal static bool AcceptsWebP(HttpRequest request)
     {
         var accept = request.Headers.Accept;
-        if (accept.Count == 0 || !MediaTypeHeaderValue.TryParseList(accept.ToArray(), out var mediaTypes))
+        if (accept.Count == 0 || !MediaTypeHeaderValue.TryParseList(accept.OfType<string>().ToList(), out var mediaTypes))
         {
             return false;
         }
@@ -477,46 +496,157 @@ public partial class ImageOverlayMiddleware
         AddIfValid(context.Request.Query["deviceId"].ToString());
         AddIfValid(context.Request.Query["DeviceId"].ToString());
 
-        // 4. SessionManager lookup
-        sessionManager ??= context.RequestServices?.GetService(typeof(ISessionManager)) as ISessionManager;
-        if (sessionManager != null)
+        // 4. The playback session of this device
+        var matchedSession = FindSession(context, sessionManager);
+        if (matchedSession != null)
         {
-            var deviceId = authDict.GetValueOrDefault("DeviceId");
-            if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Headers["X-Emby-Device-Id"].ToString();
-            if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Query["deviceId"].ToString();
-            if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Query["DeviceId"].ToString();
-
-            var clientIp = GetClientIp(context);
-
-            try
-            {
-                var sessions = sessionManager.Sessions;
-                if (sessions != null)
-                {
-                    SessionInfo? matchedSession = null;
-                    if (!string.IsNullOrEmpty(deviceId))
-                    {
-                        matchedSession = sessions.FirstOrDefault(s => string.Equals(s.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
-                    }
-
-                    if (matchedSession == null && !string.IsNullOrEmpty(clientIp))
-                    {
-                        matchedSession = FindUnambiguousIpSession(sessions, clientIp);
-                    }
-
-                    if (matchedSession != null)
-                    {
-                        AddSessionIdentifiers(matchedSession, AddIfValid);
-                    }
-                }
-            }
-            catch
-            {
-                // Ignore any session query exceptions to avoid breaking image serving
-            }
+            AddSessionIdentifiers(matchedSession, AddIfValid);
         }
 
         return seen;
+    }
+
+    /// <summary>
+    /// The session of the device making the request: by device ID when the client sends one,
+    /// otherwise the only (active) session on the request's IP. Null when neither identifies one.
+    /// </summary>
+    internal static SessionInfo? FindSession(HttpContext context, ISessionManager? sessionManager)
+    {
+        sessionManager ??= context.RequestServices?.GetService(typeof(ISessionManager)) as ISessionManager;
+        if (sessionManager == null)
+        {
+            return null;
+        }
+
+        var authDict = GetAuthorizationParameters(context.Request);
+        var deviceId = authDict.GetValueOrDefault("DeviceId");
+        if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Headers["X-Emby-Device-Id"].ToString();
+        if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Query["deviceId"].ToString();
+        if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Query["DeviceId"].ToString();
+
+        var clientIp = GetClientIp(context);
+
+        try
+        {
+            var sessions = sessionManager.Sessions;
+            if (sessions == null)
+            {
+                return null;
+            }
+
+            SessionInfo? matchedSession = null;
+            if (!string.IsNullOrEmpty(deviceId))
+            {
+                matchedSession = sessions.FirstOrDefault(s => string.Equals(s.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (matchedSession == null && !string.IsNullOrEmpty(clientIp))
+            {
+                matchedSession = FindUnambiguousIpSession(sessions, clientIp);
+            }
+
+            return matchedSession;
+        }
+        catch
+        {
+            // Ignore any session query exceptions to avoid breaking image serving
+            return null;
+        }
+    }
+
+    private static Dictionary<string, string> GetAuthorizationParameters(HttpRequest request)
+    {
+        var authDict = ParseAuthorizationHeader(request.Headers.Authorization.ToString());
+        foreach (var kvp in ParseAuthorizationHeader(request.Headers["X-Emby-Authorization"].ToString()))
+        {
+            authDict.TryAdd(kvp.Key, kvp.Value);
+        }
+
+        return authDict;
+    }
+
+    private static readonly ConcurrentDictionary<string, (Guid UserId, DateTime ExpiresUtc)> TokenUsers = new(StringComparer.Ordinal);
+    private static readonly TimeSpan TokenUserTtl = TimeSpan.FromMinutes(10);
+    private const int MaxCachedTokens = 2000;
+
+    /// <summary>
+    /// The user an image request belongs to. Requests with an access token (native clients usually
+    /// send one) are resolved through Jellyfin's own authorization, cached briefly so posters don't
+    /// cost a database lookup each. Requests without one (jellyfin-web loads posters as plain
+    /// &lt;img&gt;) fall back to the device's session. Null when the user can't be identified.
+    /// </summary>
+    internal static async Task<Guid?> ResolveUserIdAsync(HttpContext context, ISessionManager? sessionManager, IAuthorizationContext? authorizationContext)
+    {
+        var token = GetRequestToken(context.Request);
+        if (!string.IsNullOrEmpty(token))
+        {
+            var now = DateTime.UtcNow;
+            Guid tokenUserId;
+            if (TokenUsers.TryGetValue(token, out var cached) && cached.ExpiresUtc > now)
+            {
+                tokenUserId = cached.UserId;
+            }
+            else
+            {
+                tokenUserId = Guid.Empty;
+                authorizationContext ??= context.RequestServices?.GetService(typeof(IAuthorizationContext)) as IAuthorizationContext;
+                if (authorizationContext != null)
+                {
+                    try
+                    {
+                        var info = await authorizationContext.GetAuthorizationInfo(context).ConfigureAwait(false);
+                        tokenUserId = info.IsAuthenticated ? info.UserId : Guid.Empty;
+                    }
+                    catch
+                    {
+                        // An invalid or expired token just means "not identified by token".
+                    }
+
+                    if (TokenUsers.Count >= MaxCachedTokens)
+                    {
+                        TokenUsers.Clear();
+                    }
+
+                    TokenUsers[token] = (tokenUserId, now + TokenUserTtl);
+                }
+            }
+
+            if (tokenUserId != Guid.Empty)
+            {
+                return tokenUserId;
+            }
+        }
+
+        var session = FindSession(context, sessionManager);
+        return session != null && session.UserId != Guid.Empty ? session.UserId : null;
+    }
+
+    internal static string? GetRequestToken(HttpRequest request)
+    {
+        var token = GetAuthorizationParameters(request).GetValueOrDefault("Token");
+        if (string.IsNullOrEmpty(token)) token = request.Headers["X-Emby-Token"].ToString();
+        if (string.IsNullOrEmpty(token)) token = request.Headers["X-MediaBrowser-Token"].ToString();
+        if (string.IsNullOrEmpty(token)) token = request.Query["api_key"].ToString();
+        if (string.IsNullOrEmpty(token)) token = request.Query["ApiKey"].ToString();
+        return string.IsNullOrWhiteSpace(token) ? null : token.Trim();
+    }
+
+    /// <summary>
+    /// Whether this user gets badges. An unidentified user is never one of the selected users.
+    /// </summary>
+    internal static bool IsUserAllowed(UserFilterMode mode, IReadOnlyCollection<string>? selectedUserIds, Guid? userId)
+    {
+        if (mode == UserFilterMode.AllUsers)
+        {
+            return true;
+        }
+
+        var isSelected = userId.HasValue
+            && userId.Value != Guid.Empty
+            && selectedUserIds != null
+            && selectedUserIds.Any(id => Guid.TryParse(id, out var selected) && selected == userId.Value);
+
+        return mode == UserFilterMode.OnlySelected ? isSelected : !isSelected;
     }
 
     /// <summary>

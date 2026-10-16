@@ -137,6 +137,22 @@
                             </details>
 
                             <details class="jellytag-sub">
+                                <summary>Users</summary>
+                                <div class="jellytag-section-body">
+                                    <div class="selectContainer">
+                                        <label class="selectLabel" for="UserFilterMode">Show badges to</label>
+                                        <select id="UserFilterMode" is="emby-select">
+                                            <option value="AllUsers">All users</option>
+                                            <option value="AllExceptSelected">All users except the selected ones</option>
+                                            <option value="OnlySelected">Only the selected users</option>
+                                        </select>
+                                        <div class="fieldDescription">Posters requested without a sign-in (e.g. by the web client) are matched to a user through their device's session. When that isn't possible, the request doesn't count as a selected user.</div>
+                                    </div>
+                                    <div id="UserCheckboxes"><em>Loading users...</em></div>
+                                </div>
+                            </details>
+
+                            <details class="jellytag-sub">
                                 <summary>Performance & Cache</summary>
                                 <div class="jellytag-sub-body">
                                     <div class="inputContainer">
@@ -1164,6 +1180,8 @@
             config.PosterConfig = collectImageTypeConfig('Poster');
             config.ThumbnailConfig = collectImageTypeConfig('Thumb');
             config.ExcludedLibraryIds = collectExcludedLibraries();
+            config.UserFilterMode = q('UserFilterMode').value;
+            config.FilteredUserIds = collectFilteredUsers();
 
             // Nullify legacy
             config.PosterSettings = null;
@@ -1241,6 +1259,48 @@
                 console.error('[JellyTag] Failed to load libraries:', err);
                 container.innerHTML = '<em>Failed to load libraries.</em>';
             });
+        }
+
+        function loadUserCheckboxes(selectedIds) {
+            var container = document.querySelector('#UserCheckboxes');
+            ApiClient.getUsers().then(function(users) {
+                container.innerHTML = '';
+                users.forEach(function(user) {
+                    var div = document.createElement('div');
+                    div.className = 'checkboxContainer';
+                    var label = document.createElement('label');
+                    label.className = 'emby-checkbox-label';
+                    var input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.setAttribute('is', 'emby-checkbox');
+                    input.className = 'userCheckbox';
+                    input.setAttribute('data-user-id', user.Id);
+                    input.checked = selectedIds.indexOf(user.Id) >= 0;
+                    var span = document.createElement('span');
+                    span.textContent = user.Name;
+                    label.appendChild(input);
+                    label.appendChild(span);
+                    div.appendChild(label);
+                    container.appendChild(div);
+                });
+                if (users.length === 0) container.innerHTML = '<em>No users found.</em>';
+                toggleUserCheckboxes();
+            }).catch(function(err) {
+                console.error('[JellyTag] Failed to load users:', err);
+                container.innerHTML = '<em>Failed to load users.</em>';
+            });
+        }
+
+        function toggleUserCheckboxes() {
+            document.querySelector('#UserCheckboxes').style.display = q('UserFilterMode').value === 'AllUsers' ? 'none' : '';
+        }
+
+        function collectFilteredUsers() {
+            var selected = [];
+            document.querySelectorAll('#UserCheckboxes .userCheckbox').forEach(function(cb) {
+                if (cb.checked) selected.push(cb.getAttribute('data-user-id'));
+            });
+            return selected;
         }
 
         function collectExcludedLibraries() {
@@ -1753,6 +1813,8 @@
                 }
 
                 loadLibraryCheckboxes(config.ExcludedLibraryIds || []);
+                q('UserFilterMode').value = config.UserFilterMode || 'AllUsers';
+                loadUserCheckboxes(config.FilteredUserIds || []);
                 Dashboard.hideLoadingMsg();
                 loadBadgeGallery();
                 loadCacheStats();
@@ -1868,6 +1930,8 @@
                 }).catch(function(){Dashboard.hideLoadingMsg();Dashboard.alert('Failed to reset settings.');});
             }
         });
+
+        document.querySelector('#UserFilterMode').addEventListener('change', toggleUserCheckboxes);
 
         var outputFmtEl = document.querySelector('#OutputFormat');
         outputFmtEl.addEventListener('change', toggleOutputQuality);
