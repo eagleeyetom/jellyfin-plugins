@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using Jellyfin.Plugin.JellyTag.Configuration;
 using Jellyfin.Plugin.JellyTag.Services;
@@ -8,6 +10,7 @@ using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.Net.Http.Headers;
 
 namespace Jellyfin.Plugin.JellyTag.Middleware;
 
@@ -62,7 +65,7 @@ public partial class ImageOverlayMiddleware
             return;
         }
 
-        var config = Plugin.Instance?.Configuration;
+        var config = PluginConfigurationScope.Current;
         if (config == null || !config.Enabled)
         {
             await _next(context).ConfigureAwait(false);
@@ -158,7 +161,19 @@ public partial class ImageOverlayMiddleware
         var dvVariant = hideDolbyVision ? (isSamsung ? "samsung-no-dv" : "firetv-no-dv") : "";
         var clientVariant = dvVariant + (hideHdrOnWindows ? "_windows-sdr" : "");
         if (string.IsNullOrEmpty(clientVariant)) clientVariant = "default";
-        var imageTag = $"{tag}_{imageType}_{clientVariant}_{query}";
+        var outputFormat = ResolveOutputFormat(config.OutputFormat, context.Request);
+        var imageTag = $"{tag}_{imageType}_{clientVariant}_{query}_{outputFormat}";
+
+        // The badged bytes are fully determined by these inputs, so a client that still holds
+        // them gets a 304 without Jellyfin reading the original or the badges being drawn.
+        var etag = ComputeETag(itemId, badgeKey, imageTag, ImageCacheService.ComputeConfigFingerprint(config),
+            ImageOverlayService.GetCustomBadgeFingerprint(), AcceptsWebP(context.Request));
+        if (IfNoneMatchContains(context.Request, etag))
+        {
+            context.Response.StatusCode = StatusCodes.Status304NotModified;
+            SetValidationHeaders(context.Response, etag);
+            return;
+        }
 
         context.Request.Headers.Remove("If-None-Match");
         context.Request.Headers.Remove("If-Modified-Since");
@@ -187,7 +202,7 @@ public partial class ImageOverlayMiddleware
                 {
                     cachedImage.Position = 0;
                     var cachedContentType = ImageOverlayService.DetectImageContentType(cachedImage);
-                    ClearEntityHeaders(context.Response);
+                    ClearEntityHeaders(context.Response, etag);
                     context.Response.ContentType = cachedContentType;
                     context.Response.ContentLength = cachedImage.Length;
                     await cachedImage.CopyToAsync(originalBody).ConfigureAwait(false);
@@ -199,7 +214,7 @@ public partial class ImageOverlayMiddleware
             (Stream resultStream, string contentType) result;
             try
             {
-                result = await overlayService.AddBadgeOverlaysAsync(capturedBody, visibleBadges, imageConfig, GetDisplayContext(context.Request.Query)).ConfigureAwait(false);
+                result = await overlayService.AddBadgeOverlaysAsync(capturedBody, visibleBadges, imageConfig, GetDisplayContext(context.Request.Query), outputFormat).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -215,7 +230,7 @@ public partial class ImageOverlayMiddleware
                 await cacheService.CacheImageAsync(itemId, badgeKey, imageTag, result.resultStream).ConfigureAwait(false);
 
                 result.resultStream.Position = 0;
-                ClearEntityHeaders(context.Response);
+                ClearEntityHeaders(context.Response, etag);
                 context.Response.ContentType = result.contentType;
                 context.Response.ContentLength = result.resultStream.Length;
                 await result.resultStream.CopyToAsync(originalBody).ConfigureAwait(false);
@@ -256,13 +271,98 @@ public partial class ImageOverlayMiddleware
         return QueryString.Create(parameters).Value ?? string.Empty;
     }
 
-    private static void ClearEntityHeaders(HttpResponse response)
+    /// <summary>
+    /// Badged images change with the plugin configuration while the URL (and Jellyfin's image
+    /// tag) stays the same, and they depend on who is asking (client variant), so clients may
+    /// keep them but must revalidate; the ETag turns that into a cheap 304.
+    /// </summary>
+    internal const string BadgedImageCacheControl = "private, no-cache";
+
+    private static void ClearEntityHeaders(HttpResponse response, string etag)
     {
         response.Headers.Remove("ETag");
         response.Headers.Remove("Last-Modified");
         response.Headers.Remove("Content-MD5");
         response.Headers.Remove("Accept-Ranges");
-        response.Headers.CacheControl = "no-cache";
+        SetValidationHeaders(response, etag);
+    }
+
+    private static void SetValidationHeaders(HttpResponse response, string etag)
+    {
+        response.Headers.ETag = etag;
+        response.Headers.CacheControl = BadgedImageCacheControl;
+
+        // The output format follows the Accept header.
+        var vary = response.Headers.Vary.ToString();
+        if (string.IsNullOrEmpty(vary))
+        {
+            response.Headers.Vary = "Accept";
+        }
+        else if (!vary.Split(',', StringSplitOptions.TrimEntries).Any(v => v == "*" || v.Equals("Accept", StringComparison.OrdinalIgnoreCase)))
+        {
+            response.Headers.Vary = vary + ", Accept";
+        }
+    }
+
+    /// <summary>
+    /// Strong ETag over everything that determines the badged bytes.
+    /// </summary>
+    internal static string ComputeETag(Guid itemId, string badgeKey, string imageTag, string configFingerprint, string customBadgeFingerprint, bool acceptsWebP)
+    {
+        // acceptsWebP is included even when the output format is fixed: when no badge can be
+        // drawn the original is passed through, and Jellyfin picks its format from Accept too.
+        var input = string.Join('\n', itemId.ToString("N"), badgeKey, imageTag, configFingerprint, customBadgeFingerprint, acceptsWebP ? "webp" : "-");
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        return $"\"{Convert.ToHexString(hash, 0, 16).ToLowerInvariant()}\"";
+    }
+
+    internal static bool IfNoneMatchContains(HttpRequest request, string etag)
+    {
+        var ifNoneMatch = request.Headers.IfNoneMatch;
+        if (ifNoneMatch.Count == 0
+            || !EntityTagHeaderValue.TryParseList(ifNoneMatch.ToArray(), out var candidates)
+            || !EntityTagHeaderValue.TryParse(etag, out var current))
+        {
+            return false;
+        }
+
+        // If-None-Match uses the weak comparison (RFC 9110 13.1.2), so a proxy that weakened
+        // the tag (W/"...") still revalidates. "*" is ignored: it says nothing about the badges.
+        return candidates.Any(candidate => !candidate.Equals(EntityTagHeaderValue.Any) && candidate.Compare(current, useStrongComparison: false));
+    }
+
+    /// <summary>
+    /// WebP is only sent to clients that can decode it: an explicit <c>format</c> query
+    /// parameter wins, otherwise the Accept header has to list image/webp.
+    /// </summary>
+    internal static OutputImageFormat ResolveOutputFormat(OutputImageFormat configured, HttpRequest request)
+    {
+        if (configured != OutputImageFormat.WebP)
+        {
+            return configured;
+        }
+
+        var requestedFormat = request.Query["format"].FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(requestedFormat))
+        {
+            return requestedFormat.Trim().Equals("webp", StringComparison.OrdinalIgnoreCase)
+                ? OutputImageFormat.WebP
+                : OutputImageFormat.Jpeg;
+        }
+
+        return AcceptsWebP(request) ? OutputImageFormat.WebP : OutputImageFormat.Jpeg;
+    }
+
+    internal static bool AcceptsWebP(HttpRequest request)
+    {
+        var accept = request.Headers.Accept;
+        if (accept.Count == 0 || !MediaTypeHeaderValue.TryParseList(accept.ToArray(), out var mediaTypes))
+        {
+            return false;
+        }
+
+        return mediaTypes.Any(m => m.MediaType.Equals("image/webp", StringComparison.OrdinalIgnoreCase)
+            && (m.Quality ?? 1) > 0);
     }
 
     internal static ImageTypeConfig? GetImageTypeConfig(PluginConfiguration config, string imageType, BaseItem item)
