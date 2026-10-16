@@ -85,7 +85,8 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool ShowHlg { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets a value indicating whether to suppress Dolby Vision on Samsung devices.
+    /// Gets or sets a value indicating whether to report the Dolby Vision fallback layer on clients
+    /// that cannot decode Dolby Vision, judged from their device profile (or, without one, by name).
     /// </summary>
     public bool SuppressDvOnSamsung { get; set; } = true;
 
@@ -95,7 +96,8 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool SuppressDvOnFireTv { get; set; } = false;
 
     /// <summary>
-    /// Gets or sets a value indicating whether to suppress HDR10+ on non-supporting clients (e.g. LG, Sony).
+    /// Gets or sets a value indicating whether to report the HDR10+ fallback on clients whose device
+    /// profile rules HDR10+ out, or that are known by name not to support it (e.g. LG, Sony).
     /// </summary>
     public bool SuppressHdr10PlusOnLg { get; set; } = true;
 

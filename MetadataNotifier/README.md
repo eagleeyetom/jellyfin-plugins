@@ -15,6 +15,7 @@ Sends on-screen toast notifications when playback starts on any Jellyfin client,
 
 - **Multi-Client Support:** Works across Samsung Tizen TVs, web browsers, mobile apps, and other Jellyfin clients.
 - **HDR & Metadata Detection:** Identifies HDR10+, Dolby Vision, HDR10, HLG, and SDR with multi-layer detection, with optional tone-mapped SDR detection when Jellyfin reports an unsupported HDR range.
+- **Reports what the client can show:** When a client can't decode Dolby Vision or HDR10+, the toast reports the layer it actually plays (e.g. HDR10). This is read from the device profile the client sends when playback starts, not guessed from its name. Clients that send no profile fall back to name matching (Samsung, LG, Sony, Android phones, ...).
 - **Audio Codec & Channels:** Displays active audio formats including TrueHD Atmos, DTS-HD MA, DTS:X, AC3, E-AC3, AAC, and channel layouts (5.1, 7.1, etc.).
 - **Live Audio Track Change Notification:** Shows a toast notification whenever the viewer switches the audio track mid-playback.
 - **Transcoding Status & Reasons:** Reports whether playback is Direct Play, Direct Stream, or Transcoding, including exact reasons (e.g. incompatible audio codec or subtitles).
@@ -25,9 +26,22 @@ Sends on-screen toast notifications when playback starts on any Jellyfin client,
 - **Config Export/Import & Reset:** Easily backup and restore your configuration as JSON, or reset all settings to defaults with a single click.
 - **Fully Configurable:** Customize notification duration, target clients, and displayed information categories.
 
+## Client Support
+
+| Client | Toast shown | Notes |
+| --- | --- | --- |
+| Jellyfin Web (browsers) | Yes | Enable the Fullscreen Toast Fix if toasts disappear in fullscreen. |
+| Samsung (Tizen) | Yes | |
+| Android TV / Google TV / Fire TV (official app) | Yes | |
+| Wholphin | Yes | |
+| Kodi (Jellyfin add-ons) | Yes | Uses its own display timing. |
+| Jellyfin for Android (phones/tablets) | Only with the web player | The default "Integrated player" (ExoPlayer) doesn't handle server messages; the toast is drawn behind it. In the app: Settings → Video player type → Web player. |
+| Other clients (Swiftfin, Findroid, Infuse, Roku, webOS, ...) | Not verified | Depends on whether the client handles the DisplayMessage command. |
+
 ## Known Limitations
 
 - **Client-side HDR tone-mapping is undetectable.** "Tone-mapped SDR detection" only fires when Jellyfin itself transcodes/tone-maps the video server-side. If Jellyfin Direct Plays or Direct Streams an HDR/Dolby Vision file to a client whose display can't actually render it (e.g. a standard SDR monitor on a Windows/desktop client), the tone-mapping happens invisibly on the client or OS side. The plugin will still report the source format (e.g. Dolby Vision) because that is genuinely what Jellyfin sent.
+- **The device profile describes the player, not the screen.** A Fire TV or Shield that decodes Dolby Vision reports it even when its TV can't show it; use "Always report the fallback on Fire TV" for that case. Web clients claim HDR10+ wherever they support HDR10, so HDR10+ on LG/Sony/Roku/etc. is still corrected by name.
 - **Toast duration and delivery are client-dependent.** The configured notification duration is sent as a hint (`TimeoutMs`); some clients (e.g. Jellyfin Web, Kodi) use their own fixed display timing and may ignore it. Some clients may not render the message at all.
 
 

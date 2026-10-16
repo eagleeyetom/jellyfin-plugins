@@ -15,6 +15,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
+        serviceCollection.AddSingleton<ClientCapabilityStore>();
         serviceCollection.AddHostedService<MetadataNotifierService>();
         serviceCollection.AddSingleton<IStartupFilter, MetadataNotifierStartupFilter>();
     }

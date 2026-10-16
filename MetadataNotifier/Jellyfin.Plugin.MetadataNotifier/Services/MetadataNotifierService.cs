@@ -31,6 +31,7 @@ public partial class MetadataNotifierService : IHostedService
 
     private readonly ISessionManager _sessionManager;
     private readonly ILibraryManager _libraryManager;
+    private readonly ClientCapabilityStore _capabilityStore;
     private readonly ILogger<MetadataNotifierService> _logger;
     private readonly ConcurrentDictionary<string, int> _lastActiveAudioTrack = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pendingStartupToasts = new(StringComparer.Ordinal);
@@ -57,14 +58,17 @@ public partial class MetadataNotifierService : IHostedService
     /// </summary>
     /// <param name="sessionManager">Session manager.</param>
     /// <param name="libraryManager">Library manager.</param>
+    /// <param name="capabilityStore">Device profiles captured from PlaybackInfo requests.</param>
     /// <param name="logger">Logger.</param>
     public MetadataNotifierService(
         ISessionManager sessionManager,
         ILibraryManager libraryManager,
+        ClientCapabilityStore capabilityStore,
         ILogger<MetadataNotifierService> logger)
     {
         _sessionManager = sessionManager;
         _libraryManager = libraryManager;
+        _capabilityStore = capabilityStore;
         _logger = logger;
     }
 
@@ -213,13 +217,14 @@ public partial class MetadataNotifierService : IHostedService
                 activeAudioStream = GetActiveAudioStream(mediaStreams, session.PlayState?.AudioStreamIndex);
             }
 
+            var capabilities = GetClientCapabilities(session);
             var hdrInfo = string.Empty;
             var hdrRule = "disabled";
             if (config.ShowSdr || config.ShowHdr10Plus || config.ShowHdr10 || config.ShowDolbyVision || config.ShowHlg)
             {
                 var hdrResult = MetadataFormatter.ShouldReportToneMappedSdr(config, session.TranscodingInfo)
                     ? new HdrDetectionResult(config.ShowSdr ? "SDR" : string.Empty, "unsupported-hdr-transcode")
-                    : GetHdrInfo(videoStream, item.Path ?? string.Empty, item.Name ?? string.Empty, session, config);
+                    : GetHdrInfo(videoStream, item.Path ?? string.Empty, item.Name ?? string.Empty, session, config, capabilities, activeSource?.Container);
                 hdrInfo = hdrResult.Value;
                 hdrRule = hdrResult.Rule;
             }
@@ -267,10 +272,11 @@ public partial class MetadataNotifierService : IHostedService
             var messageText = MetadataFormatter.BuildMessageText(config, hdrInfo, audioInfo, playbackInfo, bitrateInfo, header);
 
             _logger.LogDebug(
-                "Metadata detection for session {SessionId}: media source {MediaSourceId}, HDR rule {HdrRule}, HDR {HdrInfo}, audio {AudioInfo}, playback {PlaybackInfo}, transcode reasons {TranscodeReasons}",
+                "Metadata detection for session {SessionId}: media source {MediaSourceId}, HDR rule {HdrRule} (client capabilities from {CapabilitySource}), HDR {HdrInfo}, audio {AudioInfo}, playback {PlaybackInfo}, transcode reasons {TranscodeReasons}",
                 session.Id,
                 session.PlayState?.MediaSourceId,
                 hdrRule,
+                capabilities != null ? "device profile" : "client name",
                 hdrInfo,
                 audioInfo,
                 playbackInfo,
@@ -626,6 +632,16 @@ public partial class MetadataNotifierService : IHostedService
         return item.Name ?? "Media Info";
     }
 
+    /// <summary>
+    /// The device profile the client last sent with a PlaybackInfo request, or the one in its
+    /// session capabilities. Null when the client reports neither (e.g. some Kodi add-ons).
+    /// </summary>
+    private ClientVideoCapabilities? GetClientCapabilities(SessionInfo session)
+    {
+        return _capabilityStore.Get(session.DeviceId)
+            ?? ClientVideoCapabilities.FromDeviceProfile(session.Capabilities?.DeviceProfile);
+    }
+
     internal static bool IsSamsungClient(SessionInfo session)
     {
         return ClientDeviceDetection.ContainsSamsungTvIndicator(session.Client)
@@ -662,6 +678,9 @@ public partial class MetadataNotifierService : IHostedService
             || deviceName.Contains("Toshiba", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Name-based guess, used only when the client reports no device profile.
+    /// </summary>
     internal static bool IsNonDolbyVisionClient(SessionInfo session, PluginConfiguration? config = null)
     {
         if (IsSamsungClient(session))
@@ -719,7 +738,9 @@ public partial class MetadataNotifierService : IHostedService
         string itemPath,
         string itemName,
         SessionInfo session,
-        PluginConfiguration config)
+        PluginConfiguration config,
+        ClientVideoCapabilities? capabilities = null,
+        string? container = null)
     {
         if (videoStream == null)
         {
@@ -731,8 +752,15 @@ public partial class MetadataNotifierService : IHostedService
         var profile = videoStream.Profile ?? string.Empty;
         var displayTitle = videoStream.DisplayTitle ?? string.Empty;
 
-        bool isNonDvClient = IsNonDolbyVisionClient(session, config);
-        bool isNonHdr10Plus = IsNonHdr10PlusClient(session);
+        // What the client receives: the re-encoded stream's codec/container when the server
+        // transcodes the video, otherwise the source's.
+        var transcoding = session.TranscodingInfo;
+        var videoReencoded = transcoding != null && !transcoding.IsVideoDirect;
+        var outputCodec = videoReencoded && !string.IsNullOrEmpty(transcoding!.VideoCodec) ? transcoding.VideoCodec : videoStream.Codec;
+        var outputContainer = videoReencoded ? transcoding!.Container : container;
+
+        bool isNonDvClient = ShouldSuppressDolbyVision(session, config, capabilities, outputCodec, outputContainer);
+        bool isNonHdr10Plus = ShouldSuppressHdr10Plus(session, capabilities, outputCodec, outputContainer);
 
         // Detect HDR10+ via multilayer check: probe flag, VideoRangeType, stream metadata, or filename
         bool hasHdr10Plus = IsHdr10Plus(videoStream, itemPath, itemName);
@@ -769,7 +797,7 @@ public partial class MetadataNotifierService : IHostedService
         // Samsung and non-DV Android clients do not support Dolby Vision hardware decoding
         if (hasDolbyVision)
         {
-            if (isNonDvClient && config.SuppressDvOnSamsung)
+            if (isNonDvClient)
             {
                 // Fall back to HDR10+ if the media contains HDR10+ metadata
                 if (hasHdr10Plus && config.ShowHdr10Plus)
@@ -836,6 +864,54 @@ public partial class MetadataNotifierService : IHostedService
         }
 
         return new(string.Empty, "hidden-by-configuration");
+    }
+
+    /// <summary>
+    /// Whether the toast should report the Dolby Vision fallback layer instead of Dolby Vision.
+    /// Only clients that really decode DV allow plain <c>DOVI</c> (profile 5 has no fallback
+    /// layer), so that entry in the device profile decides; names are a fallback for clients
+    /// that report no profile.
+    /// </summary>
+    internal static bool ShouldSuppressDolbyVision(
+        SessionInfo session,
+        PluginConfiguration config,
+        ClientVideoCapabilities? capabilities,
+        string? codec,
+        string? container)
+    {
+        // The profile describes the player, not the TV it is plugged into, so an explicit
+        // "this Fire TV feeds a non-DV display" setting always wins.
+        if (config.SuppressDvOnFireTv && IsFireTvClient(session))
+        {
+            return true;
+        }
+
+        if (!config.SuppressDvOnSamsung)
+        {
+            return false;
+        }
+
+        return (capabilities?.Supports(codec, VideoRangeType.DOVI, container) ?? RangeSupport.Unknown) switch
+        {
+            RangeSupport.Supported => false,
+            RangeSupport.Unsupported => true,
+            _ => IsNonDolbyVisionClient(session, config)
+        };
+    }
+
+    /// <summary>
+    /// Whether HDR10+ should be reported as its base layer. A profile that rejects
+    /// <c>HDR10Plus</c> is conclusive. One that allows it is not: web clients allow HDR10+
+    /// wherever they allow HDR10 (LG webOS included), so the known non-HDR10+ brands still apply.
+    /// </summary>
+    internal static bool ShouldSuppressHdr10Plus(
+        SessionInfo session,
+        ClientVideoCapabilities? capabilities,
+        string? codec,
+        string? container)
+    {
+        return capabilities?.Supports(codec, VideoRangeType.HDR10Plus, container) == RangeSupport.Unsupported
+            || IsNonHdr10PlusClient(session);
     }
 
     internal static bool HasHdr10BaseLayer(MediaStream? videoStream)

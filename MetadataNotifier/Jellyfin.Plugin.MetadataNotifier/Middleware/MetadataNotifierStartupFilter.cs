@@ -15,6 +15,7 @@ public class MetadataNotifierStartupFilter : IStartupFilter
         return app =>
         {
             app.UseMiddleware<FullscreenToastMiddleware>();
+            app.UseMiddleware<PlaybackInfoCaptureMiddleware>();
             next(app);
         };
     }
