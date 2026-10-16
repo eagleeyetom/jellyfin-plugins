@@ -28,11 +28,13 @@ public interface IImageOverlayService
     /// Adds multiple badge overlays to an image using per-panel configuration.
     /// Returns the result stream and the content type.
     /// </summary>
+    /// <param name="outputFormat">Format to encode the result in; defaults to the configured one.</param>
     Task<(Stream Stream, string ContentType)> AddBadgeOverlaysAsync(
         Stream originalImage,
         List<BadgeInfo> badges,
         ImageTypeConfig imageConfig,
-        ImageDisplayContext displayContext = ImageDisplayContext.Card);
+        ImageDisplayContext displayContext = ImageDisplayContext.Card,
+        OutputImageFormat? outputFormat = null);
 
     /// <summary>
     /// Determines if a badge should be shown based on the image type config panels.

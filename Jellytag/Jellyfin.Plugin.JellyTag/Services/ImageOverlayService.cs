@@ -16,6 +16,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
     private const int MaxCachedRasterBitmaps = 512;
     private readonly SemaphoreSlim _badgeLock = new(1, 1);
     private volatile BadgeAssets? _assets;
+    private static volatile string? _customBadgeFingerprint;
     private bool _disposed;
 
     /// <summary>
@@ -146,7 +147,8 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
         Stream originalImage,
         List<BadgeInfo> badges,
         ImageTypeConfig imageConfig,
-        ImageDisplayContext displayContext = ImageDisplayContext.Card)
+        ImageDisplayContext displayContext = ImageDisplayContext.Card,
+        OutputImageFormat? outputFormat = null)
     {
         var config = PluginConfigurationScope.Current ?? new PluginConfiguration();
         var jpegQuality = Math.Clamp(config.JpegQuality, 1, 100);
@@ -290,10 +292,10 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             canvas.Flush();
 
             using var resultImage = surface.Snapshot();
-            var outputFormat = config.OutputFormat;
-            var encodeFormat = outputFormat == OutputImageFormat.WebP ? SKEncodedImageFormat.Webp : SKEncodedImageFormat.Jpeg;
-            var encodeQuality = outputFormat == OutputImageFormat.WebP ? Math.Clamp(config.WebPQuality, 1, 100) : jpegQuality;
-            var contentType = outputFormat == OutputImageFormat.WebP ? "image/webp" : "image/jpeg";
+            var encodeAs = outputFormat ?? config.OutputFormat;
+            var encodeFormat = encodeAs == OutputImageFormat.WebP ? SKEncodedImageFormat.Webp : SKEncodedImageFormat.Jpeg;
+            var encodeQuality = encodeAs == OutputImageFormat.WebP ? Math.Clamp(config.WebPQuality, 1, 100) : jpegQuality;
+            var contentType = encodeAs == OutputImageFormat.WebP ? "image/webp" : "image/jpeg";
             using var data = resultImage.Encode(encodeFormat, encodeQuality);
 
             var outputStream = new MemoryStream();
@@ -396,6 +398,7 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
             // Renders in flight may still be drawing bitmaps from the current generation, so
             // they are not disposed here; the finalizers release them once nothing uses them.
             _assets = null;
+            _customBadgeFingerprint = null;
         }
         finally
         {
@@ -882,6 +885,37 @@ public class ImageOverlayService : IImageOverlayService, IDisposable
 
         bitmap.Dispose();
         return trimmed;
+    }
+
+    /// <summary>
+    /// Identifies the uploaded custom badge artwork, which changes the rendered output without
+    /// touching the configuration. Recomputed after <see cref="ReloadBadges"/>.
+    /// </summary>
+    internal static string GetCustomBadgeFingerprint()
+        => _customBadgeFingerprint ??= ComputeCustomBadgeFingerprint(GetCustomBadgeDir());
+
+    internal static string ComputeCustomBadgeFingerprint(string? dir)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+            {
+                return string.Empty;
+            }
+
+            var sb = new System.Text.StringBuilder();
+            foreach (var file in new DirectoryInfo(dir).EnumerateFiles().OrderBy(f => f.Name, StringComparer.Ordinal))
+            {
+                sb.Append(file.Name).Append('|').Append(file.Length).Append('|').Append(file.LastWriteTimeUtc.Ticks).Append('\n');
+            }
+
+            var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
+            return Convert.ToHexString(hash, 0, 8);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
     }
 
     private static string? GetCustomBadgeDir()
