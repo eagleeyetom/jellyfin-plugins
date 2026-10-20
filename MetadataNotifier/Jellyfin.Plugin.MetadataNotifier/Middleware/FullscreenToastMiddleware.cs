@@ -24,6 +24,11 @@ namespace Jellyfin.Plugin.MetadataNotifier.Middleware;
 /// element (and back to <c>body</c> when fullscreen exits). A <c>MutationObserver</c> on
 /// <c>document.body</c> handles the case where the container has not been created yet.
 /// </para>
+///
+/// <para>
+/// With tone-mapped SDR detection enabled it also injects <see cref="DisplayScript"/>, which
+/// reports whether the browser's display is in HDR mode.
+/// </para>
 /// </summary>
 public class FullscreenToastMiddleware
 {
@@ -98,12 +103,14 @@ public class FullscreenToastMiddleware
 
     /// <summary>
     /// Processes the HTTP request. Intercepts <c>index.html</c> GET responses and
-    /// injects the fullscreen toast fix script when the option is enabled in plugin config.
+    /// injects the scripts whose options are enabled in plugin config.
     /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
-        // Skip entirely when the option is disabled (default).
-        if (Plugin.Instance?.Configuration.EnableFullscreenToastFix != true)
+        var scripts = GetInjectedScripts();
+
+        // Skip entirely when no option needs a script (default).
+        if (scripts.Length == 0)
         {
             await _next(context).ConfigureAwait(false);
             return;
@@ -162,7 +169,7 @@ public class FullscreenToastMiddleware
 
             var patched = string.Concat(
                 html.AsSpan(0, markerIndex),
-                InjectedScript,
+                scripts,
                 html.AsSpan(markerIndex));
 
             var patchedBytes = Encoding.UTF8.GetBytes(patched);
@@ -179,6 +186,19 @@ public class FullscreenToastMiddleware
         {
             context.Response.Body = originalBody;
         }
+    }
+
+    private static string GetInjectedScripts()
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config == null)
+        {
+            return string.Empty;
+        }
+
+        return string.Concat(
+            config.EnableFullscreenToastFix ? InjectedScript : string.Empty,
+            config.DesktopSdrMode ? DisplayScript.Html : string.Empty);
     }
 
     /// <summary>

@@ -40,6 +40,11 @@ public partial class MetadataNotifierService : IHostedService
     [GeneratedRegex(@"\bLG\b", RegexOptions.IgnoreCase)]
     private static partial Regex LgWordRegex();
 
+    // jellyfin-web reports the browser as its device name ("Chrome", "Edge Chromium", "Firefox",
+    // "Opera", "Safari"), with " Android", " iPhone" or " iPad" appended on mobile devices.
+    [GeneratedRegex(@"^(?<browser>Chrome|Edge Chromium|Edge|Firefox|Opera|Safari)(?: (?:Android|iPhone|iPad))?$", RegexOptions.IgnoreCase)]
+    private static partial Regex WebBrowserDeviceNameRegex();
+
     [GeneratedRegex(@"(?:Profile|dvhe|dvh1)[\s\.]*8\.1\b", RegexOptions.IgnoreCase)]
     private static partial Regex Profile81Regex();
 
@@ -224,6 +229,8 @@ public partial class MetadataNotifierService : IHostedService
             {
                 var hdrResult = MetadataFormatter.ShouldReportToneMappedSdr(config, session.TranscodingInfo)
                     ? new HdrDetectionResult(config.ShowSdr ? "SDR" : string.Empty, "unsupported-hdr-transcode")
+                    : ShouldReportClientToneMappedSdr(config, session, _capabilityStore.GetDisplayHdr(session.DeviceId))
+                    ? new HdrDetectionResult(config.ShowSdr ? "SDR" : string.Empty, "client-display-sdr")
                     : GetHdrInfo(videoStream, item.Path ?? string.Empty, item.Name ?? string.Empty, session, config, capabilities, activeSource?.Container);
                 hdrInfo = hdrResult.Value;
                 hdrRule = hdrResult.Rule;
@@ -771,7 +778,7 @@ public partial class MetadataNotifierService : IHostedService
         // Non-supporting TVs/clients (e.g. LG, Sony, Roku) do not support HDR10+ hardware decoding
         if (hasHdr10Plus && isNonHdr10Plus && config.SuppressHdr10PlusOnLg)
         {
-            if (hasDolbyVision && config.ShowDolbyVision)
+            if (hasDolbyVision && !isNonDvClient && config.ShowDolbyVision)
             {
                 return new(config.UseDetailedVideoNames ? GetDetailedDolbyVisionInfo(videoStream) : "Dolby Vision", "hdr10plus-client-fallback-dolby-vision");
             }
@@ -903,6 +910,7 @@ public partial class MetadataNotifierService : IHostedService
     /// Whether HDR10+ should be reported as its base layer. A profile that rejects
     /// <c>HDR10Plus</c> is conclusive. One that allows it is not: web clients allow HDR10+
     /// wherever they allow HDR10 (LG webOS included), so the known non-HDR10+ brands still apply.
+    /// Chromium and Firefox play only the HDR10 base layer and ignore the dynamic metadata.
     /// </summary>
     internal static bool ShouldSuppressHdr10Plus(
         SessionInfo session,
@@ -911,7 +919,35 @@ public partial class MetadataNotifierService : IHostedService
         string? container)
     {
         return capabilities?.Supports(codec, VideoRangeType.HDR10Plus, container) == RangeSupport.Unsupported
-            || IsNonHdr10PlusClient(session);
+            || IsNonHdr10PlusClient(session)
+            || GetWebBrowserName(session) is { } browser && !browser.Equals("Safari", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The browser jellyfin-web runs in ("Chrome", "Firefox", ...), or null for any other client.
+    /// TV apps built on jellyfin-web report their own client name, so they never match.
+    /// </summary>
+    internal static string? GetWebBrowserName(SessionInfo session)
+    {
+        if (!string.Equals(session.Client, "Jellyfin Web", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var match = WebBrowserDeviceNameRegex().Match(session.DeviceName ?? string.Empty);
+        return match.Success ? match.Groups["browser"].Value : null;
+    }
+
+    /// <summary>
+    /// Whether the browser tone-maps the video to SDR itself: the server sent HDR, but the
+    /// browser reported (through the script injected into the web client) that its display is
+    /// not in HDR mode, e.g. Windows with "Use HDR" turned off.
+    /// </summary>
+    internal static bool ShouldReportClientToneMappedSdr(PluginConfiguration config, SessionInfo session, bool? displayHdr)
+    {
+        return config.DesktopSdrMode
+            && displayHdr == false
+            && GetWebBrowserName(session) != null;
     }
 
     internal static bool HasHdr10BaseLayer(MediaStream? videoStream)

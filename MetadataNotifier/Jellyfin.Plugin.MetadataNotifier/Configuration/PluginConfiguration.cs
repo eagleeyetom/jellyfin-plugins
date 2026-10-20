@@ -122,7 +122,8 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool IgnoreAudioMedia { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets a value indicating whether Jellyfin tone mapping should be reported as SDR.
+    /// Gets or sets a value indicating whether tone-mapped HDR should be reported as SDR: when Jellyfin
+    /// tone-maps server-side, or when a browser reports that its display is not in HDR mode.
     /// </summary>
     public bool DesktopSdrMode { get; set; } = false;
 

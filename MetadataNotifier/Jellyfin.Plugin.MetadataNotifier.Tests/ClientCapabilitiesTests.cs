@@ -288,6 +288,92 @@ public class ClientCapabilitiesTests
         Assert.AreNotEqual("Dolby Vision", result.Value);
     }
 
+    // ----- Browsers: what reaches the screen -----
+
+    // The file from the bug report: DV profile 8.1 with an HDR10 base layer and HDR10+ metadata,
+    // sent unchanged (video direct, audio transcoded) to Chrome on Windows.
+    private static MediaStream DolbyVisionWithHdr10PlusStream() => new()
+    {
+        Type = MediaStreamType.Video,
+        Codec = "hevc",
+        DvProfile = 8,
+        DvBlSignalCompatibilityId = 1,
+        Hdr10PlusPresentFlag = true,
+        RpuPresentFlag = 1,
+        BlPresentFlag = 1,
+        ColorTransfer = "smpte2084",
+        ColorPrimaries = "bt2020"
+    };
+
+    private static SessionInfo CreateChromeSession()
+    {
+        var session = CreateSession("Jellyfin Web", "Chrome");
+        session.TranscodingInfo = new TranscodingInfo { IsVideoDirect = true, IsAudioDirect = false, VideoCodec = "hevc", AudioCodec = "aac" };
+        return session;
+    }
+
+    [TestMethod]
+    public void Chrome_DolbyVisionWithHdr10Plus_ReportsHdr10()
+    {
+        // Chrome's profile allows DOVIWithHDR10Plus and HDR10Plus but not DOVI. The DV fallback used
+        // to pick HDR10+, which Chrome never applies; it plays the HDR10 base layer.
+        var result = MetadataNotifierService.GetHdrInfo(DolbyVisionWithHdr10PlusStream(), "/m/S01E02.mkv", "Camera Shy",
+            CreateChromeSession(), new PluginConfiguration(), Parse(TizenWebProfile), "mkv");
+
+        Assert.AreEqual("HDR10", result.Value);
+        Assert.AreEqual("hdr10plus-client-fallback-hdr10", result.Rule);
+    }
+
+    [TestMethod]
+    public void Hdr10PlusFallback_DoesNotReportDolbyVisionOnClientWithoutDv()
+    {
+        // An LG set without a DV decoder: the HDR10+ fallback used to jump to Dolby Vision anyway.
+        var result = MetadataNotifierService.GetHdrInfo(DolbyVisionWithHdr10PlusStream(), "/m/Film.mkv", "Film",
+            CreateSession("Jellyfin for WebOS", "LG OLED TV"), new PluginConfiguration(), Parse(TizenWebProfile), "mkv");
+
+        Assert.AreEqual("HDR10", result.Value);
+        Assert.AreEqual("hdr10plus-client-fallback-hdr10", result.Rule);
+    }
+
+    [TestMethod]
+    public void Safari_KeepsHdr10Plus()
+    {
+        var stream = new MediaStream { Type = MediaStreamType.Video, Codec = "hevc", Hdr10PlusPresentFlag = true, ColorTransfer = "smpte2084" };
+        var result = MetadataNotifierService.GetHdrInfo(stream, "/m/Film.mkv", "Film",
+            CreateSession("Jellyfin Web", "Safari"), new PluginConfiguration(), Parse(DolbyVisionWebProfile), "mkv");
+
+        Assert.AreEqual("HDR10+", result.Value);
+    }
+
+    [TestMethod]
+    [DataRow("Jellyfin Web", "Chrome", "Chrome")]
+    [DataRow("Jellyfin Web", "Edge Chromium", "Edge Chromium")]
+    [DataRow("Jellyfin Web", "Firefox Android", "Firefox")]
+    [DataRow("Jellyfin Web", "Safari iPad", "Safari")]
+    [DataRow("Jellyfin Web", "Samsung Smart TV", null)]
+    [DataRow("Jellyfin Web", "Chromecast", null)]
+    [DataRow("Jellyfin Media Player", "Chrome", null)]
+    [DataRow("Samsung Smart TV", "Living Room", null)]
+    public void GetWebBrowserName_OnlyMatchesJellyfinWebInABrowser(string client, string deviceName, string? expected)
+    {
+        Assert.AreEqual(expected, MetadataNotifierService.GetWebBrowserName(CreateSession(client, deviceName)));
+    }
+
+    [TestMethod]
+    public void ClientToneMappedSdr_RequiresOptionSdrDisplayAndBrowser()
+    {
+        var enabled = new PluginConfiguration { DesktopSdrMode = true };
+        var chrome = CreateChromeSession();
+
+        Assert.IsTrue(MetadataNotifierService.ShouldReportClientToneMappedSdr(enabled, chrome, displayHdr: false));
+        Assert.IsFalse(MetadataNotifierService.ShouldReportClientToneMappedSdr(enabled, chrome, displayHdr: true), "HDR display");
+        Assert.IsFalse(MetadataNotifierService.ShouldReportClientToneMappedSdr(enabled, chrome, displayHdr: null), "Not reported");
+        Assert.IsFalse(MetadataNotifierService.ShouldReportClientToneMappedSdr(new PluginConfiguration(), chrome, displayHdr: false), "Option off");
+        Assert.IsFalse(
+            MetadataNotifierService.ShouldReportClientToneMappedSdr(enabled, CreateSession("Jellyfin for Tizen", "Samsung Smart TV"), displayHdr: false),
+            "TV apps render HDR outside the web view");
+    }
+
     // ----- Capturing the profile from PlaybackInfo requests -----
 
     private static DefaultHttpContext CreatePlaybackInfoRequest(string body, string path = "/Items/0123456789abcdef0123456789abcdef/PlaybackInfo")
@@ -345,6 +431,34 @@ public class ClientCapabilitiesTests
         await middleware.InvokeAsync(CreatePlaybackInfoRequest("""{ "UserId": "x" }"""), store);
 
         Assert.AreEqual(RangeSupport.Supported, store.Get("TW96aWxsYQ==")!.Supports("hevc", VideoRangeType.DOVI));
+    }
+
+    [TestMethod]
+    [DataRow("sdr", false)]
+    [DataRow("hdr", true)]
+    public async Task Middleware_StoresDisplayRangeFromCookie(string cookie, bool expected)
+    {
+        var store = new ClientCapabilityStore();
+        var middleware = new PlaybackInfoCaptureMiddleware(_ => Task.CompletedTask, NullLogger<PlaybackInfoCaptureMiddleware>.Instance);
+        var context = CreatePlaybackInfoRequest("""{ "UserId": "x" }""");
+        context.Request.Headers.Cookie = $"other=1; {DisplayScript.CookieName}={cookie}";
+
+        await middleware.InvokeAsync(context, store);
+
+        Assert.AreEqual(expected, store.GetDisplayHdr("TW96aWxsYQ=="));
+    }
+
+    [TestMethod]
+    public async Task Middleware_WithUnknownDisplayCookie_KeepsDisplayUnknown()
+    {
+        var store = new ClientCapabilityStore();
+        var middleware = new PlaybackInfoCaptureMiddleware(_ => Task.CompletedTask, NullLogger<PlaybackInfoCaptureMiddleware>.Instance);
+        var context = CreatePlaybackInfoRequest(TizenWebProfile);
+        context.Request.Headers.Cookie = $"{DisplayScript.CookieName}=bogus";
+
+        await middleware.InvokeAsync(context, store);
+
+        Assert.IsNull(store.GetDisplayHdr("TW96aWxsYQ=="));
     }
 
     [TestMethod]

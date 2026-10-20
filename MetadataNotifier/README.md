@@ -40,8 +40,8 @@ Sends on-screen toast notifications when playback starts on any Jellyfin client,
 
 ## Known Limitations
 
-- **Client-side HDR tone-mapping is undetectable.** "Tone-mapped SDR detection" only fires when Jellyfin itself transcodes/tone-maps the video server-side. If Jellyfin Direct Plays or Direct Streams an HDR/Dolby Vision file to a client whose display can't actually render it (e.g. a standard SDR monitor on a Windows/desktop client), the tone-mapping happens invisibly on the client or OS side. The plugin will still report the source format (e.g. Dolby Vision) because that is genuinely what Jellyfin sent.
-- **The device profile describes the player, not the screen.** A Fire TV or Shield that decodes Dolby Vision reports it even when its TV can't show it; use "Always report the fallback on Fire TV" for that case. Web clients claim HDR10+ wherever they support HDR10, so HDR10+ on LG/Sony/Roku/etc. is still corrected by name.
+- **Client-side HDR tone-mapping is only detected in browsers.** "Tone-mapped SDR detection" fires when Jellyfin tone-maps server-side, and in Jellyfin Web on a desktop or mobile browser whose display is not in HDR mode (e.g. Windows with "Use HDR" off): the plugin adds a small script to the web client that reports the display's range, so reload the web client after enabling the option. Apps and TVs that tone-map on their own are still reported with the source format, because that is genuinely what Jellyfin sent.
+- **The device profile describes the player, not the screen.** A Fire TV or Shield that decodes Dolby Vision reports it even when its TV can't show it; use "Always report the fallback on Fire TV" for that case. Web clients claim HDR10+ wherever they support HDR10, so HDR10+ on LG/Sony/Roku/etc. is still corrected by name, and Chrome, Edge, Firefox and Opera (which play only the HDR10 base layer) report HDR10.
 - **Toast duration and delivery are client-dependent.** The configured notification duration is sent as a hint (`TimeoutMs`); some clients (e.g. Jellyfin Web, Kodi) use their own fixed display timing and may ignore it. Some clients may not render the message at all.
 
 

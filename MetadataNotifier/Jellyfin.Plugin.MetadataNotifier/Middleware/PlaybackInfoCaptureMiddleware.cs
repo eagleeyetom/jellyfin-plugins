@@ -43,10 +43,36 @@ public partial class PlaybackInfoCaptureMiddleware
     {
         if (IsPlaybackInfoRequest(context.Request))
         {
+            CaptureDisplayRange(context.Request, store);
             await CaptureAsync(context, store).ConfigureAwait(false);
         }
 
         await _next(context).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Stores the display range the web client reported in the <see cref="DisplayScript.CookieName"/>
+    /// cookie. The device profile cannot tell this: browsers claim HDR support whether or not the
+    /// display is in HDR mode, and tone-map to SDR themselves when it is not.
+    /// </summary>
+    internal static void CaptureDisplayRange(HttpRequest request, ClientCapabilityStore store)
+    {
+        bool? isHdr = request.Cookies[DisplayScript.CookieName] switch
+        {
+            "hdr" => true,
+            "sdr" => false,
+            _ => null
+        };
+
+        if (isHdr is not bool value)
+        {
+            return;
+        }
+
+        foreach (var deviceId in GetDeviceIds(request))
+        {
+            store.SetDisplayHdr(deviceId, value);
+        }
     }
 
     internal static bool IsPlaybackInfoRequest(HttpRequest request)

@@ -119,6 +119,48 @@ public class FullscreenToastMiddlewareTests
     }
 
     [TestMethod]
+    [DataRow(false, true)]
+    [DataRow(true, false)]
+    [DataRow(true, true)]
+    public async Task InvokeAsync_InjectsOnlyEnabledScripts(bool fullscreenFix, bool sdrDetection)
+    {
+        var paths = new DummyApplicationPaths();
+        try
+        {
+            var plugin = new Plugin(paths, new DummyXmlSerializer());
+            plugin.Configuration.EnableFullscreenToastFix = fullscreenFix;
+            plugin.Configuration.DesktopSdrMode = sdrDetection;
+
+            var html = await InvokeAsync("/web/index.html");
+
+            Assert.AreEqual(fullscreenFix, html.Contains("syncToastContainer", StringComparison.Ordinal));
+            Assert.AreEqual(sdrDetection, html.Contains("dynamic-range: high", StringComparison.Ordinal));
+        }
+        finally
+        {
+            paths.Cleanup();
+        }
+    }
+
+    [TestMethod]
+    public async Task InvokeAsync_NoScriptEnabled_LeavesResponseUnchanged()
+    {
+        var paths = new DummyApplicationPaths();
+        try
+        {
+            var plugin = new Plugin(paths, new DummyXmlSerializer());
+            plugin.Configuration.EnableFullscreenToastFix = false;
+            plugin.Configuration.DesktopSdrMode = false;
+
+            Assert.AreEqual(IndexHtml, await InvokeAsync("/web/index.html"));
+        }
+        finally
+        {
+            paths.Cleanup();
+        }
+    }
+
+    [TestMethod]
     [DataRow("/jellyfin/web/main.bundle.js")]
     [DataRow("/jellyfin/")]
     [DataRow("/Items/abc/Images/Primary")]
