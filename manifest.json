@@ -136,8 +136,8 @@
         "changelog": "Add a Users section to show badges to selected users only (or everyone but them), revalidate badged images with ETags, send WebP only to clients that accept it, keep badges inside the visible area of the web client list view with a new size setting, render the live preview without saving settings, detect HDR formats from the file name instead of the whole path, and fix Fire TV and shared-IP client detection.",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.7.0.0/jellytag-2.7.0.0.zip",
-        "checksum": "00000000000000000000000000000000",
-        "timestamp": "2026-10-23T00:00:00Z"
+        "checksum": "77C9EDB716BCA70262E7C28E05D25E7F",
+        "timestamp": "2026-10-23T18:48:19Z"
       },
       {
         "version": "2.6.0.0",
