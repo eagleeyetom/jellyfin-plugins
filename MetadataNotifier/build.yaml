@@ -9,6 +9,16 @@ artifacts:
   - path: Jellyfin.Plugin.MetadataNotifier/MetadataNotifier.png
     type: Icon
 changelog: |
+  ## v1.5.0.0 (2026-10-23)
+  - Decide the Dolby Vision and HDR10+ fallbacks from the device profile each client sends when playback starts; client names are used only for clients that send none
+  - Report HDR10 in Chrome, Edge, Firefox and Opera, which play only the HDR10 base layer
+  - Extend tone-mapped SDR detection to browsers whose display is not in HDR mode, using a small script added to the web client
+  - Fix library exclusion, which never matched the libraries chosen on the settings page
+  - Fix Fire TV detection matching Firefox
+  - Fix custom templates altering " - " inside titles and values
+  - Make the fullscreen toast fix work when Jellyfin runs under a base URL
+  - Reorganise the HDR section of the settings page and add a client support table to the README
+  - Share Dolby Vision, HDR10+ and client detection code with JellyTag
   ## v1.4.3.0 (2026-10-05)
   - Add option to hide Dolby Vision notifications on Fire TV clients
   - Improve HDR10+ detection on Fire TV clients

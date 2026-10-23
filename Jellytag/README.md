@@ -35,9 +35,9 @@ The fork contains practical fixes and maintenance changes for a personal Jellyfi
   Dolby Vision and Dolby Atmos as one official combined logo when both are selected.
 - **Custom badges**: Replace any default badge with your own SVG/PNG/JPEG, or customize text labels — via the config UI or API
 - **Live preview**: See badge changes in real-time directly in the configuration page
-- **Library filtering**: Exclude specific libraries from badge generation
+- **Library and user filtering**: Exclude specific libraries from badge generation, and show badges to everyone, everyone except selected users, or only selected users
 - **Config export/import**: Backup and restore your configuration as JSON
-- **File-based caching**: Processed images are cached to disk with automatic expiration
+- **File-based caching**: Processed images are cached to disk with automatic expiration, and clients revalidate them with ETags instead of downloading them again
 
 ## Screenshots
 
@@ -63,10 +63,12 @@ Go to **Dashboard** → **Plugins** → **JellyTag** to access the configuration
 | Option | Description | Default |
 |--------|-------------|--------|
 | Enable JellyTag | Enable/disable the plugin globally | Enabled |
-| Output Format | JPEG or WebP | JPEG |
+| Output Format | JPEG or WebP (WebP is sent only to clients that accept it) | JPEG |
 | JPEG Quality | Output image quality (50-100) | 90 |
 | Cache Duration | How long cached images are kept (hours) | 24 |
 | Excluded Libraries | Libraries to skip for badge generation | None |
+| Users | Show badges to all users, all except the selected users, or only the selected users. Image requests that cannot be tied to a user are never treated as a selected user | All users |
+| List View Badge Size | Badge size in the web client's list view (e.g. a season's episode list) as a percentage of the normal size | 75% |
 
 ### Image Type Settings (Poster / Thumbnail)
 

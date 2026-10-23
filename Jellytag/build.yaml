@@ -1,6 +1,6 @@
 name: "JellyTag"
 guid: "f4a2e8c1-9b3d-4f7a-b6c5-2d8e1a3f9b04"
-version: "2.6.0.0"
+version: "2.7.0.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 owner: "JellyTag"
@@ -19,6 +19,16 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.JellyTag.dll"
 changelog: |
+  ## v2.7.0.0 (2026-10-23)
+  - Add a Users section: show badges to everyone, everyone except selected users, or only selected users
+  - Let clients revalidate badged images with an ETag (304 Not Modified) instead of downloading them again, and serve cached badged images without making Jellyfin read the original first
+  - Send WebP only to clients that accept it and JPEG to the rest
+  - Keep badges inside the visible area of the web client's list view (e.g. a season's episode list) and add a "List view badge size" setting
+  - Render the live preview from the unsaved settings without saving them or clearing the image cache
+  - Detect Dolby Vision, HDR10+ and HDR from the file name (and its parent folder) instead of the whole path, so a folder such as "4K HDR" no longer marks everything inside it
+  - Fix Fire TV detection matching Firefox, and stop one device's Dolby Vision/HDR filtering from applying to other devices behind the same IP
+  - Make configuration import and reset safe against missing sections, keep badge reloads from breaking renders in progress, and avoid cache file collisions
+  - Share Dolby Vision, HDR10+ and client detection code with Metadata Notifier
   ## v2.6.0.0 (2026-10-05)
   - Overhaul configuration menu into 5 streamlined accordion sections with General settings first
   - Add global Badge Style selector (Image, Brand Logo, Text) and corner shape controls (Rectangular, Square, Round)
