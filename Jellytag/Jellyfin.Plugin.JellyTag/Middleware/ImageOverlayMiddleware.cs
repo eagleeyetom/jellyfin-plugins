@@ -114,7 +114,10 @@ public partial class ImageOverlayMiddleware
         if (config.UserFilterMode != UserFilterMode.AllUsers)
         {
             var userId = await ResolveUserIdAsync(context, sessionManager, null).ConfigureAwait(false);
-            if (!IsUserAllowed(config.UserFilterMode, config.FilteredUserIds, userId))
+            var allowed = userId.HasValue
+                ? IsUserAllowed(config.UserFilterMode, config.FilteredUserIds, userId)
+                : IsAnyOfUsersAllowed(config.UserFilterMode, config.FilteredUserIds, FindIpUserIds(context, sessionManager));
+            if (!allowed)
             {
                 // The same URL now gets a different answer depending on who asks: keep it out of
                 // shared caches and make browsers revalidate, so changing the filter takes effect.
@@ -647,6 +650,50 @@ public partial class ImageOverlayMiddleware
             && selectedUserIds.Any(id => Guid.TryParse(id, out var selected) && selected == userId.Value);
 
         return mode == UserFilterMode.OnlySelected ? isSelected : !isSelected;
+    }
+
+    /// <summary>
+    /// Whether badges are shown to a request that carries no token or device ID (jellyfin-web
+    /// loads posters as plain &lt;img&gt;) and can only be tied to the users signed in from its IP.
+    /// Several sessions of the same user are fine; users on both sides of the filter leave the
+    /// request unidentified, as does an IP without any session.
+    /// </summary>
+    internal static bool IsAnyOfUsersAllowed(UserFilterMode mode, IReadOnlyCollection<string>? selectedUserIds, IReadOnlyCollection<Guid> ipUserIds)
+    {
+        var allowed = ipUserIds.Count(id => IsUserAllowed(mode, selectedUserIds, id));
+        if (allowed == 0 && ipUserIds.Count > 0)
+        {
+            return false;
+        }
+
+        return allowed == ipUserIds.Count && ipUserIds.Count > 0
+            || IsUserAllowed(mode, selectedUserIds, null);
+    }
+
+    /// <summary>
+    /// The distinct users with a session on the request's IP.
+    /// </summary>
+    internal static IReadOnlyCollection<Guid> FindIpUserIds(HttpContext context, ISessionManager? sessionManager)
+    {
+        sessionManager ??= context.RequestServices?.GetService(typeof(ISessionManager)) as ISessionManager;
+        var clientIp = GetClientIp(context);
+        if (sessionManager == null || string.IsNullOrEmpty(clientIp))
+        {
+            return [];
+        }
+
+        try
+        {
+            return sessionManager.Sessions?
+                .Where(s => s.UserId != Guid.Empty && IsIpMatch(s.RemoteEndPoint, clientIp))
+                .Select(s => s.UserId)
+                .Distinct()
+                .ToList() ?? [];
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     /// <summary>

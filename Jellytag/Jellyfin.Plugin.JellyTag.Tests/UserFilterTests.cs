@@ -112,7 +112,44 @@ public class UserFilterTests
         Assert.IsNull(await ImageOverlayMiddleware.ResolveUserIdAsync(context, sessions, null));
     }
 
+    [TestMethod]
+    public void IsAnyOfUsersAllowed_DecidesFromTheUsersOnTheIp()
+    {
+        var selected = new[] { Me.ToString("N") };
+        var other = Guid.NewGuid();
+
+        Assert.IsTrue(ImageOverlayMiddleware.IsAnyOfUsersAllowed(UserFilterMode.OnlySelected, selected, [Me]));
+        Assert.IsFalse(ImageOverlayMiddleware.IsAnyOfUsersAllowed(UserFilterMode.OnlySelected, selected, [Someone]));
+        Assert.IsFalse(ImageOverlayMiddleware.IsAnyOfUsersAllowed(UserFilterMode.OnlySelected, selected, [Me, Someone]), "Mixed users stay unidentified");
+        Assert.IsFalse(ImageOverlayMiddleware.IsAnyOfUsersAllowed(UserFilterMode.OnlySelected, selected, []));
+
+        Assert.IsTrue(ImageOverlayMiddleware.IsAnyOfUsersAllowed(UserFilterMode.OnlySelected, [Me.ToString("N"), other.ToString("N")], [Me, other]));
+        Assert.IsFalse(ImageOverlayMiddleware.IsAnyOfUsersAllowed(UserFilterMode.AllExceptSelected, selected, [Me]));
+        Assert.IsTrue(ImageOverlayMiddleware.IsAnyOfUsersAllowed(UserFilterMode.AllExceptSelected, selected, [Someone]));
+        Assert.IsTrue(ImageOverlayMiddleware.IsAnyOfUsersAllowed(UserFilterMode.AllExceptSelected, selected, []));
+    }
+
     // ----- End to end through the middleware -----
+
+    [TestMethod]
+    public async Task OnlySelected_BrowserWithSeveralSessionsOfTheSelectedUser_GetsBadges()
+    {
+        var env = new Env(UserFilterMode.OnlySelected, Me);
+
+        await env.SendFromIpAsync("10.0.0.7", Session("browser", Me, "10.0.0.7:52311"), Session("phone", Me, "10.0.0.7:52400"));
+
+        Assert.AreEqual(1, env.Overlay.Calls);
+    }
+
+    [TestMethod]
+    public async Task OnlySelected_SharedIpWithAnotherUser_GetsTheOriginalImage()
+    {
+        var env = new Env(UserFilterMode.OnlySelected, Me);
+
+        await env.SendFromIpAsync("10.0.0.7", Session("browser", Me, "10.0.0.7:52311"), Session("phone", Someone, "10.0.0.7:52400"));
+
+        Assert.AreEqual(0, env.Overlay.Calls);
+    }
 
     [TestMethod]
     public async Task OnlySelected_OtherUser_GetsTheOriginalImage()
@@ -202,7 +239,14 @@ public class UserFilterTests
 
         public int NextCalls { get; private set; }
 
-        public async Task SendAsync(SessionInfo session)
+        public Task SendAsync(SessionInfo session) => SendAsync(session.DeviceId, null, session);
+
+        /// <summary>
+        /// A plain &lt;img&gt; request from a browser: no token or device ID, only the IP.
+        /// </summary>
+        public Task SendFromIpAsync(string ip, params SessionInfo[] sessions) => SendAsync(null, ip, sessions);
+
+        private async Task SendAsync(string? deviceId, string? ip, params SessionInfo[] sessions)
         {
             using var scope = PluginConfigurationScope.Override(_config);
             var middleware = new ImageOverlayMiddleware(
@@ -218,7 +262,16 @@ public class UserFilterTests
             var context = new DefaultHttpContext();
             context.Request.Method = "GET";
             context.Request.Path = $"/Items/{_movie.Id:N}/Images/Primary";
-            context.Request.Headers["X-Emby-Device-Id"] = session.DeviceId;
+            if (deviceId != null)
+            {
+                context.Request.Headers["X-Emby-Device-Id"] = deviceId;
+            }
+
+            if (ip != null)
+            {
+                context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(ip);
+            }
+
             context.Response.Body = new MemoryStream();
 
             await middleware.InvokeAsync(
@@ -227,7 +280,7 @@ public class UserFilterTests
                 Overlay,
                 new NoCache(),
                 ImageHttpCachingTests.LibraryManagerProxy.Create(_movie),
-                ImageOverlayMiddlewareTests.SessionManagerProxy.Create(session));
+                ImageOverlayMiddlewareTests.SessionManagerProxy.Create(sessions));
         }
     }
 
