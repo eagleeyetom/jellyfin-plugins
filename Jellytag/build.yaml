@@ -1,6 +1,6 @@
 name: "JellyTag"
 guid: "f4a2e8c1-9b3d-4f7a-b6c5-2d8e1a3f9b04"
-version: "2.7.0.0"
+version: "2.7.1.0"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
 owner: "JellyTag"
@@ -19,6 +19,8 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.JellyTag.dll"
 changelog: |
+  ## v2.7.1.0 (2026-10-28)
+  - Fix badges missing in the web client with the Users filter: image requests without a token or device ID are now matched to the users signed in from the request's IP, so several sessions of one selected user (browser, phone, app) no longer leave the request unidentified
   ## v2.7.0.0 (2026-10-23)
   - Add a Users section: show badges to everyone, everyone except selected users, or only selected users
   - Let clients revalidate badged images with an ETag (304 Not Modified) instead of downloading them again, and serve cached badged images without making Jellyfin read the original first

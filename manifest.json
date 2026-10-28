@@ -132,6 +132,14 @@
     "imageUrl": "https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/main/Jellytag/Jellyfin.Plugin.JellyTag/JellyTag.png",
     "versions": [
       {
+        "version": "2.7.1.0",
+        "changelog": "Fix badges missing in the web client with the Users filter: image requests without a token or device ID are now matched to the users signed in from the request's IP, so several sessions of one selected user no longer leave the request unidentified.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.7.1.0/jellytag-2.7.1.0.zip",
+        "checksum": "00000000000000000000000000000000",
+        "timestamp": "2026-10-28T00:00:00Z"
+      },
+      {
         "version": "2.7.0.0",
         "changelog": "Add a Users section to show badges to selected users only (or everyone but them), revalidate badged images with ETags, send WebP only to clients that accept it, keep badges inside the visible area of the web client list view with a new size setting, render the live preview without saving settings, detect HDR formats from the file name instead of the whole path, and fix Fire TV and shared-IP client detection.",
         "targetAbi": "12.0.0.0",

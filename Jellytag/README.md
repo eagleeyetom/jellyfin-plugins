@@ -67,7 +67,7 @@ Go to **Dashboard** → **Plugins** → **JellyTag** to access the configuration
 | JPEG Quality | Output image quality (50-100) | 90 |
 | Cache Duration | How long cached images are kept (hours) | 24 |
 | Excluded Libraries | Libraries to skip for badge generation | None |
-| Users | Show badges to all users, all except the selected users, or only the selected users. Image requests that cannot be tied to a user are never treated as a selected user | All users |
+| Users | Show badges to all users, all except the selected users, or only the selected users. Requests without a token or device ID (web client images) are tied to the users signed in from the same IP; if those users are on both sides of the filter, the request is never treated as a selected user | All users |
 | List View Badge Size | Badge size in the web client's list view (e.g. a season's episode list) as a percentage of the normal size | 75% |
 
 ### Image Type Settings (Poster / Thumbnail)
