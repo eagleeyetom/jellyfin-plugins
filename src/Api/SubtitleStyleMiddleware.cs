@@ -49,7 +49,6 @@ public sealed class SubtitleStyleMiddleware
     public async Task InvokeAsync(
         HttpContext context,
         ILibraryManager libraryManager,
-        ISubtitleEncoder subtitleEncoder,
         IMediaEncoder mediaEncoder,
         IPathManager pathManager,
         ILocalizationManager localization,
@@ -73,7 +72,7 @@ public sealed class SubtitleStyleMiddleware
         var sub = get ? SubtitlePath.Match(path) : Match.Empty;
         if (sub.Success && AssCodecs.Contains(sub.Groups["fmt"].Value, StringComparer.OrdinalIgnoreCase))
         {
-            await HandleAssStream(context, sub, config, libraryManager, subtitleEncoder, mediaEncoder, localization, logger).ConfigureAwait(false);
+            await HandleAssStream(context, sub, config, libraryManager, mediaEncoder, localization, logger).ConfigureAwait(false);
             return;
         }
 
@@ -158,7 +157,7 @@ public sealed class SubtitleStyleMiddleware
         return changed;
     }
 
-    private async Task HandleAssStream(HttpContext context, Match m, PluginConfiguration config, ILibraryManager libraryManager, ISubtitleEncoder subtitleEncoder, IMediaEncoder mediaEncoder, ILocalizationManager localization, ILogger logger)
+    private async Task HandleAssStream(HttpContext context, Match m, PluginConfiguration config, ILibraryManager libraryManager, IMediaEncoder mediaEncoder, ILocalizationManager localization, ILogger logger)
     {
         long ticks = 0;
         if (m.Groups["ticks"].Success)
@@ -190,16 +189,20 @@ public sealed class SubtitleStyleMiddleware
 
         if (SrtCodecs.Contains(codec, StringComparer.OrdinalIgnoreCase))
         {
+            // Let Jellyfin itself serve the SRT (this keeps its authentication, authorisation and
+            // stream-index handling), then convert the authorised response.
+            string originalPath = context.Request.Path.Value!;
+            context.Request.Path = new PathString(StreamExt.Replace(originalPath, "/Stream.srt", 1));
+            var (srtStatus, srtBody, srtType) = await CaptureAsync(context).ConfigureAwait(false);
+            if (srtStatus != StatusCodes.Status200OK)
+            {
+                await WriteAsync(context, srtBody, srtType).ConfigureAwait(false);
+                return;
+            }
+
             try
             {
-                string srt;
-                var input = await subtitleEncoder.GetSubtitles(item, sourceId, index, "srt", 0, 0, false, context.RequestAborted).ConfigureAwait(false);
-                await using (input.ConfigureAwait(false))
-                using (var reader = new StreamReader(input, Encoding.UTF8))
-                {
-                    srt = await reader.ReadToEndAsync(context.RequestAborted).ConfigureAwait(false);
-                }
-
+                string srt = Encoding.UTF8.GetString(srtBody);
                 string ass = AssBuilder.Patch(await AssBuilder.ConvertTextAsync(mediaEncoder.EncoderPath, srt, context.RequestAborted).ConfigureAwait(false), styleLine, hash);
                 if (AssBuilder.CountDialogues(ass) == 0 && AssBuilder.CountSrtCues(srt) > 0)
                 {
@@ -216,13 +219,14 @@ public sealed class SubtitleStyleMiddleware
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Positioned subtitles: on-the-fly conversion failed for {Path} stream {Index}, using Jellyfin's response", item.Path, index);
-                if (context.Response.HasStarted)
+                // The client expects ASS; an SRT body would fail in libass, so return an error it can show.
+                logger.LogWarning(ex, "Positioned subtitles: on-the-fly conversion failed for {Path} stream {Index}", item.Path, index);
+                if (!context.Response.HasStarted)
                 {
-                    return;
+                    context.Response.Clear();
+                    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
                 }
 
-                await _next(context).ConfigureAwait(false);
                 return;
             }
         }
