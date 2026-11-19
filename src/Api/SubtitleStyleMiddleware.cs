@@ -12,6 +12,7 @@ using Jellyfin.Plugin.PositionedSubtitles.Services;
 using MediaBrowser.Controller.IO;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
+using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Globalization;
 using MediaBrowser.Model.Net;
@@ -52,6 +53,7 @@ public sealed class SubtitleStyleMiddleware
         IMediaEncoder mediaEncoder,
         IPathManager pathManager,
         ILocalizationManager localization,
+        IAuthorizationContext authContext,
         ILogger<SubtitleStyleMiddleware> logger)
     {
         var config = Plugin.Instance?.Configuration;
@@ -65,25 +67,27 @@ public sealed class SubtitleStyleMiddleware
         bool get = HttpMethods.IsGet(context.Request.Method);
         if ((get || HttpMethods.IsPost(context.Request.Method)) && PlaybackInfoPath.IsMatch(path))
         {
-            await HandlePlaybackInfo(context, config, pathManager, localization, logger).ConfigureAwait(false);
+            await HandlePlaybackInfo(context, config, pathManager, localization, authContext, logger).ConfigureAwait(false);
             return;
         }
 
         var sub = get ? SubtitlePath.Match(path) : Match.Empty;
         if (sub.Success && AssCodecs.Contains(sub.Groups["fmt"].Value, StringComparer.OrdinalIgnoreCase))
         {
-            await HandleAssStream(context, sub, config, libraryManager, mediaEncoder, localization, logger).ConfigureAwait(false);
+            await HandleAssStream(context, sub, config, libraryManager, mediaEncoder, localization, authContext, logger).ConfigureAwait(false);
             return;
         }
 
         await _next(context).ConfigureAwait(false);
     }
 
-    private async Task HandlePlaybackInfo(HttpContext context, PluginConfiguration config, IPathManager pathManager, ILocalizationManager localization, ILogger logger)
+    private async Task HandlePlaybackInfo(HttpContext context, PluginConfiguration config, IPathManager pathManager, ILocalizationManager localization, IAuthorizationContext authContext, ILogger logger)
     {
         string? client = GetClient(context.Request);
         var clients = config.LiveClients.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (client is null || !clients.Contains(client, StringComparer.OrdinalIgnoreCase))
+        Guid userId = await ResolveUserAsync(context, authContext).ConfigureAwait(false);
+        var style = config.FindUserStyle(userId);
+        if (style is null || client is null || !clients.Contains(client, StringComparer.OrdinalIgnoreCase))
         {
             await _next(context).ConfigureAwait(false);
             return;
@@ -96,11 +100,11 @@ public sealed class SubtitleStyleMiddleware
             try
             {
                 var root = JsonNode.Parse(body);
-                int changed = Rewrite(root, config, pathManager, localization);
+                int changed = Rewrite(root, config, userId, pathManager, localization);
                 if (changed > 0)
                 {
                     output = Encoding.UTF8.GetBytes(root!.ToJsonString());
-                    logger.LogInformation("Positioned subtitles: announced {Count} SRT track(s) as ASS to {Client}", changed, client);
+                    logger.LogInformation("Positioned subtitles: styled {Count} subtitle track(s) for {User} on {Client}", changed, style.UserName, client);
                 }
             }
             catch (Exception ex)
@@ -113,8 +117,14 @@ public sealed class SubtitleStyleMiddleware
         await WriteAsync(context, output, contentType).ConfigureAwait(false);
     }
 
-    private static int Rewrite(JsonNode? root, PluginConfiguration config, IPathManager pathManager, ILocalizationManager localization)
+    /// <summary>
+    /// Flips positioned SRT tracks to ASS and tags the subtitle URLs of the selected languages with the
+    /// user id, so the Stream.ass request (made by the libass worker) can pick the user's style even
+    /// if it carries no token.
+    /// </summary>
+    private static int Rewrite(JsonNode? root, PluginConfiguration config, Guid userId, IPathManager pathManager, ILocalizationManager localization)
     {
+        string tag = "PsUser=" + userId.ToString("N");
         var languages = LanguageMatcher.Parse(config.Languages);
         int changed = 0;
         if (root?["MediaSources"] is not JsonArray sources)
@@ -132,11 +142,23 @@ public sealed class SubtitleStyleMiddleware
 
             foreach (var s in streams.OfType<JsonObject>())
             {
+                string codec = Str(s, "Codec") ?? string.Empty;
                 if (!string.Equals(Str(s, "Type"), "Subtitle", StringComparison.OrdinalIgnoreCase)
-                    || !SrtCodecs.Contains(Str(s, "Codec") ?? string.Empty, StringComparer.OrdinalIgnoreCase)
                     || !string.Equals(Str(s, "DeliveryMethod"), "External", StringComparison.OrdinalIgnoreCase)
                     || Str(s, "DeliveryUrl") is not string url
                     || !LanguageMatcher.Matches(localization, Str(s, "Language"), languages))
+                {
+                    continue;
+                }
+
+                if (AssCodecs.Contains(codec, StringComparer.OrdinalIgnoreCase))
+                {
+                    s["DeliveryUrl"] = AddQuery(url, tag);
+                    changed++;
+                    continue;
+                }
+
+                if (!SrtCodecs.Contains(codec, StringComparer.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -149,7 +171,7 @@ public sealed class SubtitleStyleMiddleware
                 }
 
                 s["Codec"] = "ass";
-                s["DeliveryUrl"] = StreamExt.Replace(url, "/Stream.ass", 1);
+                s["DeliveryUrl"] = AddQuery(StreamExt.Replace(url, "/Stream.ass", 1), tag);
                 changed++;
             }
         }
@@ -157,8 +179,21 @@ public sealed class SubtitleStyleMiddleware
         return changed;
     }
 
-    private async Task HandleAssStream(HttpContext context, Match m, PluginConfiguration config, ILibraryManager libraryManager, IMediaEncoder mediaEncoder, ILocalizationManager localization, ILogger logger)
+    private async Task HandleAssStream(HttpContext context, Match m, PluginConfiguration config, ILibraryManager libraryManager, IMediaEncoder mediaEncoder, ILocalizationManager localization, IAuthorizationContext authContext, ILogger logger)
     {
+        Guid userId = await ResolveUserAsync(context, authContext).ConfigureAwait(false);
+        if (userId == Guid.Empty && context.Request.Query.TryGetValue("PsUser", out var tagged) && Guid.TryParse(tagged.ToString(), out var taggedId))
+        {
+            userId = taggedId;
+        }
+
+        var style = config.FindUserStyle(userId);
+        if (style is null)
+        {
+            await _next(context).ConfigureAwait(false);
+            return;
+        }
+
         long ticks = 0;
         if (m.Groups["ticks"].Success)
         {
@@ -182,7 +217,7 @@ public sealed class SubtitleStyleMiddleware
             return;
         }
 
-        string styleLine = AssBuilder.BuildStyleLine(config);
+        string styleLine = AssBuilder.BuildStyleLine(style);
         string hash = AssBuilder.StyleHash(styleLine);
         string codec = stream.Codec ?? string.Empty;
         string mime = MimeTypes.GetMimeType("file.ass") ?? "text/x-ssa";
@@ -231,7 +266,7 @@ public sealed class SubtitleStyleMiddleware
             }
         }
 
-        if (!AssCodecs.Contains(codec, StringComparer.OrdinalIgnoreCase) || !config.RestyleEmbeddedAss)
+        if (!AssCodecs.Contains(codec, StringComparer.OrdinalIgnoreCase) || !style.RecolorAss)
         {
             await _next(context).ConfigureAwait(false);
             return;
@@ -244,7 +279,7 @@ public sealed class SubtitleStyleMiddleware
             try
             {
                 string text = Encoding.UTF8.GetString(body);
-                string restyled = AssBuilder.Restyle(text, config.PrimaryColor, hash, out int changedStyles);
+                string restyled = AssBuilder.Restyle(text, style.PrimaryColor, hash, out int changedStyles);
                 if (changedStyles > 0 && AssBuilder.CountDialogues(restyled) == AssBuilder.CountDialogues(text))
                 {
                     output = Encoding.UTF8.GetBytes(restyled);
@@ -323,6 +358,29 @@ public sealed class SubtitleStyleMiddleware
         context.Response.Headers.CacheControl = "no-cache";
         context.Response.ContentLength = body.Length;
         await context.Response.Body.WriteAsync(body, context.RequestAborted).ConfigureAwait(false);
+    }
+
+    private static async Task<Guid> ResolveUserAsync(HttpContext context, IAuthorizationContext authContext)
+    {
+        try
+        {
+            var info = await authContext.GetAuthorizationInfo(context).ConfigureAwait(false);
+            return info.IsAuthenticated ? info.UserId : Guid.Empty;
+        }
+        catch (Exception)
+        {
+            return Guid.Empty;
+        }
+    }
+
+    private static string AddQuery(string url, string pair)
+    {
+        if (url.Contains("PsUser=", StringComparison.Ordinal))
+        {
+            return url;
+        }
+
+        return url + (url.Contains('?', StringComparison.Ordinal) ? "&" : "?") + pair;
     }
 
     private static string? GetClient(HttpRequest request)

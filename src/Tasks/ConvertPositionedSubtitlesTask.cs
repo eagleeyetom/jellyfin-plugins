@@ -81,7 +81,7 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
         var config = Plugin.Instance?.Configuration ?? new PluginConfiguration();
         var stats = new Stats();
         var repair = new SubtitleCacheRepair(_logger, config.DryRun);
-        string styleLine = AssBuilder.BuildStyleLine(config);
+        string styleLine = AssBuilder.BuildStyleLine(config.Style);
         string styleHash = AssBuilder.StyleHash(styleLine);
         var languages = ParseLanguages(config.Languages);
 
@@ -278,7 +278,7 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
             string ass;
             if (isAss)
             {
-                ass = AssBuilder.Restyle(source, config.PrimaryColor, styleHash, out int changedStyles);
+                ass = AssBuilder.Restyle(source, config.Style.PrimaryColor, styleHash, out int changedStyles);
                 if (changedStyles == 0)
                 {
                     _logger.LogDebug("Positioned subtitles: {Path} stream {Index} has no white styles to recolour", video.Path, stream.Index);

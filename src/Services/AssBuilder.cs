@@ -21,10 +21,16 @@ public static class AssBuilder
 
     public static readonly Regex PositionTag = new(@"\{\\an[1-9]\}", RegexOptions.Compiled);
 
-    public static string BuildStyleLine(PluginConfiguration c)
+    public static string BuildStyleLine(SubtitleStyle c)
     {
         var inv = CultureInfo.InvariantCulture;
         string font = string.IsNullOrWhiteSpace(c.FontName) ? "Arial" : c.FontName.Replace(",", string.Empty, StringComparison.Ordinal).Trim();
+
+        // BorderStyle 3 = opaque box; libass draws it with OutlineColour, padded by Outline.
+        int boxAlpha = 0xFF - (int)Math.Round(Math.Clamp(c.BackgroundOpacity, 0, 100) * 2.55);
+        string outlineColour = c.Background ? ToAssColor(c.BackgroundColor, "#000000", boxAlpha) : ToAssColor(c.OutlineColor, "#000000", 0x00);
+        double outline = c.Background ? Math.Max(Math.Clamp(c.Outline, 0, 20), 6) : Math.Clamp(c.Outline, 0, 20);
+
         return string.Join(',', new[]
         {
             "Style: Default",
@@ -32,11 +38,12 @@ public static class AssBuilder
             Math.Clamp(c.FontSize, 8, 400).ToString(inv),
             ToAssColor(c.PrimaryColor, "#FFFF00", 0x00),
             ToAssColor(c.PrimaryColor, "#FFFF00", 0x00),
-            ToAssColor(c.OutlineColor, "#000000", 0x00),
+            outlineColour,
             ToAssColor(c.ShadowColor, "#000000", 0x80),
             c.Bold ? "-1" : "0",
-            "0", "0", "0", "100", "100", "0", "0", "1",
-            Math.Clamp(c.Outline, 0, 20).ToString(inv),
+            "0", "0", "0", "100", "100", "0", "0",
+            c.Background ? "3" : "1",
+            outline.ToString(inv),
             Math.Clamp(c.Shadow, 0, 20).ToString(inv),
             "2", "80", "80",
             Math.Clamp(c.MarginV, 0, 500).ToString(inv),

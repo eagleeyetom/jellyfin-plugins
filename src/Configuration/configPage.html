@@ -4,61 +4,50 @@
     <title>Positioned Subtitles</title>
 </head>
 <body>
-<div data-role="page" class="page type-interior pluginConfigurationPage positionedSubsConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+<div data-role="page" class="page type-interior pluginConfigurationPage positionedSubsConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-select">
     <div data-role="content">
         <div class="content-primary">
             <form class="positionedSubsConfigurationForm">
-                <p>Embedded SRT tracks with <code>{\anN}</code> positioning are written as <code>&lt;video&gt;.&lt;lang&gt;.ass</code> next to the video,
-                    using the style below (ASS ignores the client's subtitle appearance settings). Run it from Scheduled Tasks &rarr; "Convert positioned subtitles to ASS".</p>
+                <p>Jellyfin's web/Tizen player ignores <code>{\anN}</code> positioning in SRT, and ASS tracks always use the style from the file
+                    (the client's subtitle appearance settings only live on the device and never reach the server).
+                    For every user with an enabled style below, this plugin styles subtitles on the fly: positioned SRT tracks are served as ASS with that style,
+                    and white ASS tracks are recoloured. Users without a style get Jellyfin's normal subtitles. No files are written.</p>
 
                 <div class="inputContainer">
                     <input is="emby-input" type="text" id="txtLanguages" label="Languages (comma separated, e.g. pol, eng)" />
                 </div>
                 <div class="checkboxContainer checkboxContainer-withDescription">
-                    <label><input is="emby-checkbox" type="checkbox" id="chkLive" /><span>Live styling (no files)</span></label>
-                    <div class="fieldDescription checkboxFieldDescription">SRT tracks are announced to the clients below as ASS and converted on the fly with the style below; ASS tracks are served recoloured. Nothing is written to the media folders.</div>
+                    <label><input is="emby-checkbox" type="checkbox" id="chkLive" /><span>Live styling</span></label>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="chkOnlyPositioned" /><span>Only SRT tracks with positioning tags</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">When unchecked, every SRT track in the selected languages is styled (and the client's own SRT appearance settings stop applying).</div>
                 </div>
                 <div class="inputContainer">
-                    <input is="emby-input" type="text" id="txtLiveClients" label="Clients for live styling (Authorization Client= names)" />
-                </div>
-                <div class="checkboxContainer checkboxContainer-withDescription">
-                    <label><input is="emby-checkbox" type="checkbox" id="chkSidecars" /><span>Write .ass files next to videos (old mode)</span></label>
-                    <div class="fieldDescription checkboxFieldDescription">When unchecked, the scheduled task removes .ass files this plugin wrote earlier.</div>
-                </div>
-                <div class="checkboxContainer checkboxContainer-withDescription">
-                    <label><input is="emby-checkbox" type="checkbox" id="chkOnlyPositioned" /><span>Only tracks with positioning tags</span></label>
-                    <div class="fieldDescription checkboxFieldDescription">When unchecked, every SRT track in the selected languages is converted.</div>
+                    <input is="emby-input" type="text" id="txtLiveClients" label="Clients (Authorization Client= names)" />
                 </div>
 
-                <div class="checkboxContainer checkboxContainer-withDescription">
-                    <label><input is="emby-checkbox" type="checkbox" id="chkRestyleAss" /><span>Recolour embedded ASS tracks</span></label>
-                    <div class="fieldDescription checkboxFieldDescription">Embedded ASS/SSA tracks keep the release's own (usually white) style. When checked, an external copy is written with white styles changed to the text colour below; fonts, sizes, positions and coloured signs stay as they are.</div>
-                </div>
+                <h2>User styles</h2>
+                <div id="userStyles"></div>
 
-                <h3>Style (1920x1080 canvas)</h3>
-                <div class="inputContainer"><input is="emby-input" type="text" id="txtFontName" label="Font" /></div>
-                <div class="inputContainer"><input is="emby-input" type="number" id="numFontSize" min="8" max="400" label="Font size" /></div>
-                <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkBold" /><span>Bold</span></label></div>
-                <div class="inputContainer"><input is="emby-input" type="color" id="colPrimary" label="Text colour" /></div>
-                <div class="inputContainer"><input is="emby-input" type="color" id="colOutline" label="Outline colour" /></div>
-                <div class="inputContainer"><input is="emby-input" type="number" id="numOutline" min="0" max="20" step="0.5" label="Outline width" /></div>
-                <div class="inputContainer"><input is="emby-input" type="color" id="colShadow" label="Shadow colour (50% opacity)" /></div>
-                <div class="inputContainer"><input is="emby-input" type="number" id="numShadow" min="0" max="20" step="0.5" label="Shadow depth" /></div>
-                <div class="inputContainer"><input is="emby-input" type="number" id="numMarginV" min="0" max="500" label="Vertical margin" /></div>
-
-                <h3>Cache and safety</h3>
-                <div class="checkboxContainer checkboxContainer-withDescription">
-                    <label><input is="emby-checkbox" type="checkbox" id="chkRepair" /><span>Repair shifted subtitle cache</span></label>
-                    <div class="fieldDescription checkboxFieldDescription">Jellyfin names cached subtitles by stream index; adding external subtitle or audio files shifts the indices and the cache then serves the wrong language. This renames the cache files to match (whole library).</div>
-                </div>
-                <div class="checkboxContainer checkboxContainer-withDescription">
-                    <label><input is="emby-checkbox" type="checkbox" id="chkExtractMissing" /><span>Extract missing subtitles</span></label>
-                    <div class="fieldDescription checkboxFieldDescription">If a selected track has not been extracted yet, extract it (reads the whole video file).</div>
-                </div>
-                <div class="checkboxContainer checkboxContainer-withDescription">
-                    <label><input is="emby-checkbox" type="checkbox" id="chkDryRun" /><span>Dry run</span></label>
-                    <div class="fieldDescription checkboxFieldDescription">Only log what would be done.</div>
-                </div>
+                <details style="margin-top:2em">
+                    <summary style="cursor:pointer">Maintenance and old file mode</summary>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label><input is="emby-checkbox" type="checkbox" id="chkRepair" /><span>Repair shifted subtitle cache</span></label>
+                        <div class="fieldDescription checkboxFieldDescription">Jellyfin names cached subtitles by stream index; adding or removing external subtitle/audio files shifts the indices and the cache then serves the wrong language. The scheduled task renames the cache files to match.</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label><input is="emby-checkbox" type="checkbox" id="chkExtractMissing" /><span>Extract missing subtitles</span></label>
+                        <div class="fieldDescription checkboxFieldDescription">The scheduled task extracts subtitles that are not cached yet (reads the whole video file).</div>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label><input is="emby-checkbox" type="checkbox" id="chkSidecars" /><span>Write .ass files next to videos (old mode, uses the first enabled user's style)</span></label>
+                        <div class="fieldDescription checkboxFieldDescription">When unchecked, the scheduled task removes .ass files this plugin wrote earlier.</div>
+                    </div>
+                    <div class="checkboxContainer">
+                        <label><input is="emby-checkbox" type="checkbox" id="chkDryRun" /><span>Dry run (scheduled task only logs)</span></label>
+                    </div>
+                </details>
 
                 <br />
                 <button is="emby-button" type="submit" class="raised button-submit block emby-button"><span>Save</span></button>
@@ -66,26 +55,127 @@
         </div>
     </div>
 
+    <template id="userStyleTemplate">
+        <div class="paperList userStyle" style="padding:1em;margin-bottom:1em">
+            <div class="checkboxContainer">
+                <label><input is="emby-checkbox" type="checkbox" data-f="Enabled" /><span class="userName" style="font-weight:bold"></span></label>
+            </div>
+            <div class="userFields">
+                <div class="preview" style="background:#3a4a5a linear-gradient(135deg,#2b3540,#58687a);height:5.5em;position:relative;border-radius:4px;margin-bottom:1em;overflow:hidden">
+                    <div class="previewText" style="position:absolute;left:0;right:0;text-align:center;line-height:1.2">Przykładowy napis<br/>Dość dobre.</div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:0 1.5em">
+                    <div class="inputContainer" style="flex:1 1 12em"><input is="emby-input" type="text" data-f="FontName" label="Font" /></div>
+                    <div class="inputContainer" style="flex:1 1 8em"><input is="emby-input" type="number" data-f="FontSize" data-t="int" min="8" max="400" label="Size (at 1080p)" /></div>
+                    <div class="inputContainer" style="flex:1 1 8em"><input is="emby-input" type="number" data-f="MarginV" data-t="int" min="0" max="500" label="Vertical margin" /></div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:0 1.5em">
+                    <div class="inputContainer" style="flex:1 1 8em"><input is="emby-input" type="color" data-f="PrimaryColor" label="Text colour" /></div>
+                    <div class="inputContainer" style="flex:1 1 8em"><input is="emby-input" type="color" data-f="OutlineColor" label="Outline colour" /></div>
+                    <div class="inputContainer" style="flex:1 1 8em"><input is="emby-input" type="number" data-f="Outline" data-t="float" min="0" max="20" step="0.5" label="Outline width" /></div>
+                    <div class="inputContainer" style="flex:1 1 8em"><input is="emby-input" type="color" data-f="ShadowColor" label="Shadow colour" /></div>
+                    <div class="inputContainer" style="flex:1 1 8em"><input is="emby-input" type="number" data-f="Shadow" data-t="float" min="0" max="20" step="0.5" label="Shadow depth" /></div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:0 1.5em;align-items:center">
+                    <div class="checkboxContainer" style="flex:1 1 10em"><label><input is="emby-checkbox" type="checkbox" data-f="Bold" /><span>Bold</span></label></div>
+                    <div class="checkboxContainer" style="flex:1 1 10em"><label><input is="emby-checkbox" type="checkbox" data-f="Background" /><span>Background box</span></label></div>
+                    <div class="inputContainer" style="flex:1 1 8em"><input is="emby-input" type="color" data-f="BackgroundColor" label="Box colour" /></div>
+                    <div class="inputContainer" style="flex:1 1 8em"><input is="emby-input" type="number" data-f="BackgroundOpacity" data-t="int" min="0" max="100" label="Box opacity %" /></div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" data-f="RecolorAss" /><span>Recolour white ASS tracks to the text colour</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">Fonts, sizes, positions and coloured signs of ASS tracks are kept.</div>
+                </div>
+            </div>
+        </div>
+    </template>
+
     <script type="text/javascript">
         (function () {
             var pluginId = "2f8a634e-fa86-4c06-bfa1-a50c1c53908a";
-            var fields = [
-                ['#txtLanguages', 'Languages', 'value'], ['#chkOnlyPositioned', 'OnlyPositioned', 'checked'], ['#chkRestyleAss', 'RestyleEmbeddedAss', 'checked'],
-                ['#chkLive', 'LiveStyling', 'checked'], ['#txtLiveClients', 'LiveClients', 'value'], ['#chkSidecars', 'WriteSidecarFiles', 'checked'],
-                ['#txtFontName', 'FontName', 'value'], ['#numFontSize', 'FontSize', 'int'], ['#chkBold', 'Bold', 'checked'],
-                ['#colPrimary', 'PrimaryColor', 'value'], ['#colOutline', 'OutlineColor', 'value'], ['#numOutline', 'Outline', 'float'],
-                ['#colShadow', 'ShadowColor', 'value'], ['#numShadow', 'Shadow', 'float'], ['#numMarginV', 'MarginV', 'int'],
-                ['#chkRepair', 'RepairShiftedCache', 'checked'], ['#chkExtractMissing', 'ExtractMissing', 'checked'], ['#chkDryRun', 'DryRun', 'checked']
+            var globals = [
+                ['#txtLanguages', 'Languages', 'value'], ['#chkLive', 'LiveStyling', 'checked'], ['#chkOnlyPositioned', 'OnlyPositioned', 'checked'],
+                ['#txtLiveClients', 'LiveClients', 'value'], ['#chkRepair', 'RepairShiftedCache', 'checked'],
+                ['#chkExtractMissing', 'ExtractMissing', 'checked'], ['#chkSidecars', 'WriteSidecarFiles', 'checked'], ['#chkDryRun', 'DryRun', 'checked']
             ];
+            var styleKeys = ['FontName', 'FontSize', 'Bold', 'PrimaryColor', 'OutlineColor', 'Outline', 'ShadowColor', 'Shadow', 'Background', 'BackgroundColor', 'BackgroundOpacity', 'MarginV', 'RecolorAss'];
+
+            function norm(id) { return (id || '').replace(/-/g, '').toLowerCase(); }
+
+            function readBlock(block) {
+                var o = { UserId: block.dataset.userId, UserName: block.dataset.userName };
+                block.querySelectorAll('[data-f]').forEach(function (el) {
+                    var f = el.dataset.f;
+                    if (el.type === 'checkbox') { o[f] = el.checked; }
+                    else if (el.dataset.t === 'int') { o[f] = parseInt(el.value, 10) || 0; }
+                    else if (el.dataset.t === 'float') { o[f] = parseFloat(el.value) || 0; }
+                    else { o[f] = el.value; }
+                });
+                return o;
+            }
+
+            function hexA(hex, a) {
+                var v = (hex || '#000000').replace('#', '');
+                return 'rgba(' + parseInt(v.substr(0, 2), 16) + ',' + parseInt(v.substr(2, 2), 16) + ',' + parseInt(v.substr(4, 2), 16) + ',' + a + ')';
+            }
+
+            function updatePreview(block) {
+                var s = readBlock(block);
+                block.querySelector('.userFields').style.opacity = s.Enabled ? '1' : '0.45';
+                var t = block.querySelector('.previewText');
+                var scale = block.querySelector('.preview').clientHeight / 300; // preview box ~ a 1080p frame slice
+                var px = Math.max(8, s.FontSize * scale);
+                var o = Math.max(0, s.Outline * scale);
+                t.style.fontFamily = s.FontName + ', Arial, sans-serif';
+                t.style.fontSize = px + 'px';
+                t.style.fontWeight = s.Bold ? 'bold' : 'normal';
+                t.style.color = s.PrimaryColor;
+                t.style.bottom = Math.max(2, s.MarginV * scale) + 'px';
+                if (s.Background) {
+                    t.style.textShadow = 'none';
+                    t.innerHTML = '<span style="background:' + hexA(s.BackgroundColor, s.BackgroundOpacity / 100) + ';padding:0 .25em;box-decoration-break:clone;-webkit-box-decoration-break:clone">Przykładowy napis<br/>Dość dobre.</span>';
+                } else {
+                    var sh = [];
+                    for (var a = 0; a < 16; a++) { sh.push((Math.cos(a * Math.PI / 8) * o).toFixed(1) + 'px ' + (Math.sin(a * Math.PI / 8) * o).toFixed(1) + 'px 0 ' + s.OutlineColor); }
+                    if (s.Shadow > 0) { var d = (s.Shadow * scale).toFixed(1); sh.push(d + 'px ' + d + 'px 0 ' + hexA(s.ShadowColor, 0.5)); }
+                    t.style.textShadow = sh.join(',');
+                    t.innerHTML = 'Przykładowy napis<br/>Dość dobre.';
+                }
+            }
+
+            function render(page, config, users) {
+                var container = page.querySelector('#userStyles');
+                var tpl = page.querySelector('#userStyleTemplate');
+                container.innerHTML = '';
+                users.forEach(function (u) {
+                    var existing = (config.UserStyles || []).filter(function (s) { return norm(s.UserId) === norm(u.Id); })[0];
+                    var s = Object.assign({}, config.Style || {}, existing || { Enabled: false });
+                    var block = tpl.content.firstElementChild.cloneNode(true);
+                    block.dataset.userId = norm(u.Id);
+                    block.dataset.userName = u.Name;
+                    block.querySelector('.userName').textContent = u.Name;
+                    block.querySelectorAll('[data-f]').forEach(function (el) {
+                        var f = el.dataset.f;
+                        if (f === 'Enabled') { el.checked = existing ? existing.Enabled !== false : false; return; }
+                        if (el.type === 'checkbox') { el.checked = !!s[f]; } else { el.value = s[f]; }
+                    });
+                    block.addEventListener('input', function () { updatePreview(block); });
+                    block.addEventListener('change', function () { updatePreview(block); });
+                    container.appendChild(block);
+                    updatePreview(block);
+                });
+            }
 
             document.querySelector('.positionedSubsConfigurationPage').addEventListener('pageshow', function () {
                 var page = this;
                 Dashboard.showLoadingMsg();
-                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
-                    fields.forEach(function (f) {
+                Promise.all([ApiClient.getPluginConfiguration(pluginId), ApiClient.getUsers()]).then(function (r) {
+                    var config = r[0];
+                    globals.forEach(function (f) {
                         var el = page.querySelector(f[0]);
                         if (f[2] === 'checked') { el.checked = !!config[f[1]]; } else { el.value = config[f[1]]; }
                     });
+                    render(page, config, r[1]);
                     Dashboard.hideLoadingMsg();
                 });
             });
@@ -95,13 +185,22 @@
                 var form = this;
                 Dashboard.showLoadingMsg();
                 ApiClient.getPluginConfiguration(pluginId).then(function (config) {
-                    fields.forEach(function (f) {
+                    globals.forEach(function (f) {
                         var el = form.querySelector(f[0]);
-                        if (f[2] === 'checked') { config[f[1]] = el.checked; }
-                        else if (f[2] === 'int') { config[f[1]] = parseInt(el.value, 10) || 0; }
-                        else if (f[2] === 'float') { config[f[1]] = parseFloat(el.value) || 0; }
-                        else { config[f[1]] = el.value; }
+                        config[f[1]] = f[2] === 'checked' ? el.checked : el.value;
                     });
+                    var styles = [];
+                    form.querySelectorAll('.userStyle').forEach(function (block) {
+                        var s = readBlock(block);
+                        var existing = (config.UserStyles || []).filter(function (x) { return norm(x.UserId) === s.UserId; })[0];
+                        if (s.Enabled || existing) { styles.push(s); }
+                    });
+                    config.UserStyles = styles;
+                    var first = styles.filter(function (s) { return s.Enabled; })[0];
+                    if (first) {
+                        config.Style = config.Style || {};
+                        styleKeys.forEach(function (k) { config.Style[k] = first[k]; });
+                    }
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });
