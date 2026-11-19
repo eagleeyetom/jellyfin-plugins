@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Jellyfin.Plugin.PositionedSubtitles.Tests/Jellyfin.Plugin.PositionedSubtitles.Tests.csproj" />
+  <Project Path="Jellyfin.Plugin.PositionedSubtitles/Jellyfin.Plugin.PositionedSubtitles.csproj" />
+</Solution>

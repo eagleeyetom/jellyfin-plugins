@@ -1,0 +1,19 @@
+name: Positioned Subtitles
+assemblyName: Jellyfin.Plugin.PositionedSubtitles
+targetAbi: 12.0.0.0
+owner: eagleeyetom
+category: Subtitles
+artifacts:
+  - path: Jellyfin.Plugin.PositionedSubtitles/bin/Release/net10.0/Jellyfin.Plugin.PositionedSubtitles.dll
+    type: Assembly
+changelog: |
+  ## v2.1.0.0 (2026-11-19)
+  - Separate subtitle style per Jellyfin user, set on the settings page with a live preview; users without a style get Jellyfin's normal subtitles
+  - Add an optional background box behind the text
+  ## v2.0.0.0 (2026-11-19)
+  - Style subtitles on the fly instead of writing files: positioned SRT tracks are served to web, Tizen and webOS clients as styled ASS, and white ASS tracks are recoloured
+  - The scheduled task removes .ass files written by v1 and keeps repairing the subtitle cache
+  ## v1.1.0.0 (2026-11-19)
+  - Recolour embedded ASS/SSA tracks
+  ## v1.0.0.0 (2026-11-19)
+  - Initial release: convert SRT tracks with {\anN} positioning to styled ASS files and repair subtitle cache files whose stream indices were shifted by external files

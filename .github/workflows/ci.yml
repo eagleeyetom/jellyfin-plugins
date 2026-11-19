@@ -29,7 +29,11 @@ jobs:
       - name: Run JellyTag unit tests
         run: dotnet test Jellytag/Jellyfin.Plugin.JellyTag.Tests/Jellyfin.Plugin.JellyTag.Tests.csproj --configuration Release
 
+      - name: Run Positioned Subtitles unit tests
+        run: dotnet test PositionedSubtitles/Jellyfin.Plugin.PositionedSubtitles.Tests/Jellyfin.Plugin.PositionedSubtitles.Tests.csproj --configuration Release
+
       - name: Build all plugins
         run: |
           dotnet build MetadataNotifier/Jellyfin.Plugin.MetadataNotifier/Jellyfin.Plugin.MetadataNotifier.csproj --configuration Release
           dotnet build Jellytag/Jellyfin.Plugin.JellyTag/Jellyfin.Plugin.JellyTag.csproj --configuration Release
+          dotnet build PositionedSubtitles/Jellyfin.Plugin.PositionedSubtitles/Jellyfin.Plugin.PositionedSubtitles.csproj --configuration Release

@@ -1,32 +1,30 @@
 #!/usr/bin/env bash
-# Builds the plugin against the DLLs of the running Jellyfin container and prepares dist/.
-# Usage: ./build.sh            -> build into dist/
-#        ./build.sh install    -> also copy into the container's plugin folder (restart Jellyfin afterwards)
+# Builds Positioned Subtitles and packages it like a catalogue release.
+# Usage: ./build.sh            -> output/ (dll, meta.json, zip)
+#        ./build.sh install    -> also copy it into a local Jellyfin container (CONTAINER=jellyfin) and print the restart command
 set -euo pipefail
 cd "$(dirname "$0")"
-CONTAINER=${CONTAINER:-jellyfin}
-VERSION=2.1.0.0
+
+PROJECT=Jellyfin.Plugin.PositionedSubtitles/Jellyfin.Plugin.PositionedSubtitles.csproj
 NAME="Positioned Subtitles"
+CONTAINER=${CONTAINER:-jellyfin}
+VERSION=$(dotnet msbuild "$PROJECT" -getProperty:Version | tr -d '[:space:]')
+ABI=$(sed -n 's/^targetAbi: *//p' build.yaml)
 
-mkdir -p ref
-for d in MediaBrowser.Common MediaBrowser.Controller MediaBrowser.Model Jellyfin.Data Jellyfin.Extensions Jellyfin.Database.Implementations; do
-  docker cp "$CONTAINER:/jellyfin/$d.dll" ref/ >/dev/null
-done
-SERVER=$(docker exec "$CONTAINER" sh -c 'curl -s localhost:8096/System/Info/Public' | sed -n 's/.*"Version":"\([0-9.]*\)".*/\1/p')
-ABI="${SERVER}.0"
+rm -rf output Jellyfin.Plugin.PositionedSubtitles/publish_out
+dotnet publish "$PROJECT" -c Release -nologo -v quiet -o Jellyfin.Plugin.PositionedSubtitles/publish_out
+mkdir -p output
+cp Jellyfin.Plugin.PositionedSubtitles/publish_out/Jellyfin.Plugin.PositionedSubtitles.dll output/
+rm -rf Jellyfin.Plugin.PositionedSubtitles/publish_out
 
-dotnet build src -c Release -nologo -v quiet -o build/out
-rm -rf dist && mkdir -p dist
-cp build/out/Jellyfin.Plugin.PositionedSubtitles.dll dist/
-cat > dist/meta.json <<EOF
+cat > output/meta.json <<EOF
 {
   "category": "Subtitles",
-  "changelog": "Built against Jellyfin $SERVER",
-  "description": "Converts embedded SRT subtitles with {\\\\anN} positioning to styled external ASS files and repairs shifted subtitle cache indices.",
+  "description": "Forces a per-user subtitle style on the fly: positioned SRT tracks are served as styled ASS and white ASS tracks are recoloured.",
   "guid": "2f8a634e-fa86-4c06-bfa1-a50c1c53908a",
   "name": "$NAME",
-  "overview": "Positioned SRT to ASS",
-  "owner": "local",
+  "overview": "Per-user subtitle styles and SRT positioning for web and TV clients",
+  "owner": "eagleeyetom",
   "targetAbi": "$ABI",
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "version": "$VERSION",
@@ -35,12 +33,14 @@ cat > dist/meta.json <<EOF
   "assemblies": []
 }
 EOF
-echo "Built dist/ for Jellyfin $SERVER (targetAbi $ABI)"
+(cd output && zip -q "positionedsubtitles-$VERSION.zip" Jellyfin.Plugin.PositionedSubtitles.dll meta.json)
+echo "Built output/ v$VERSION (targetAbi $ABI)"
 
 if [ "${1:-}" = install ]; then
   docker exec "$CONTAINER" sh -c "rm -rf \"/config/plugins/${NAME}_\"*"
   DEST="/config/plugins/${NAME}_${VERSION}"
   docker exec "$CONTAINER" mkdir -p "$DEST"
-  docker cp dist/. "$CONTAINER:$DEST/"
-  echo "Installed to $DEST - restart the container: docker restart $CONTAINER"
+  docker cp output/Jellyfin.Plugin.PositionedSubtitles.dll "$CONTAINER:$DEST/"
+  docker cp output/meta.json "$CONTAINER:$DEST/"
+  echo "Installed to $DEST - restart Jellyfin: docker restart $CONTAINER"
 fi

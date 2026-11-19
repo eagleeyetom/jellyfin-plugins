@@ -122,7 +122,7 @@ public sealed class SubtitleStyleMiddleware
     /// user id, so the Stream.ass request (made by the libass worker) can pick the user's style even
     /// if it carries no token.
     /// </summary>
-    private static int Rewrite(JsonNode? root, PluginConfiguration config, Guid userId, IPathManager pathManager, ILocalizationManager localization)
+    internal static int Rewrite(JsonNode? root, PluginConfiguration config, Guid userId, IPathManager pathManager, ILocalizationManager localization)
     {
         string tag = "PsUser=" + userId.ToString("N");
         var languages = LanguageMatcher.Parse(config.Languages);

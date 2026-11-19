@@ -63,6 +63,22 @@ Sends on-screen toast notifications when playback starts on any client, displayi
 
 ---
 
+### Positioned Subtitles
+
+Gives each user a separate subtitle style in the web client and the Tizen and webOS apps, and makes `{\anN}` positioning in SRT work there. Subtitles are styled while they are served: positioned SRT tracks become styled ASS, and white ASS tracks are recoloured. Media files are never modified. A scheduled task also repairs Jellyfin's subtitle cache when external subtitle files shift the stream indices.
+
+**Features:**
+- Separate style per user, with a live preview on the settings page
+- SRT `{\an8}` lines shown at the top in the web, Tizen and webOS players
+- Recolouring of white ASS tracks, keeping fonts, positions and signs
+- Repair of subtitle cache files that serve the wrong language after external files are added or removed
+
+Not in the plugin catalogue yet; build it from source.
+
+[More details](PositionedSubtitles/README.md)
+
+---
+
 ### Requirements
 
 - Jellyfin 12.0.0 or higher
