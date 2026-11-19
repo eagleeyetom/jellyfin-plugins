@@ -42,7 +42,7 @@
                         <div class="fieldDescription checkboxFieldDescription">The scheduled task extracts subtitles that are not cached yet (reads the whole video file).</div>
                     </div>
                     <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label><input is="emby-checkbox" type="checkbox" id="chkSidecars" /><span>Write .ass files next to videos (old mode, uses the first enabled user's style)</span></label>
+                        <label><input is="emby-checkbox" type="checkbox" id="chkSidecars" /><span>Write .ass files next to videos (old mode, default style)</span></label>
                         <div class="fieldDescription checkboxFieldDescription">When unchecked, the scheduled task removes .ass files this plugin wrote earlier.</div>
                     </div>
                     <div class="checkboxContainer">
@@ -104,7 +104,9 @@
                 ['#txtLiveClients', 'LiveClients', 'value'], ['#chkRepair', 'RepairShiftedCache', 'checked'],
                 ['#chkExtractMissing', 'ExtractMissing', 'checked'], ['#chkSidecars', 'WriteSidecarFiles', 'checked'], ['#chkDryRun', 'DryRun', 'checked']
             ];
-            var styleKeys = ['FontName', 'FontSize', 'Bold', 'PrimaryColor', 'OutlineColor', 'Outline', 'ShadowColor', 'Shadow', 'Background', 'BackgroundColor', 'BackgroundOpacity', 'MarginV', 'RecolorAss'];
+            // Starting point for a user without a style: Jellyfin-like white text with a black outline.
+            var neutralStyle = { FontName: 'Arial', FontSize: 64, Bold: false, PrimaryColor: '#ffffff', OutlineColor: '#000000', Outline: 3,
+                ShadowColor: '#000000', Shadow: 1.5, Background: false, BackgroundColor: '#000000', BackgroundOpacity: 60, MarginV: 55, RecolorAss: false };
 
             function norm(id) { return (id || '').replace(/-/g, '').toLowerCase(); }
 
@@ -165,7 +167,7 @@
                 var enabledOf = function (u) { var e = styleOf(u); return e && e.Enabled !== false ? 0 : 1; };
                 users.slice().sort(function (a, b) { return enabledOf(a) - enabledOf(b) || a.Name.localeCompare(b.Name); }).forEach(function (u) {
                     var existing = styleOf(u);
-                    var s = Object.assign({}, config.Style || {}, existing || { Enabled: false });
+                    var s = Object.assign({}, neutralStyle, existing || { Enabled: false });
                     var block = tpl.content.firstElementChild.cloneNode(true);
                     block.dataset.userId = norm(u.Id);
                     block.dataset.userName = u.Name;
@@ -213,11 +215,6 @@
                         if (s.Enabled || existing) { styles.push(s); }
                     });
                     config.UserStyles = styles;
-                    var first = styles.filter(function (s) { return s.Enabled; })[0];
-                    if (first) {
-                        config.Style = config.Style || {};
-                        styleKeys.forEach(function (k) { config.Style[k] = first[k]; });
-                    }
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });

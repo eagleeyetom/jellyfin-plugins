@@ -85,7 +85,7 @@ public sealed class LiveStylingTests
         var legacy = (PluginConfiguration)serializer.Deserialize(new StringReader(v1))!;
         Assert.AreEqual("pol", legacy.Languages);
         Assert.AreEqual(0, legacy.UserStyles.Count);
-        Assert.AreEqual("#FFFF00", legacy.Style.PrimaryColor);
+        Assert.AreEqual("#FFFFFF", legacy.Style.PrimaryColor, "v1 flat style fields are ignored");
     }
 }
 

@@ -11,7 +11,7 @@ public class SubtitleStyle
 
     public bool Bold { get; set; }
 
-    public string PrimaryColor { get; set; } = "#FFFF00";
+    public string PrimaryColor { get; set; } = "#FFFFFF";
 
     public string OutlineColor { get; set; } = "#000000";
 
@@ -32,7 +32,7 @@ public class SubtitleStyle
     public int MarginV { get; set; } = 55;
 
     /// <summary>Recolour white styles of embedded ASS tracks to <see cref="PrimaryColor"/>.</summary>
-    public bool RecolorAss { get; set; } = true;
+    public bool RecolorAss { get; set; }
 }
 
 /// <summary>Style of one Jellyfin user. Users without an enabled entry get Jellyfin's normal subtitles.</summary>

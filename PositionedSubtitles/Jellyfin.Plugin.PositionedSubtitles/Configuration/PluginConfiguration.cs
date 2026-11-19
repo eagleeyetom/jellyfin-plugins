@@ -28,7 +28,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public bool WriteSidecarFiles { get; set; }
 
-    /// <summary>Style for sidecar files, and the template for newly added users.</summary>
+    /// <summary>Style for sidecar files (old mode).</summary>
     public SubtitleStyle Style { get; set; } = new();
 
     /// <summary>Only convert tracks that contain {\anN} tags. When false every matching SRT track is converted.</summary>

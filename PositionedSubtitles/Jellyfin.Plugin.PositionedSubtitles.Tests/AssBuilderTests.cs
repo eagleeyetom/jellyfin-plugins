@@ -38,7 +38,8 @@ public sealed class AssBuilderTests
     [TestMethod]
     public void BuildStyleLine_DefaultStyle()
     {
-        Assert.AreEqual(YellowStyle, AssBuilder.BuildStyleLine(new SubtitleStyle()));
+        Assert.AreEqual(YellowStyle, AssBuilder.BuildStyleLine(new SubtitleStyle { PrimaryColor = "#FFFF00" }));
+        StringAssert.StartsWith(AssBuilder.BuildStyleLine(new SubtitleStyle()), "Style: Default,Arial,64,&H00FFFFFF,", "default is neutral white");
     }
 
     [TestMethod]
