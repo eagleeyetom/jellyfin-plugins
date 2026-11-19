@@ -56,11 +56,11 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
         _logger = logger;
     }
 
-    public string Name => "Convert positioned subtitles to ASS";
+    public string Name => "Positioned subtitles maintenance";
 
     public string Key => "PositionedSubtitlesConvert";
 
-    public string Description => "Writes styled external ASS files for embedded SRT tracks with {\\anN} positioning and repairs shifted subtitle cache indices.";
+    public string Description => "Repairs shifted subtitle cache indices. With sidecar files disabled (live styling) it removes .ass files it wrote earlier; otherwise it writes them.";
 
     public string Category => _localization.GetLocalizedString("TasksLibraryCategory");
 
@@ -137,8 +137,8 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
 
         progress.Report(100);
         _logger.LogInformation(
-            "Positioned subtitles: done. videos {Videos}, ASS created {Created}, updated {Updated}, unchanged {Unchanged}, skipped user files {UserFiles}, cache shifted {Shifted}, cache deleted {Deleted}, extracted {Extracted}, errors {Errors}",
-            seen.Count, stats.Created, stats.Updated, stats.Unchanged, stats.UserFiles, stats.Shifted, stats.Deleted, stats.Extracted, stats.Errors);
+            "Positioned subtitles: done. videos {Videos}, ASS created {Created}, updated {Updated}, unchanged {Unchanged}, skipped user files {UserFiles}, cache shifted {Shifted}, cache deleted {Deleted}, extracted {Extracted}, removed sidecars {Removed}, errors {Errors}",
+            seen.Count, stats.Created, stats.Updated, stats.Unchanged, stats.UserFiles, stats.Shifted, stats.Deleted, stats.Extracted, stats.Removed, stats.Errors);
     }
 
     private IEnumerable<Video> ExpandVersions(BaseItem item)
@@ -191,6 +191,31 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
                 case CacheState.Shifted: stats.Shifted++; break;
                 case CacheState.Deleted: stats.Deleted++; break;
             }
+        }
+
+        if (!config.WriteSidecarFiles)
+        {
+            await RemoveOwnSidecars(video, folder, streams, config, repair, stats, ct).ConfigureAwait(false);
+
+            // Live styling decides per request from the cache whether an SRT track has {\anN}; make sure it exists.
+            var current = (_libraryManager.GetItemById(video.Id) as Video ?? video).GetMediaStreams();
+            bool missing = current.Any(s => s.Type == MediaStreamType.Subtitle && !s.IsExternal
+                                            && SrtCodecs.Contains(s.Codec ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                                            && MatchesLanguage(s.Language, languages)
+                                            && _pathManager.GetSubtitlePath(sourceId, s.Index, ".srt") is string p && !File.Exists(p));
+            if (missing && config.ExtractMissing && !config.DryRun)
+            {
+                var mediaSource = video.GetMediaSources(false).FirstOrDefault(m => string.Equals(m.Id, sourceId, StringComparison.OrdinalIgnoreCase));
+                if (mediaSource is not null)
+                {
+                    _logger.LogInformation("Positioned subtitles: extracting embedded subtitles of {Path}", video.Path);
+                    await _subtitleEncoder.ExtractAllExtractableSubtitles(mediaSource, ct).ConfigureAwait(false);
+                    repair.WriteState(folder, SubtitleCacheRepair.ExternalOffset(current));
+                    stats.Extracted++;
+                }
+            }
+
+            return;
         }
 
         var candidates = streams
@@ -325,16 +350,50 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
         }
     }
 
+    /// <summary>Live styling replaces sidecar files: delete the ones this plugin wrote earlier.</summary>
+    private async Task RemoveOwnSidecars(Video video, string folder, IReadOnlyList<MediaStream> streams, PluginConfiguration config, SubtitleCacheRepair repair, Stats stats, CancellationToken ct)
+    {
+        string dir = Path.GetDirectoryName(video.Path)!;
+        string baseName = Path.GetFileNameWithoutExtension(video.Path);
+        var own = Directory.EnumerateFiles(dir, baseName + ".*.ass")
+            .Where(f => AssBuilder.IsOwnFile(f, out _))
+            .ToList();
+        if (own.Count == 0)
+        {
+            return;
+        }
+
+        // Count only files Jellyfin actually knows as external streams of this item.
+        int known = streams.Count(s => s.IsExternal && s.Path is not null && own.Contains(s.Path, StringComparer.Ordinal));
+        foreach (string f in own)
+        {
+            if (config.DryRun)
+            {
+                _logger.LogInformation("[dry run] would remove {File}", f);
+                continue;
+            }
+
+            File.Delete(f);
+            stats.Removed++;
+            _logger.LogInformation("Positioned subtitles: removed {File} (live styling replaces it)", f);
+        }
+
+        if (!config.DryRun)
+        {
+            await RefreshWithCacheShift(video, folder, streams, -known, repair, ct).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>
     /// New external files shift every embedded stream index. Rename the cache first so that
     /// providers running during the refresh (e.g. Subtitle Extract) see consistent files,
     /// then correct for anything else the refresh added (e.g. downloaded subtitles).
     /// </summary>
-    private async Task RefreshWithCacheShift(Video video, string folder, IReadOnlyList<MediaStream> before, int created, SubtitleCacheRepair repair, CancellationToken ct)
+    private async Task RefreshWithCacheShift(Video video, string folder, IReadOnlyList<MediaStream> before, int delta, SubtitleCacheRepair repair, CancellationToken ct)
     {
         int offsetBefore = SubtitleCacheRepair.ExternalOffset(before);
-        int predicted = offsetBefore + created;
-        repair.ShiftAll(folder, created, predicted);
+        int predicted = offsetBefore + delta;
+        repair.ShiftAll(folder, delta, predicted);
 
         var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
         {
@@ -425,6 +484,7 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
         public int Shifted;
         public int Deleted;
         public int Extracted;
+        public int Removed;
         public int Errors;
     }
 }

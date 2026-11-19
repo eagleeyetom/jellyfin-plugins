@@ -95,23 +95,55 @@ public static class AssBuilder
         return hash is not null;
     }
 
-    public static async Task<string> ConvertAsync(string ffmpegPath, string srtPath, CancellationToken ct)
+    public static Task<string> ConvertAsync(string ffmpegPath, string srtPath, CancellationToken ct)
+    {
+        return RunFfmpegAsync(ffmpegPath, new[] { "-nostdin", "-hide_banner", "-v", "error", "-sub_charenc", "UTF-8", "-i", srtPath, "-f", "ass", "-" }, null, ct);
+    }
+
+    /// <summary>Converts SRT text (not a file) to ASS by piping it through ffmpeg.</summary>
+    public static Task<string> ConvertTextAsync(string ffmpegPath, string srtText, CancellationToken ct)
+    {
+        return RunFfmpegAsync(ffmpegPath, new[] { "-hide_banner", "-v", "error", "-sub_charenc", "UTF-8", "-f", "srt", "-i", "pipe:0", "-f", "ass", "-" }, srtText, ct);
+    }
+
+    private static async Task<string> RunFfmpegAsync(string ffmpegPath, string[] args, string? stdinText, CancellationToken ct)
     {
         var psi = new ProcessStartInfo(ffmpegPath)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = stdinText is not null,
             UseShellExecute = false,
             CreateNoWindow = true,
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8
         };
-        foreach (var a in new[] { "-nostdin", "-hide_banner", "-v", "error", "-sub_charenc", "UTF-8", "-i", srtPath, "-f", "ass", "-" })
+        if (stdinText is not null)
+        {
+            psi.StandardInputEncoding = new UTF8Encoding(false);
+        }
+
+        foreach (var a in args)
         {
             psi.ArgumentList.Add(a);
         }
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start ffmpeg");
+        if (stdinText is not null)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await process.StandardInput.WriteAsync(stdinText).ConfigureAwait(false);
+                    process.StandardInput.Close();
+                }
+                catch (IOException)
+                {
+                }
+            });
+        }
+
         Task<string> stdout = process.StandardOutput.ReadToEndAsync(ct);
         Task<string> stderr = process.StandardError.ReadToEndAsync(ct);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);

@@ -7,6 +7,21 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Comma separated subtitle languages (ISO 639-2 like "pol" or ISO 639-1 like "pl").</summary>
     public string Languages { get; set; } = "pol";
 
+    /// <summary>
+    /// Style subtitles on the fly (no files): SRT tracks are announced to the selected clients as ASS
+    /// and served converted with the configured style; ASS tracks are served recoloured.
+    /// </summary>
+    public bool LiveStyling { get; set; } = true;
+
+    /// <summary>Client names (Authorization "Client=") for which SRT tracks are announced as ASS.</summary>
+    public string LiveClients { get; set; } = "Jellyfin Web, Jellyfin for Tizen, Jellyfin for webOS";
+
+    /// <summary>
+    /// Old behaviour: write .ass files next to the videos. When false, the scheduled task removes
+    /// files it wrote earlier (only those carrying its marker).
+    /// </summary>
+    public bool WriteSidecarFiles { get; set; }
+
     /// <summary>Only convert tracks that contain {\anN} tags. When false every matching SRT track is converted.</summary>
     public bool OnlyPositioned { get; set; } = true;
 

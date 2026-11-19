@@ -1,7 +1,7 @@
 # Jellyfin Positioned Subtitles (local plugin)
 
 The Jellyfin web/Tizen client ignores `{\anN}` positioning in SRT. Kodi honours it.
-The scheduled task **Convert positioned subtitles to ASS** (Dashboard → Scheduled Tasks → Library):
+**v2: live styling (default).** A middleware announces SRT tracks (selected languages, with `{\anN}`) to web/Tizen clients as ASS and serves them converted with the configured style; embedded ASS tracks are served recoloured. No files are written. The scheduled task **Positioned subtitles maintenance** repairs the cache, extracts missing subtitles and removes .ass files written by v1. Old v1 behaviour (`WriteSidecarFiles`):
 
 1. reads embedded SRT tracks of the selected languages from the subtitle cache
    (`/config/data/subtitles/xx/<item id>/<stream index>.srt`, filled by Subtitle Extract);

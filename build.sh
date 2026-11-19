@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 CONTAINER=${CONTAINER:-jellyfin}
-VERSION=1.1.0.0
+VERSION=2.0.0.0
 NAME="Positioned Subtitles"
 
 mkdir -p ref

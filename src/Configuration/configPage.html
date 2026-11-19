@@ -15,6 +15,17 @@
                     <input is="emby-input" type="text" id="txtLanguages" label="Languages (comma separated, e.g. pol, eng)" />
                 </div>
                 <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="chkLive" /><span>Live styling (no files)</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">SRT tracks are announced to the clients below as ASS and converted on the fly with the style below; ASS tracks are served recoloured. Nothing is written to the media folders.</div>
+                </div>
+                <div class="inputContainer">
+                    <input is="emby-input" type="text" id="txtLiveClients" label="Clients for live styling (Authorization Client= names)" />
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="chkSidecars" /><span>Write .ass files next to videos (old mode)</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">When unchecked, the scheduled task removes .ass files this plugin wrote earlier.</div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
                     <label><input is="emby-checkbox" type="checkbox" id="chkOnlyPositioned" /><span>Only tracks with positioning tags</span></label>
                     <div class="fieldDescription checkboxFieldDescription">When unchecked, every SRT track in the selected languages is converted.</div>
                 </div>
@@ -60,6 +71,7 @@
             var pluginId = "2f8a634e-fa86-4c06-bfa1-a50c1c53908a";
             var fields = [
                 ['#txtLanguages', 'Languages', 'value'], ['#chkOnlyPositioned', 'OnlyPositioned', 'checked'], ['#chkRestyleAss', 'RestyleEmbeddedAss', 'checked'],
+                ['#chkLive', 'LiveStyling', 'checked'], ['#txtLiveClients', 'LiveClients', 'value'], ['#chkSidecars', 'WriteSidecarFiles', 'checked'],
                 ['#txtFontName', 'FontName', 'value'], ['#numFontSize', 'FontSize', 'int'], ['#chkBold', 'Bold', 'checked'],
                 ['#colPrimary', 'PrimaryColor', 'value'], ['#colOutline', 'OutlineColor', 'value'], ['#numOutline', 'Outline', 'float'],
                 ['#colShadow', 'ShadowColor', 'value'], ['#numShadow', 'Shadow', 'float'], ['#numMarginV', 'MarginV', 'int'],
