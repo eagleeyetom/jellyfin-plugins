@@ -15,6 +15,7 @@ rm -rf output Jellyfin.Plugin.PositionedSubtitles/publish_out
 dotnet publish "$PROJECT" -c Release -nologo -v quiet -o Jellyfin.Plugin.PositionedSubtitles/publish_out
 mkdir -p output
 cp Jellyfin.Plugin.PositionedSubtitles/publish_out/Jellyfin.Plugin.PositionedSubtitles.dll output/
+cp Jellyfin.Plugin.PositionedSubtitles/PositionedSubtitles.png output/
 rm -rf Jellyfin.Plugin.PositionedSubtitles/publish_out
 
 cat > output/meta.json <<EOF
@@ -33,7 +34,7 @@ cat > output/meta.json <<EOF
   "assemblies": []
 }
 EOF
-(cd output && zip -q "positionedsubtitles-$VERSION.zip" Jellyfin.Plugin.PositionedSubtitles.dll meta.json)
+(cd output && zip -q "positionedsubtitles-$VERSION.zip" Jellyfin.Plugin.PositionedSubtitles.dll meta.json PositionedSubtitles.png)
 echo "Built output/ v$VERSION (targetAbi $ABI)"
 
 if [ "${1:-}" = install ]; then
@@ -41,6 +42,10 @@ if [ "${1:-}" = install ]; then
   DEST="/config/plugins/${NAME}_${VERSION}"
   docker exec "$CONTAINER" mkdir -p "$DEST"
   docker cp output/Jellyfin.Plugin.PositionedSubtitles.dll "$CONTAINER:$DEST/"
-  docker cp output/meta.json "$CONTAINER:$DEST/"
+  docker cp output/PositionedSubtitles.png "$CONTAINER:$DEST/"
+  # A manually installed plugin shows its icon only when meta.json points to it.
+  sed "s#\"assemblies\": \[\]#\"imagePath\": \"$DEST/PositionedSubtitles.png\",\n  \"assemblies\": []#" output/meta.json > output/meta.install.json
+  docker cp output/meta.install.json "$CONTAINER:$DEST/meta.json"
+  rm -f output/meta.install.json
   echo "Installed to $DEST - restart Jellyfin: docker restart $CONTAINER"
 fi

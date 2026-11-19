@@ -6,6 +6,8 @@ category: Subtitles
 artifacts:
   - path: Jellyfin.Plugin.PositionedSubtitles/bin/Release/net10.0/Jellyfin.Plugin.PositionedSubtitles.dll
     type: Assembly
+  - path: Jellyfin.Plugin.PositionedSubtitles/PositionedSubtitles.png
+    type: Icon
 changelog: |
   ## v2.1.0.0 (2026-11-19)
   - Separate subtitle style per Jellyfin user, set on the settings page with a live preview; users without a style get Jellyfin's normal subtitles
