@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Positioned Subtitles</title>
+</head>
+<body>
+<div data-role="page" class="page type-interior pluginConfigurationPage positionedSubsConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+    <div data-role="content">
+        <div class="content-primary">
+            <form class="positionedSubsConfigurationForm">
+                <p>Embedded SRT tracks with <code>{\anN}</code> positioning are written as <code>&lt;video&gt;.&lt;lang&gt;.ass</code> next to the video,
+                    using the style below (ASS ignores the client's subtitle appearance settings). Run it from Scheduled Tasks &rarr; "Convert positioned subtitles to ASS".</p>
+
+                <div class="inputContainer">
+                    <input is="emby-input" type="text" id="txtLanguages" label="Languages (comma separated, e.g. pol, eng)" />
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="chkOnlyPositioned" /><span>Only tracks with positioning tags</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">When unchecked, every SRT track in the selected languages is converted.</div>
+                </div>
+
+                <h3>Style (1920x1080 canvas)</h3>
+                <div class="inputContainer"><input is="emby-input" type="text" id="txtFontName" label="Font" /></div>
+                <div class="inputContainer"><input is="emby-input" type="number" id="numFontSize" min="8" max="400" label="Font size" /></div>
+                <div class="checkboxContainer"><label><input is="emby-checkbox" type="checkbox" id="chkBold" /><span>Bold</span></label></div>
+                <div class="inputContainer"><input is="emby-input" type="color" id="colPrimary" label="Text colour" /></div>
+                <div class="inputContainer"><input is="emby-input" type="color" id="colOutline" label="Outline colour" /></div>
+                <div class="inputContainer"><input is="emby-input" type="number" id="numOutline" min="0" max="20" step="0.5" label="Outline width" /></div>
+                <div class="inputContainer"><input is="emby-input" type="color" id="colShadow" label="Shadow colour (50% opacity)" /></div>
+                <div class="inputContainer"><input is="emby-input" type="number" id="numShadow" min="0" max="20" step="0.5" label="Shadow depth" /></div>
+                <div class="inputContainer"><input is="emby-input" type="number" id="numMarginV" min="0" max="500" label="Vertical margin" /></div>
+
+                <h3>Cache and safety</h3>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="chkRepair" /><span>Repair shifted subtitle cache</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">Jellyfin names cached subtitles by stream index; adding external subtitle or audio files shifts the indices and the cache then serves the wrong language. This renames the cache files to match (whole library).</div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="chkExtractMissing" /><span>Extract missing subtitles</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">If a selected track has not been extracted yet, extract it (reads the whole video file).</div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="chkDryRun" /><span>Dry run</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">Only log what would be done.</div>
+                </div>
+
+                <br />
+                <button is="emby-button" type="submit" class="raised button-submit block emby-button"><span>Save</span></button>
+            </form>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = "2f8a634e-fa86-4c06-bfa1-a50c1c53908a";
+            var fields = [
+                ['#txtLanguages', 'Languages', 'value'], ['#chkOnlyPositioned', 'OnlyPositioned', 'checked'],
+                ['#txtFontName', 'FontName', 'value'], ['#numFontSize', 'FontSize', 'int'], ['#chkBold', 'Bold', 'checked'],
+                ['#colPrimary', 'PrimaryColor', 'value'], ['#colOutline', 'OutlineColor', 'value'], ['#numOutline', 'Outline', 'float'],
+                ['#colShadow', 'ShadowColor', 'value'], ['#numShadow', 'Shadow', 'float'], ['#numMarginV', 'MarginV', 'int'],
+                ['#chkRepair', 'RepairShiftedCache', 'checked'], ['#chkExtractMissing', 'ExtractMissing', 'checked'], ['#chkDryRun', 'DryRun', 'checked']
+            ];
+
+            document.querySelector('.positionedSubsConfigurationPage').addEventListener('pageshow', function () {
+                var page = this;
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    fields.forEach(function (f) {
+                        var el = page.querySelector(f[0]);
+                        if (f[2] === 'checked') { el.checked = !!config[f[1]]; } else { el.value = config[f[1]]; }
+                    });
+                    Dashboard.hideLoadingMsg();
+                });
+            });
+
+            document.querySelector('.positionedSubsConfigurationForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                var form = this;
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    fields.forEach(function (f) {
+                        var el = form.querySelector(f[0]);
+                        if (f[2] === 'checked') { config[f[1]] = el.checked; }
+                        else if (f[2] === 'int') { config[f[1]] = parseInt(el.value, 10) || 0; }
+                        else if (f[2] === 'float') { config[f[1]] = parseFloat(el.value) || 0; }
+                        else { config[f[1]] = el.value; }
+                    });
+                    ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                    });
+                });
+                return false;
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>
