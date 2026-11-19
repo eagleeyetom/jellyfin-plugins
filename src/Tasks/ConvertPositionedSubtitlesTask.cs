@@ -28,6 +28,8 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
 
     private static readonly string[] SrtCodecs = { "subrip", "srt" };
 
+    private static readonly string[] AssCodecs = { "ass", "ssa" };
+
     private readonly ILibraryManager _libraryManager;
     private readonly ISubtitleEncoder _subtitleEncoder;
     private readonly IMediaEncoder _mediaEncoder;
@@ -193,7 +195,8 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
 
         var candidates = streams
             .Where(s => s.Type == MediaStreamType.Subtitle && !s.IsExternal
-                        && SrtCodecs.Contains(s.Codec ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                        && (SrtCodecs.Contains(s.Codec ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                            || (config.RestyleEmbeddedAss && AssCodecs.Contains(s.Codec ?? string.Empty, StringComparer.OrdinalIgnoreCase)))
                         && MatchesLanguage(s.Language, languages))
             .ToList();
         if (candidates.Count == 0)
@@ -209,7 +212,8 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
 
         foreach (var stream in candidates)
         {
-            string? cachePath = _pathManager.GetSubtitlePath(sourceId, stream.Index, ".srt");
+            bool isAss = AssCodecs.Contains(stream.Codec ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+            string? cachePath = isAss ? FindAssCache(sourceId, stream.Index) : _pathManager.GetSubtitlePath(sourceId, stream.Index, ".srt");
             if (cachePath is null)
             {
                 continue;
@@ -227,6 +231,10 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
                 }
 
                 extracted = true;
+                if (isAss)
+                {
+                    cachePath = FindAssCache(sourceId, stream.Index) ?? cachePath;
+                }
             }
 
             if (!File.Exists(cachePath))
@@ -235,11 +243,42 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
                 continue;
             }
 
-            string srt = await File.ReadAllTextAsync(cachePath, Encoding.UTF8, ct).ConfigureAwait(false);
-            int positioned = AssBuilder.PositionTag.Matches(srt).Count;
-            if (config.OnlyPositioned && positioned == 0)
+            string source = await File.ReadAllTextAsync(cachePath, Encoding.UTF8, ct).ConfigureAwait(false);
+            int positioned = AssBuilder.PositionTag.Matches(source).Count;
+            if (!isAss && config.OnlyPositioned && positioned == 0)
             {
                 continue;
+            }
+
+            string ass;
+            if (isAss)
+            {
+                ass = AssBuilder.Restyle(source, config.PrimaryColor, styleHash, out int changedStyles);
+                if (changedStyles == 0)
+                {
+                    _logger.LogDebug("Positioned subtitles: {Path} stream {Index} has no white styles to recolour", video.Path, stream.Index);
+                    continue;
+                }
+
+                if (AssBuilder.CountDialogues(ass) != AssBuilder.CountDialogues(source))
+                {
+                    stats.Errors++;
+                    _logger.LogWarning("Positioned subtitles: restyle check failed for {Path} stream {Index}", video.Path, stream.Index);
+                    continue;
+                }
+            }
+            else
+            {
+                ass = AssBuilder.Patch(await AssBuilder.ConvertAsync(_mediaEncoder.EncoderPath, cachePath, ct).ConfigureAwait(false), styleLine, styleHash);
+                int dialogues = AssBuilder.CountDialogues(ass);
+                int cues = AssBuilder.CountSrtCues(source);
+                int assPositioned = AssBuilder.PositionTag.Matches(ass).Count;
+                if (dialogues == 0 || dialogues < cues * 0.9 || assPositioned != positioned)
+                {
+                    stats.Errors++;
+                    _logger.LogWarning("Positioned subtitles: conversion check failed for {Path} stream {Index} (dialogues {D}/{C}, positioned {P}/{PS})", video.Path, stream.Index, dialogues, cues, assPositioned, positioned);
+                    continue;
+                }
             }
 
             string target = TargetPath(dir, baseName, stream, streams, usedNames);
@@ -248,17 +287,6 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
             {
                 stats.UserFiles++;
                 _logger.LogInformation("Positioned subtitles: {Target} exists and was not created by this plugin, skipping", target);
-                continue;
-            }
-
-            string ass = AssBuilder.Patch(await AssBuilder.ConvertAsync(_mediaEncoder.EncoderPath, cachePath, ct).ConfigureAwait(false), styleLine, styleHash);
-            int dialogues = AssBuilder.CountDialogues(ass);
-            int cues = AssBuilder.CountSrtCues(srt);
-            int assPositioned = AssBuilder.PositionTag.Matches(ass).Count;
-            if (dialogues == 0 || dialogues < cues * 0.9 || assPositioned != positioned)
-            {
-                stats.Errors++;
-                _logger.LogWarning("Positioned subtitles: conversion check failed for {Path} stream {Index} (dialogues {D}/{C}, positioned {P}/{PS})", video.Path, stream.Index, dialogues, cues, assPositioned, positioned);
                 continue;
             }
 
@@ -324,6 +352,18 @@ public class ConvertPositionedSubtitlesTask : IScheduledTask
             _logger.LogInformation("Positioned subtitles: {Path} has {After} external streams after refresh, expected {Expected}; adjusting cache", video.Path, offsetAfter, predicted);
             repair.ShiftAll(folder, offsetAfter - predicted, offsetAfter);
         }
+    }
+
+    private string? FindAssCache(string sourceId, int index)
+    {
+        string? ass = _pathManager.GetSubtitlePath(sourceId, index, ".ass");
+        string? ssa = _pathManager.GetSubtitlePath(sourceId, index, ".ssa");
+        if (ssa is not null && File.Exists(ssa) && (ass is null || !File.Exists(ass)))
+        {
+            return ssa;
+        }
+
+        return ass;
     }
 
     private string TargetPath(string dir, string baseName, MediaStream stream, IReadOnlyList<MediaStream> streams, HashSet<string> used)

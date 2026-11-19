@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 CONTAINER=${CONTAINER:-jellyfin}
-VERSION=1.0.0.0
+VERSION=1.1.0.0
 NAME="Positioned Subtitles"
 
 mkdir -p ref
@@ -38,6 +38,7 @@ EOF
 echo "Built dist/ for Jellyfin $SERVER (targetAbi $ABI)"
 
 if [ "${1:-}" = install ]; then
+  docker exec "$CONTAINER" sh -c "rm -rf \"/config/plugins/${NAME}_\"*"
   DEST="/config/plugins/${NAME}_${VERSION}"
   docker exec "$CONTAINER" mkdir -p "$DEST"
   docker cp dist/. "$CONTAINER:$DEST/"

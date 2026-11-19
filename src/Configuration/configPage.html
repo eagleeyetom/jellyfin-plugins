@@ -19,6 +19,11 @@
                     <div class="fieldDescription checkboxFieldDescription">When unchecked, every SRT track in the selected languages is converted.</div>
                 </div>
 
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label><input is="emby-checkbox" type="checkbox" id="chkRestyleAss" /><span>Recolour embedded ASS tracks</span></label>
+                    <div class="fieldDescription checkboxFieldDescription">Embedded ASS/SSA tracks keep the release's own (usually white) style. When checked, an external copy is written with white styles changed to the text colour below; fonts, sizes, positions and coloured signs stay as they are.</div>
+                </div>
+
                 <h3>Style (1920x1080 canvas)</h3>
                 <div class="inputContainer"><input is="emby-input" type="text" id="txtFontName" label="Font" /></div>
                 <div class="inputContainer"><input is="emby-input" type="number" id="numFontSize" min="8" max="400" label="Font size" /></div>
@@ -54,7 +59,7 @@
         (function () {
             var pluginId = "2f8a634e-fa86-4c06-bfa1-a50c1c53908a";
             var fields = [
-                ['#txtLanguages', 'Languages', 'value'], ['#chkOnlyPositioned', 'OnlyPositioned', 'checked'],
+                ['#txtLanguages', 'Languages', 'value'], ['#chkOnlyPositioned', 'OnlyPositioned', 'checked'], ['#chkRestyleAss', 'RestyleEmbeddedAss', 'checked'],
                 ['#txtFontName', 'FontName', 'value'], ['#numFontSize', 'FontSize', 'int'], ['#chkBold', 'Bold', 'checked'],
                 ['#colPrimary', 'PrimaryColor', 'value'], ['#colOutline', 'OutlineColor', 'value'], ['#numOutline', 'Outline', 'float'],
                 ['#colShadow', 'ShadowColor', 'value'], ['#numShadow', 'Shadow', 'float'], ['#numMarginV', 'MarginV', 'int'],

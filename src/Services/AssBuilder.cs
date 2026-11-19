@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -178,6 +179,95 @@ public static class AssBuilder
         }
 
         return string.Join('\n', output);
+    }
+
+    /// <summary>
+    /// Recolours an existing ASS/SSA script: every style whose primary colour is white-ish gets
+    /// <paramref name="primaryHtml"/>; everything else (fonts, sizes, positions, coloured signs,
+    /// inline overrides) is kept. Returns the number of styles changed.
+    /// </summary>
+    public static string Restyle(string script, string primaryHtml, string hash, out int changedStyles)
+    {
+        changedStyles = 0;
+        var lines = script.Replace("\r\n", "\n", StringComparison.Ordinal).TrimStart('﻿').Split('\n');
+        var output = new List<string>(lines.Length + 2);
+        int primaryIdx = -1, secondaryIdx = -1;
+        bool inStyles = false;
+        string newColor = ToAssColor(primaryHtml, "#FFFF00", 0x00);
+
+        foreach (string raw in lines)
+        {
+            string line = raw;
+            string trimmed = line.Trim();
+            if (line.StartsWith(Marker, StringComparison.Ordinal) || line.StartsWith(HashPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (trimmed.StartsWith('['))
+            {
+                inStyles = trimmed.Contains("Styles", StringComparison.OrdinalIgnoreCase);
+            }
+            else if (inStyles && trimmed.StartsWith("Format:", StringComparison.OrdinalIgnoreCase))
+            {
+                var cols = trimmed.Substring(7).Split(',').Select(c => c.Trim()).ToList();
+                primaryIdx = cols.FindIndex(c => c.Equals("PrimaryColour", StringComparison.OrdinalIgnoreCase));
+                secondaryIdx = cols.FindIndex(c => c.Equals("SecondaryColour", StringComparison.OrdinalIgnoreCase));
+            }
+            else if (inStyles && primaryIdx >= 0 && trimmed.StartsWith("Style:", StringComparison.OrdinalIgnoreCase))
+            {
+                int colon = line.IndexOf(':', StringComparison.Ordinal);
+                var fields = line.Substring(colon + 1).Split(',');
+                if (primaryIdx < fields.Length && TryParseAssColor(fields[primaryIdx], out uint primary) && IsWhitish(primary))
+                {
+                    string alpha = ((primary >> 24) & 0xFF).ToString("X2", CultureInfo.InvariantCulture);
+                    string colour = "&H" + alpha + newColor.Substring(4);
+                    if (secondaryIdx >= 0 && secondaryIdx < fields.Length && TryParseAssColor(fields[secondaryIdx], out uint secondary) && (secondary & 0xFFFFFF) == (primary & 0xFFFFFF))
+                    {
+                        fields[secondaryIdx] = colour;
+                    }
+
+                    string lead = fields[primaryIdx].Length - fields[primaryIdx].TrimStart().Length > 0 ? " " : string.Empty;
+                    fields[primaryIdx] = lead + colour;
+                    line = line.Substring(0, colon + 1) + string.Join(',', fields);
+                    changedStyles++;
+                }
+            }
+
+            output.Add(line);
+            if (trimmed.Equals("[Script Info]", StringComparison.OrdinalIgnoreCase))
+            {
+                output.Add(Marker);
+                output.Add(HashPrefix + hash);
+            }
+        }
+
+        return string.Join('\n', output);
+    }
+
+    /// <summary>Parses &amp;HAABBGGRR / &amp;HBBGGRR (hex) or a decimal SSA colour into AABBGGRR.</summary>
+    public static bool TryParseAssColor(string value, out uint color)
+    {
+        string v = value.Trim().TrimEnd('&');
+        if (v.StartsWith("&H", StringComparison.OrdinalIgnoreCase))
+        {
+            return uint.TryParse(v.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out color);
+        }
+
+        if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out long dec))
+        {
+            color = unchecked((uint)dec);
+            return true;
+        }
+
+        color = 0;
+        return false;
+    }
+
+    private static bool IsWhitish(uint abgr)
+    {
+        uint r = abgr & 0xFF, g = (abgr >> 8) & 0xFF, b = (abgr >> 16) & 0xFF;
+        return r >= 0xD0 && g >= 0xD0 && b >= 0xD0;
     }
 
     public static int CountDialogues(string ass)

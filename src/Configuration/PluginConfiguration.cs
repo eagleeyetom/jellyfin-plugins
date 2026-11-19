@@ -10,6 +10,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Only convert tracks that contain {\anN} tags. When false every matching SRT track is converted.</summary>
     public bool OnlyPositioned { get; set; } = true;
 
+    /// <summary>
+    /// Embedded ASS/SSA tracks keep the release's own style (usually white). When true, an external
+    /// copy is written with white styles recoloured to <see cref="PrimaryColor"/>; all else is kept.
+    /// </summary>
+    public bool RestyleEmbeddedAss { get; set; } = true;
+
     public string FontName { get; set; } = "Arial";
 
     /// <summary>Font size at PlayResY 1080.</summary>
