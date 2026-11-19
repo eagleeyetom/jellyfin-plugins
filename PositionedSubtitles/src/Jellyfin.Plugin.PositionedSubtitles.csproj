@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Jellyfin.Plugin.PositionedSubtitles</AssemblyName>
+    <RootNamespace>Jellyfin.Plugin.PositionedSubtitles</RootNamespace>
+    <AssemblyVersion>2.1.0.0</AssemblyVersion>
+    <FileVersion>2.1.0.0</FileVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <!-- Compiled against the DLLs of the running Jellyfin server (copied by build.sh into ../ref). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Reference Include="MediaBrowser.Common"><HintPath>../ref/MediaBrowser.Common.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="MediaBrowser.Controller"><HintPath>../ref/MediaBrowser.Controller.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="MediaBrowser.Model"><HintPath>../ref/MediaBrowser.Model.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Jellyfin.Data"><HintPath>../ref/Jellyfin.Data.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Jellyfin.Extensions"><HintPath>../ref/Jellyfin.Extensions.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Jellyfin.Database.Implementations"><HintPath>../ref/Jellyfin.Database.Implementations.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Configuration/configPage.html" />
+    <EmbeddedResource Include="Configuration/configPage.html" LogicalName="Jellyfin.Plugin.PositionedSubtitles.Configuration.configPage.html" />
+  </ItemGroup>
+
+</Project>
