@@ -609,8 +609,8 @@ public partial class JellyTagController : ControllerBase
             return NotFound();
         }
 
-        var imageInfo = item.GetImageInfo(type, 0);
-        if (imageInfo == null || !imageInfo.IsLocalFile || !System.IO.File.Exists(imageInfo.Path))
+        var imageInfo = ResolvePreviewImageInfo(item, type, _libraryManager);
+        if (imageInfo == null)
         {
             return NotFound();
         }
@@ -624,6 +624,50 @@ public partial class JellyTagController : ControllerBase
         var (bytes, contentType) = await RenderPreviewAsync(item, type.ToString(), config, source, _qualityService, _overlayService).ConfigureAwait(false);
         Response.Headers.CacheControl = "no-store";
         return File(bytes, contentType);
+    }
+
+    internal static ItemImageInfo? ResolvePreviewImageInfo(BaseItem item, ImageType type, ILibraryManager? libraryManager = null)
+    {
+        static bool IsUsableLocalImage(ItemImageInfo? info) =>
+            info != null && info.IsLocalFile && !string.IsNullOrEmpty(info.Path) && System.IO.File.Exists(info.Path);
+
+        var primaryTry = item.GetImageInfo(type, 0);
+        if (IsUsableLocalImage(primaryTry))
+        {
+            return primaryTry;
+        }
+
+        if (type == ImageType.Thumb)
+        {
+            var backdropTry = item.GetImageInfo(ImageType.Backdrop, 0);
+            if (IsUsableLocalImage(backdropTry))
+            {
+                return backdropTry;
+            }
+
+            if (libraryManager != null)
+            {
+                var children = libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    ParentId = item.Id,
+                    Recursive = true,
+                    IsVirtualItem = false,
+                    IncludeItemTypes = [Jellyfin.Data.Enums.BaseItemKind.Episode, Jellyfin.Data.Enums.BaseItemKind.Movie],
+                    Limit = 10
+                });
+
+                foreach (var child in children)
+                {
+                    var childThumb = child.GetImageInfo(ImageType.Primary, 0) ?? child.GetImageInfo(ImageType.Thumb, 0);
+                    if (IsUsableLocalImage(childThumb))
+                    {
+                        return childThumb;
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     internal static async Task<(byte[] Bytes, string ContentType)> RenderPreviewAsync(

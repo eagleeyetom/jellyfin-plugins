@@ -203,6 +203,29 @@ public class RegressionTests
         CollectionAssert.AreEqual(source, bytes);
     }
 
+    [TestMethod]
+    public void ResolvePreviewImageInfo_ThumbWithoutLandscape_FallsBackToBackdrop()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var backdropPath = Path.Combine(dir, "backdrop.jpg");
+            File.WriteAllBytes(backdropPath, CreateJpeg(320, 180));
+
+            var series = new MediaBrowser.Controller.Entities.TV.Series();
+            series.SetImage(new ItemImageInfo { Type = MediaBrowser.Model.Entities.ImageType.Backdrop, Path = backdropPath }, 0);
+
+            var resolved = JellyTagController.ResolvePreviewImageInfo(series, MediaBrowser.Model.Entities.ImageType.Thumb);
+
+            Assert.IsNotNull(resolved, "Horizontal preview should fall back to Backdrop when Thumb image is missing");
+            Assert.AreEqual(backdropPath, resolved.Path);
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
     // ----- jellyfin-web list view (season episode list) crops thumbnails to 3:2 / 11:8 -----
 
     [TestMethod]

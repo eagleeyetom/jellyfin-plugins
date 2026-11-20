@@ -106,6 +106,7 @@ public partial class QualityDetectionService : IQualityDetectionService
             {
                 ParentId = item.Id,
                 Recursive = true,
+                IsVirtualItem = false,
                 IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
                 Limit = 50
             };
@@ -122,7 +123,7 @@ public partial class QualityDetectionService : IQualityDetectionService
 
             foreach (var child in children)
             {
-                if (child is Video childVideo)
+                if (child is Video childVideo && !childVideo.IsVirtualItem)
                 {
                     var childBadges = new List<BadgeInfo>();
                     DetectBadgesFromVideo(childVideo, childBadges, includeResolution: true);

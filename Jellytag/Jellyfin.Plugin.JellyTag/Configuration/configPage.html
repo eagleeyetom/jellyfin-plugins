@@ -388,7 +388,7 @@
                 <div class="jellytag-preview-panel">
                     <h3>Live Preview</h3>
                     <div class="preview-search-wrap">
-                        <input id="PreviewSearch" type="text" is="emby-input" placeholder="Search for a movie..." />
+                        <input id="PreviewSearch" type="text" is="emby-input" placeholder="Search for a movie or TV show..." />
                         <div id="PreviewSearchResults" class="preview-search-results"></div>
                     </div>
                     <div id="PreviewSelected" class="preview-selected"></div>
@@ -1946,10 +1946,10 @@
             var errorEl=document.querySelector('#PreviewError'),refreshBtn=document.querySelector('#RefreshPreview');
             searchInput.addEventListener('input',function(){clearTimeout(searchTimer);var qry=searchInput.value.trim();
                 if(qry.length<2){searchResults.style.display='none';return;}
-                searchTimer=setTimeout(function(){ApiClient.getItems(ApiClient.getCurrentUserId(),{SearchTerm:qry,IncludeItemTypes:'Movie',Limit:8,Recursive:true,Fields:'PrimaryImageAspectRatio'}).then(function(result){
+                searchTimer=setTimeout(function(){ApiClient.getItems(ApiClient.getCurrentUserId(),{SearchTerm:qry,IncludeItemTypes:'Movie,Series',Limit:8,Recursive:true,Fields:'PrimaryImageAspectRatio'}).then(function(result){
                     searchResults.innerHTML='';if(!result.Items||result.Items.length===0){searchResults.innerHTML='<div class="preview-search-item" style="color:#aaa;">No results</div>';searchResults.style.display='block';return;}
-                    result.Items.forEach(function(item){var div=document.createElement('div');div.className='preview-search-item';div.textContent=item.Name+(item.ProductionYear?' ('+item.ProductionYear+')':'');
-                        div.addEventListener('click',function(){previewItemId=item.Id;previewItemName=item.Name+(item.ProductionYear?' ('+item.ProductionYear+')':'');selectedEl.textContent=previewItemName;searchResults.style.display='none';searchInput.value='';refreshPreview();});
+                    result.Items.forEach(function(item){var div=document.createElement('div');div.className='preview-search-item';var label=item.Name+(item.ProductionYear?' ('+item.ProductionYear+')':'')+(item.Type==='Series'?' [TV]':'');div.textContent=label;
+                        div.addEventListener('click',function(){previewItemId=item.Id;previewItemName=label;selectedEl.textContent=previewItemName;searchResults.style.display='none';searchInput.value='';refreshPreview();});
                         searchResults.appendChild(div);});searchResults.style.display='block';});},300);});
             document.addEventListener('click',function(e){if(!searchResults.contains(e.target)&&e.target!==searchInput)searchResults.style.display='none';});
             // Renders the unsaved form state server-side; nothing is saved and the image cache is left alone.

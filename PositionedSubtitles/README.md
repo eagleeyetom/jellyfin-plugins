@@ -4,8 +4,6 @@
     <img src="Jellyfin.Plugin.PositionedSubtitles/PositionedSubtitles.png" width="200" />
 </p>
 
-The icon is drawn in `Jellyfin.Plugin.PositionedSubtitles/PositionedSubtitles.svg`; render it to the PNG after editing.
-
 Per-user subtitle styles and working SRT positioning for the Jellyfin web client and the TV apps built on it (Tizen, webOS). Nothing is written to the media folders: subtitles are styled while they are being served.
 
 ## Why
