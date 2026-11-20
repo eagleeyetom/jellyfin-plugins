@@ -19,8 +19,9 @@ category: "General"
 artifacts:
   - "Jellyfin.Plugin.JellyTag.dll"
 changelog: |
-  ## v2.7.1.0 (2026-10-28)
+  ## v2.7.1.0 (2026-11-20)
   - Fix badges missing in the web client with the Users filter: image requests without a token or device ID are now matched to the users signed in from the request's IP, so several sessions of one selected user (browser, phone, app) no longer leave the request unidentified
+  - Support TV shows (Series) in the Live Preview search, fall back to backdrops or episode thumbnails when a dedicated horizontal thumb image is missing, and exclude virtual/missing episodes when detecting series and season badges
   ## v2.7.0.0 (2026-10-23)
   - Add a Users section: show badges to everyone, everyone except selected users, or only selected users
   - Let clients revalidate badged images with an ETag (304 Not Modified) instead of downloading them again, and serve cached badged images without making Jellyfin read the original first

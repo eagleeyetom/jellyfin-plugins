@@ -51,13 +51,13 @@ Leaving `Write .ass files next to videos` on keeps the v1 behaviour instead.
 
 ## Build and install
 
+Install **Positioned Subtitles** from the plugin repository catalog (`manifest.json`), or build from source:
+
 ```bash
 dotnet test Jellyfin.Plugin.PositionedSubtitles.Tests
 ./build.sh                # output/: dll, meta.json, zip
 ./build.sh install        # copy into the local "jellyfin" container, then: docker restart jellyfin
 ```
-
-The plugin is not in `manifest.json` yet; install it from the build output.
 
 The test that pipes SRT through ffmpeg runs only when `POSUBS_FFMPEG` points to an ffmpeg binary or wrapper.
 

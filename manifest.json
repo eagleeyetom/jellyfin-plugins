@@ -133,11 +133,11 @@
     "versions": [
       {
         "version": "2.7.1.0",
-        "changelog": "Fix badges missing in the web client with the Users filter: image requests without a token or device ID are now matched to the users signed in from the request's IP, so several sessions of one selected user no longer leave the request unidentified.",
+        "changelog": "Fix badges missing in the web client with the Users filter by matching unauthenticated image requests to the users signed in from the request's IP, add TV show (Series) search and horizontal backdrop fallback to the Live Preview, and exclude virtual/missing episodes when detecting series and season badges.",
         "targetAbi": "12.0.0.0",
         "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.7.1.0/jellytag-2.7.1.0.zip",
         "checksum": "00000000000000000000000000000000",
-        "timestamp": "2026-10-28T00:00:00Z"
+        "timestamp": "2026-11-20T00:00:00Z"
       },
       {
         "version": "2.7.0.0",
@@ -282,6 +282,25 @@
         "sourceUrl": "https://github.com/Atilil/jellyfin-plugins/releases/download/jellytag-1.0.0.0/jellytag-1.0.0.0.zip",
         "checksum": "ef2835580a7a8ec6efda30e13a41534c",
         "timestamp": "2025-01-29T00:00:00Z"
+      }
+    ]
+  },
+  {
+    "guid": "2f8a634e-fa86-4c06-bfa1-a50c1c53908a",
+    "name": "Positioned Subtitles",
+    "overview": "Per-user subtitle styles and SRT positioning for web and TV clients",
+    "description": "Positioned Subtitles gives each Jellyfin user a separate subtitle style in the web client and Tizen/webOS TV apps, and makes {\\anN} positioning in SRT work on the fly. Positioned SRT tracks are served as styled ASS, white ASS tracks are recoloured to the user's style without modifying media folders, and a scheduled maintenance task keeps subtitle cache stream indices consistent when external subtitles are added or removed.",
+    "owner": "eagleeyetom",
+    "category": "Subtitles",
+    "imageUrl": "https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/main/PositionedSubtitles/Jellyfin.Plugin.PositionedSubtitles/PositionedSubtitles.png",
+    "versions": [
+      {
+        "version": "2.1.0.0",
+        "changelog": "Initial catalog release: per-user subtitle styles with live preview and optional background box, on-the-fly SRT {\\anN} positioning to ASS conversion for web, Tizen, and webOS clients, white ASS track recolouring, and scheduled subtitle cache stream index repair.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/positionedsubtitles-2.1.0.0/positionedsubtitles-2.1.0.0.zip",
+        "checksum": "00000000000000000000000000000000",
+        "timestamp": "2026-11-20T00:00:00Z"
       }
     ]
   }

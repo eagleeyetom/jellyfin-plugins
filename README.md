@@ -65,6 +65,8 @@ Sends on-screen toast notifications when playback starts on any client, displayi
 
 ### Positioned Subtitles
 
+[![Positioned Subtitles Release](https://img.shields.io/github/v/release/eagleeyetom/jellyfin-plugins?filter=positionedsubtitles-*&label=release&color=00A4DC)](https://github.com/eagleeyetom/jellyfin-plugins/releases)
+
 <p align="center">
     <img src="PositionedSubtitles/Jellyfin.Plugin.PositionedSubtitles/PositionedSubtitles.png" width="200" />
 </p>
@@ -76,8 +78,6 @@ Gives each user a separate subtitle style in the web client and the Tizen and we
 - SRT `{\an8}` lines shown at the top in the web, Tizen and webOS players
 - Recolouring of white ASS tracks, keeping fonts, positions and signs
 - Repair of subtitle cache files that serve the wrong language after external files are added or removed
-
-Not in the plugin catalogue yet; build it from source.
 
 [More details](PositionedSubtitles/README.md)
 
