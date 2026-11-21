@@ -106,7 +106,7 @@ public partial class ImageOverlayMiddleware
             var collectionFolders = libraryManager.GetCollectionFolders(item);
             if (collectionFolders.Any(f => excludedGuids.Contains(f.Id)))
             {
-                await _next(context).ConfigureAwait(false);
+                await PassThroughUncachedAsync(context).ConfigureAwait(false);
                 return;
             }
         }
@@ -119,14 +119,8 @@ public partial class ImageOverlayMiddleware
                 : IsAnyOfUsersAllowed(config.UserFilterMode, config.FilteredUserIds, FindIpUserIds(context, sessionManager));
             if (!allowed)
             {
-                // The same URL now gets a different answer depending on who asks: keep it out of
-                // shared caches and make browsers revalidate, so changing the filter takes effect.
-                context.Response.OnStarting(() =>
-                {
-                    context.Response.Headers.CacheControl = BadgedImageCacheControl;
-                    return Task.CompletedTask;
-                });
-                await _next(context).ConfigureAwait(false);
+                // The same URL now gets a different answer depending on who asks.
+                await PassThroughUncachedAsync(context).ConfigureAwait(false);
                 return;
             }
         }
@@ -134,7 +128,7 @@ public partial class ImageOverlayMiddleware
         var imageConfig = GetImageTypeConfig(config, imageType, item);
         if (imageConfig == null || !imageConfig.Enabled)
         {
-            await _next(context).ConfigureAwait(false);
+            await PassThroughUncachedAsync(context).ConfigureAwait(false);
             return;
         }
 
@@ -167,7 +161,7 @@ public partial class ImageOverlayMiddleware
 
         if (visibleBadges.Count == 0)
         {
-            await _next(context).ConfigureAwait(false);
+            await PassThroughUncachedAsync(context).ConfigureAwait(false);
             return;
         }
 
@@ -198,6 +192,22 @@ public partial class ImageOverlayMiddleware
 
         await ServeBadgedImageAsync(context, overlayService, cacheService, itemId, badgeKey, imageTag, visibleBadges, imageConfig, etag, outputFormat)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Lets Jellyfin serve the original image of an item that could carry badges, without its
+    /// long-lived caching headers. Jellyfin marks tagged image URLs cacheable for a year, and the
+    /// URL stays the same once badges do apply (media info probed, panel enabled, filter changed),
+    /// so a client that kept the plain original would never ask again.
+    /// </summary>
+    internal async Task PassThroughUncachedAsync(HttpContext context)
+    {
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers.CacheControl = BadgedImageCacheControl;
+            return Task.CompletedTask;
+        });
+        await _next(context).ConfigureAwait(false);
     }
 
     /// <summary>

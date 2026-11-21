@@ -6,6 +6,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SkiaSharp;
@@ -47,6 +48,50 @@ public class ImageHttpCachingTests
 
         Assert.AreEqual(1, env.NextCalls, "A 304 must not make Jellyfin read the original image");
         Assert.AreEqual(1, env.Overlay.Calls, "A 304 must not draw the badges");
+    }
+
+    // ----- Pass-through must not inherit Jellyfin's year-long caching -----
+
+    [TestMethod]
+    public async Task InvokeAsync_NoVisibleBadges_OriginalIsNotCachedLongTerm()
+    {
+        // An item whose badges show up later (media info probed, panel enabled) keeps the same URL;
+        // with Jellyfin's headers the browser would keep the plain poster for a year.
+        var env = new Env();
+        env.Quality.Badges.Clear();
+        using var scope = PluginConfigurationScope.Override(env.Config);
+
+        var result = await env.SendAsync();
+
+        Assert.AreEqual(1, env.NextCalls);
+        Assert.AreEqual(0, env.Overlay.Calls);
+        Assert.AreEqual(ImageOverlayMiddleware.BadgedImageCacheControl, result.Response.Headers.CacheControl.ToString());
+        Assert.AreEqual("\"jellyfin-original\"", result.Response.Headers.ETag.ToString(), "Jellyfin's own validator stays for revalidation");
+    }
+
+    [TestMethod]
+    public async Task InvokeAsync_ImageTypeDisabled_OriginalIsNotCachedLongTerm()
+    {
+        var env = new Env();
+        env.Config.PosterConfig.Enabled = false;
+        using var scope = PluginConfigurationScope.Override(env.Config);
+
+        var result = await env.SendAsync();
+
+        Assert.AreEqual(0, env.Overlay.Calls);
+        Assert.AreEqual(ImageOverlayMiddleware.BadgedImageCacheControl, result.Response.Headers.CacheControl.ToString());
+    }
+
+    [TestMethod]
+    public async Task InvokeAsync_PluginDisabled_LeavesJellyfinCachingAlone()
+    {
+        var env = new Env();
+        env.Config.Enabled = false;
+        using var scope = PluginConfigurationScope.Override(env.Config);
+
+        var result = await env.SendAsync();
+
+        Assert.AreEqual(JellyfinCacheControl, result.Response.Headers.CacheControl.ToString());
     }
 
     [TestMethod]
@@ -264,11 +309,14 @@ public class ImageHttpCachingTests
                     ctx.Response.StatusCode = 200;
                     ctx.Response.ContentType = "image/jpeg";
                     ctx.Response.Headers.ETag = "\"jellyfin-original\"";
+                    ctx.Response.Headers.CacheControl = JellyfinCacheControl;
                     await ctx.Response.Body.WriteAsync(Original);
                 },
                 NullLogger<ImageOverlayMiddleware>.Instance);
 
+            var responseFeature = new RecordingResponseFeature();
             var context = new DefaultHttpContext();
+            context.Features.Set<IHttpResponseFeature>(responseFeature);
             context.Request.Method = "GET";
             context.Request.Path = $"/Items/{Movie.Id:N}/Images/Primary";
             var body = new MemoryStream();
@@ -276,8 +324,34 @@ public class ImageHttpCachingTests
             configure?.Invoke(context);
 
             await middleware.InvokeAsync(context, Quality, _overlay, Cache, LibraryManager);
+            await responseFeature.StartAsync();
 
             return (context.Response, body.ToArray());
+        }
+    }
+
+    /// <summary>What Jellyfin sends for image URLs carrying a tag.</summary>
+    private const string JellyfinCacheControl = "public, max-age=31536000";
+
+    /// <summary>
+    /// DefaultHttpContext drops OnStarting callbacks; this one runs them the way the server does
+    /// right before the headers go out, i.e. after Jellyfin set its own.
+    /// </summary>
+    private sealed class RecordingResponseFeature : HttpResponseFeature
+    {
+        private readonly List<(Func<object, Task> Callback, object State)> _onStarting = new();
+
+        public override void OnStarting(Func<object, Task> callback, object state) => _onStarting.Add((callback, state));
+
+        public async Task StartAsync()
+        {
+            // Registered last runs first, as in Kestrel.
+            for (var i = _onStarting.Count - 1; i >= 0; i--)
+            {
+                await _onStarting[i].Callback(_onStarting[i].State);
+            }
+
+            _onStarting.Clear();
         }
     }
 
