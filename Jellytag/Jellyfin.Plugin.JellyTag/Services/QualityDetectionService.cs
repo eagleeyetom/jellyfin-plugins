@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.JellyTag.Configuration;
 using Jellyfin.Plugin.Shared.MediaDetection;
 using MediaBrowser.Controller.Entities;
@@ -102,15 +103,30 @@ public partial class QualityDetectionService : IQualityDetectionService
         }
         else
         {
-            var query = new InternalItemsQuery
+            var childBadgeLists = CollectChildBadges(
+                (startIndex, limit) => _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    ParentId = item.Id,
+                    Recursive = true,
+                    IsVirtualItem = false,
+                    IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
+                    OrderBy = [(ItemSortBy.DateCreated, SortOrder.Descending)],
+                    StartIndex = startIndex,
+                    Limit = limit
+                }),
+                childVideo =>
+                {
+                    var childBadges = new List<BadgeInfo>();
+                    DetectBadgesFromVideo(childVideo, childBadges, includeResolution: true);
+                    return childBadges;
+                },
+                out var scanned);
+
+            if (scanned > childBadgeLists.Count)
             {
-                ParentId = item.Id,
-                Recursive = true,
-                IsVirtualItem = false,
-                IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
-                Limit = 50
-            };
-            var children = _libraryManager.GetItemList(query);
+                _logger.LogDebug("{Item}: {Skipped} of {Scanned} children had no media info and were skipped",
+                    item.Name, scanned - childBadgeLists.Count, scanned);
+            }
 
             var bestResolution = VideoQuality.Unknown;
             var bestHdrBadges = new List<BadgeInfo>();
@@ -121,70 +137,64 @@ public partial class QualityDetectionService : IQualityDetectionService
             int bestChannelScore = -1;
             var otherBadges = new List<BadgeInfo>();
 
-            foreach (var child in children)
+            foreach (var childBadges in childBadgeLists)
             {
-                if (child is Video childVideo && !childVideo.IsVirtualItem)
+                var childHdr = new List<BadgeInfo>();
+                var childAudio = new List<BadgeInfo>();
+                var childChannels = new List<BadgeInfo>();
+
+                foreach (var b in childBadges)
                 {
-                    var childBadges = new List<BadgeInfo>();
-                    DetectBadgesFromVideo(childVideo, childBadges, includeResolution: true);
-
-                    var childHdr = new List<BadgeInfo>();
-                    var childAudio = new List<BadgeInfo>();
-                    var childChannels = new List<BadgeInfo>();
-
-                    foreach (var b in childBadges)
+                    switch (b.Category)
                     {
-                        switch (b.Category)
-                        {
-                            case BadgeCategory.Resolution:
-                                var q = b.BadgeKey switch
-                                {
-                                    "4k" => VideoQuality.UHD4K,
-                                    "1080p" => VideoQuality.FHD1080p,
-                                    "720p" => VideoQuality.HD720p,
-                                    "sd" => VideoQuality.SD,
-                                    _ => VideoQuality.Unknown
-                                };
-                                if (q != VideoQuality.Unknown && (bestResolution == VideoQuality.Unknown || q > bestResolution))
-                                {
-                                    bestResolution = q;
-                                }
-                                break;
-                            case BadgeCategory.Hdr:
-                                childHdr.Add(b);
-                                break;
-                            case BadgeCategory.Audio:
-                                childAudio.Add(b);
-                                break;
-                            case BadgeCategory.Channels:
-                                childChannels.Add(b);
-                                break;
-                            default:
-                                otherBadges.Add(b);
-                                break;
-                        }
+                        case BadgeCategory.Resolution:
+                            var q = b.BadgeKey switch
+                            {
+                                "4k" => VideoQuality.UHD4K,
+                                "1080p" => VideoQuality.FHD1080p,
+                                "720p" => VideoQuality.HD720p,
+                                "sd" => VideoQuality.SD,
+                                _ => VideoQuality.Unknown
+                            };
+                            if (q != VideoQuality.Unknown && (bestResolution == VideoQuality.Unknown || q > bestResolution))
+                            {
+                                bestResolution = q;
+                            }
+                            break;
+                        case BadgeCategory.Hdr:
+                            childHdr.Add(b);
+                            break;
+                        case BadgeCategory.Audio:
+                            childAudio.Add(b);
+                            break;
+                        case BadgeCategory.Channels:
+                            childChannels.Add(b);
+                            break;
+                        default:
+                            otherBadges.Add(b);
+                            break;
                     }
+                }
 
-                    var hdrScore = GetHdrQualityScore(childHdr);
-                    if (hdrScore > bestHdrScore)
-                    {
-                        bestHdrScore = hdrScore;
-                        bestHdrBadges = childHdr;
-                    }
+                var hdrScore = GetHdrQualityScore(childHdr);
+                if (hdrScore > bestHdrScore)
+                {
+                    bestHdrScore = hdrScore;
+                    bestHdrBadges = childHdr;
+                }
 
-                    var audioScore = GetAudioQualityScore(childAudio);
-                    if (audioScore > bestAudioScore)
-                    {
-                        bestAudioScore = audioScore;
-                        bestAudioBadges = childAudio;
-                    }
+                var audioScore = GetAudioQualityScore(childAudio);
+                if (audioScore > bestAudioScore)
+                {
+                    bestAudioScore = audioScore;
+                    bestAudioBadges = childAudio;
+                }
 
-                    var channelScore = GetChannelQualityScore(childChannels);
-                    if (channelScore > bestChannelScore)
-                    {
-                        bestChannelScore = channelScore;
-                        bestChannelBadges = childChannels;
-                    }
+                var channelScore = GetChannelQualityScore(childChannels);
+                if (channelScore > bestChannelScore)
+                {
+                    bestChannelScore = channelScore;
+                    bestChannelBadges = childChannels;
                 }
             }
 
@@ -202,6 +212,64 @@ public partial class QualityDetectionService : IQualityDetectionService
         }
 
         return badges;
+    }
+
+    /// <summary>Children with media info whose badges are aggregated into a series/season/folder.</summary>
+    internal const int MaxAggregatedChildren = 50;
+
+    /// <summary>Upper bound on children looked at, so a library full of stale entries stays cheap.</summary>
+    internal const int MaxScannedChildren = 500;
+
+    private const int ChildPageSize = 50;
+
+    /// <summary>
+    /// Badges of up to <see cref="MaxAggregatedChildren"/> children that have media info. Children
+    /// without any (stale "zombie" entries left in the database after files were moved or replaced,
+    /// never-probed items) are skipped instead of counting towards the limit: a single page of them
+    /// used to leave the whole series without badges.
+    /// </summary>
+    internal static List<List<BadgeInfo>> CollectChildBadges(
+        Func<int, int, IReadOnlyList<BaseItem>> fetchPage,
+        Func<Video, List<BadgeInfo>> detect,
+        out int scanned)
+    {
+        var result = new List<List<BadgeInfo>>();
+        scanned = 0;
+
+        while (result.Count < MaxAggregatedChildren && scanned < MaxScannedChildren)
+        {
+            var page = fetchPage(scanned, Math.Min(ChildPageSize, MaxScannedChildren - scanned));
+            if (page == null || page.Count == 0)
+            {
+                break;
+            }
+
+            scanned += page.Count;
+            foreach (var child in page)
+            {
+                if (child is not Video childVideo || childVideo.IsVirtualItem)
+                {
+                    continue;
+                }
+
+                var childBadges = detect(childVideo);
+                if (childBadges.Count > 0)
+                {
+                    result.Add(childBadges);
+                    if (result.Count >= MaxAggregatedChildren)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if (page.Count < ChildPageSize)
+            {
+                break;
+            }
+        }
+
+        return result;
     }
 
     internal static int GetHdrQualityScore(List<BadgeInfo> hdrBadges)

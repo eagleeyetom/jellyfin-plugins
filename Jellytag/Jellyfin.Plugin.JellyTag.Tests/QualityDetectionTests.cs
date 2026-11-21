@@ -390,4 +390,72 @@ public class QualityDetectionTests
         Assert.IsTrue(scoreStereo > scoreMono);
 #pragma warning restore MSTEST0037
     }
+
+    // ----- Series aggregation must survive stale ("zombie") episodes in the database -----
+
+    private static readonly BadgeInfo FlagPl = new() { Category = BadgeCategory.Language, BadgeKey = "pl", ResourceFileName = "flag-pl.svg" };
+
+    /// <summary>Episodes ordered as the library query would return them; names starting with "zombie" have no media info.</summary>
+    private static List<MediaBrowser.Controller.Entities.BaseItem> CreateChildren(int zombies, int real)
+    {
+        var items = new List<MediaBrowser.Controller.Entities.BaseItem>();
+        for (var i = 0; i < zombies; i++) items.Add(new MediaBrowser.Controller.Entities.TV.Episode { Name = "zombie" + i });
+        for (var i = 0; i < real; i++) items.Add(new MediaBrowser.Controller.Entities.TV.Episode { Name = "real" + i });
+        return items;
+    }
+
+    private static List<List<BadgeInfo>> Collect(List<MediaBrowser.Controller.Entities.BaseItem> children, out int scanned, List<int>? requestedLimits = null)
+    {
+        return QualityDetectionService.CollectChildBadges(
+            (start, limit) =>
+            {
+                requestedLimits?.Add(limit);
+                return children.Skip(start).Take(limit).ToList();
+            },
+            video => video.Name!.StartsWith("zombie", StringComparison.Ordinal) ? new List<BadgeInfo>() : new List<BadgeInfo> { FlagPl },
+            out scanned);
+    }
+
+    [TestMethod]
+    public void CollectChildBadges_FirstPageAllZombies_StillFindsRealEpisodes()
+    {
+        // Westworld case: more stale entries than one page, real episodes behind them.
+        var result = Collect(CreateChildren(zombies: 120, real: 36), out var scanned);
+
+        Assert.HasCount(36, result);
+        Assert.AreEqual(156, scanned);
+        Assert.IsTrue(result.All(badges => badges.Contains(FlagPl)));
+    }
+
+    [TestMethod]
+    public void CollectChildBadges_StopsAfterEnoughRealChildren()
+    {
+        var requested = new List<int>();
+        var result = Collect(CreateChildren(zombies: 10, real: 400), out var scanned, requested);
+
+        Assert.HasCount(QualityDetectionService.MaxAggregatedChildren, result);
+        Assert.AreEqual(100, scanned, "Two pages hold 50 real episodes; no further page should be fetched");
+        Assert.HasCount(2, requested);
+    }
+
+    [TestMethod]
+    public void CollectChildBadges_OnlyZombies_StopsAtScanLimit()
+    {
+        var result = Collect(CreateChildren(zombies: 5000, real: 0), out var scanned);
+
+        Assert.IsEmpty(result);
+        Assert.AreEqual(QualityDetectionService.MaxScannedChildren, scanned);
+    }
+
+    [TestMethod]
+    public void CollectChildBadges_SkipsVirtualItems()
+    {
+        var children = CreateChildren(zombies: 0, real: 3);
+        ((MediaBrowser.Controller.Entities.Video)children[1]).IsVirtualItem = true;
+
+        var result = Collect(children, out var scanned);
+
+        Assert.HasCount(2, result);
+        Assert.AreEqual(3, scanned);
+    }
 }
