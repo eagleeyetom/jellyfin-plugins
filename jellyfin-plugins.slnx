@@ -1,7 +1,7 @@
 <Solution>
-  <Folder Name="/Jellytag/">
-    <Project Path="Jellytag/Jellyfin.Plugin.JellyTag.Tests/Jellyfin.Plugin.JellyTag.Tests.csproj" />
-    <Project Path="Jellytag/Jellyfin.Plugin.JellyTag/Jellyfin.Plugin.JellyTag.csproj" />
+  <Folder Name="/BadgeFin/">
+    <Project Path="BadgeFin/Jellyfin.Plugin.BadgeFin.Tests/Jellyfin.Plugin.BadgeFin.Tests.csproj" />
+    <Project Path="BadgeFin/Jellyfin.Plugin.BadgeFin/Jellyfin.Plugin.BadgeFin.csproj" />
   </Folder>
   <Folder Name="/PositionedSubtitles/">
     <Project Path="PositionedSubtitles/Jellyfin.Plugin.PositionedSubtitles.Tests/Jellyfin.Plugin.PositionedSubtitles.Tests.csproj" />

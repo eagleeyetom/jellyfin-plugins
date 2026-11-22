@@ -1,0 +1,1492 @@
+using System.Reflection;
+using System.Xml.Linq;
+using Jellyfin.Plugin.BadgeFin.Configuration;
+using Microsoft.Extensions.Logging;
+using SkiaSharp;
+using Svg.Skia;
+
+namespace Jellyfin.Plugin.BadgeFin.Services;
+
+/// <summary>
+/// Service for adding quality badge overlays to images.
+/// </summary>
+public class ImageOverlayService : IImageOverlayService, IDisposable
+{
+    private readonly ILogger<ImageOverlayService> _logger;
+    private const int MaxCachedRasterBitmaps = 512;
+    private readonly SemaphoreSlim _badgeLock = new(1, 1);
+    private volatile BadgeAssets? _assets;
+    private static volatile string? _customBadgeFingerprint;
+    private bool _disposed;
+
+    /// <summary>
+    /// One loaded generation of badge artwork and its derived caches. A render works on the
+    /// generation it started with; <see cref="ReloadBadges"/> only swaps in a new one, so
+    /// bitmaps a concurrent render is still drawing are never disposed underneath it.
+    /// </summary>
+    private sealed class BadgeAssets
+    {
+        public System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> Svg { get; } = new();
+
+        public System.Collections.Concurrent.ConcurrentDictionary<string, SKBitmap?> Raster { get; } = new();
+
+        public System.Collections.Concurrent.ConcurrentDictionary<string, float> AspectRatios { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> RecoloredSvg { get; } = new();
+
+        public System.Collections.Concurrent.ConcurrentDictionary<string, SKBitmap> RasterizedSvg { get; } = new();
+
+        public void DisposeBitmaps()
+        {
+            var bitmaps = new HashSet<SKBitmap>(ReferenceEqualityComparer.Instance);
+            foreach (var bmp in Raster.Values)
+            {
+                if (bmp != null) bitmaps.Add(bmp);
+            }
+
+            foreach (var bmp in RasterizedSvg.Values)
+            {
+                bitmaps.Add(bmp);
+            }
+
+            foreach (var bmp in bitmaps)
+            {
+                bmp.Dispose();
+            }
+
+            Raster.Clear();
+            RasterizedSvg.Clear();
+            RecoloredSvg.Clear();
+            AspectRatios.Clear();
+            Svg.Clear();
+        }
+    }
+
+    private const int MinBadgeSizePercent = 5;
+    private const int MaxBadgeSizePercent = 50;
+    private const float MinBadgeMarginPercent = 0f;
+    private const float MaxBadgeMarginPercent = 20f;
+
+    private static readonly Dictionary<string, string> BadgeDisplayText = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "4k", "4K" }, { "1080p", "1080p" }, { "720p", "720p" }, { "sd", "SD" },
+        { "hdr10", "HDR10" }, { "hdr10plus", "HDR10+" }, { "dv", "DV" }, { "hlg", "HLG" },
+        { "atmos", "ATMOS" }, { "dtsx", "DTS:X" }, { "truehd", "TrueHD" }, { "dtshdma", "DTS-HD MA" },
+        { "flac", "FLAC" }, { "dts", "DTS" }, { "eac3", "E-AC-3" }, { "ac3", "AC3" }, { "opus", "OPUS" }, { "aac", "AAC" },
+        { "7.1", "7.1" }, { "5.1", "5.1" }, { "stereo", "STEREO" }, { "mono", "Mono" },
+        { "hdr", "HDR" }, { "3d", "3D" },
+        { "UHD4K", "4K" }, { "FHD1080p", "1080p" }, { "HD720p", "720p" },
+        { "h264", "H.264" }, { "hevc", "HEVC" }, { "av1", "AV1" }, { "vp9", "VP9" },
+        { "mpeg2", "MPEG-2" }, { "vc1", "VC-1" },
+        // Language and VOST keys are canonical ISO 639-1; anything not listed falls
+        // back to the uppercased code (e.g. "en" -> "EN", "vostfr" -> "VOSTFR").
+        { "ja", "JP" }, { "ko", "KR" }, { "el", "GR" },
+        { "vostja", "VOSTJP" }, { "vostko", "VOSTKR" }, { "vostel", "VOSTGR" }
+    };
+
+    public ImageOverlayService(ILogger<ImageOverlayService> logger)
+    {
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Maps a BadgeCategory to the corresponding panel in ImageTypeConfig.
+    /// </summary>
+    private static BadgePanelSettings GetPanelForCategory(BadgeCategory category, ImageTypeConfig imageConfig)
+    {
+        return category switch
+        {
+            BadgeCategory.Resolution => imageConfig.ResolutionPanel,
+            BadgeCategory.Hdr or BadgeCategory.ThreeD => imageConfig.HdrPanel,
+            BadgeCategory.VideoCodec => imageConfig.CodecPanel,
+            BadgeCategory.Audio => imageConfig.AudioPanel,
+            BadgeCategory.Channels => imageConfig.ChannelPanel,
+            BadgeCategory.Language or BadgeCategory.Subtitle => imageConfig.LanguagePanel,
+            _ => imageConfig.ResolutionPanel
+        };
+    }
+
+    /// <inheritdoc />
+    public bool ShouldShowBadge(BadgeInfo badge, ImageTypeConfig imageConfig)
+    {
+        var config = PluginConfigurationScope.Current;
+        if (config == null || !config.Enabled)
+        {
+            return false;
+        }
+
+        var panel = GetPanelForCategory(badge.Category, imageConfig);
+        if (!panel.Enabled)
+        {
+            return false;
+        }
+
+        // For language/subtitle badges, EnabledBadges is empty = show all (language codes are dynamic)
+        if (badge.Category is BadgeCategory.Language or BadgeCategory.Subtitle)
+        {
+            // Subtitle badges depend on ShowVostIndicator
+            if (badge.Category == BadgeCategory.Subtitle && !imageConfig.ShowVostIndicator)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        // For other categories, check EnabledBadges list
+        if (panel.EnabledBadges.Count == 0)
+        {
+            return false;
+        }
+
+        return panel.EnabledBadges.Contains(badge.BadgeKey, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <inheritdoc />
+    public async Task<(Stream Stream, string ContentType)> AddBadgeOverlaysAsync(
+        Stream originalImage,
+        List<BadgeInfo> badges,
+        ImageTypeConfig imageConfig,
+        ImageDisplayContext displayContext = ImageDisplayContext.Card,
+        OutputImageFormat? outputFormat = null)
+    {
+        var config = PluginConfigurationScope.Current ?? new PluginConfiguration();
+        var jpegQuality = Math.Clamp(config.JpegQuality, 1, 100);
+
+        originalImage.Position = 0;
+        var sourceContentType = DetectImageContentType(originalImage);
+
+        using var image = SKBitmap.Decode(originalImage);
+        if (image == null)
+        {
+            originalImage.Position = 0;
+            var output = new MemoryStream();
+            await originalImage.CopyToAsync(output).ConfigureAwait(false);
+            output.Position = 0;
+            return (output, sourceContentType);
+        }
+
+        // Get ordered panels
+        var panels = GetOrderedPanels(imageConfig);
+
+        // Apply per-panel selection before combining cross-panel brand logos.
+        var panelBadgesByPanel = panels
+            .Where(panel => panel.Enabled)
+            .ToDictionary(
+                panel => panel,
+                panel => badges.Where(b => GetPanelForCategory(b.Category, imageConfig) == panel).ToList());
+
+        foreach (var panel in panels.Where(panel => panel.Enabled))
+        {
+            var panelBadges = panelBadgesByPanel[panel];
+            if (panel.ShowMode == BadgeDisplayMode.Highest && panelBadges.Count > 1)
+            {
+                panelBadges.RemoveRange(1, panelBadges.Count - 1);
+            }
+        }
+
+        if (config.CombineDolbyVisionAtmosLogos)
+        {
+            TryCombineDolbyVisionAtmosBadges(
+                panelBadgesByPanel.GetValueOrDefault(imageConfig.HdrPanel) ?? new List<BadgeInfo>(),
+                panelBadgesByPanel.GetValueOrDefault(imageConfig.AudioPanel) ?? new List<BadgeInfo>(),
+                imageConfig.HdrPanel,
+                imageConfig.AudioPanel,
+                true);
+        }
+
+        var (cropX, cropY) = CalculateSafeAreaCrop(image.Width, image.Height, displayContext);
+        var badgeReferenceWidth = GetBadgeReferenceWidth(image.Width, cropX, displayContext, config.ListViewBadgeScalePercent);
+
+        // Prepare and render each panel
+        var allPanelGroups = new List<PanelRenderGroup>();
+        var allOwnedBitmaps = new List<SKBitmap>();
+
+        try
+        {
+            foreach (var panel in panels)
+            {
+                if (!panel.Enabled) continue;
+
+                var panelBadges = panelBadgesByPanel[panel];
+                if (panelBadges.Count == 0) continue;
+
+                var sizePercent = Math.Clamp(panel.SizePercent, MinBadgeSizePercent, MaxBadgeSizePercent);
+                var useText = panel.Style == BadgeStyle.Text;
+
+                var sizes = new List<SKSizeI>();
+                var sourceBitmaps = new List<SKBitmap>();
+                var filtered = new List<BadgeInfo>();
+                var ownedBitmaps = new List<SKBitmap>();
+
+                await PrepareBadgeGroup(panelBadges, sizePercent, badgeReferenceWidth, useText, sizes, sourceBitmaps, filtered, ownedBitmaps, panel).ConfigureAwait(false);
+                allOwnedBitmaps.AddRange(ownedBitmaps);
+
+                if (filtered.Count == 0) continue;
+
+                allPanelGroups.Add(new PanelRenderGroup
+                {
+                    Panel = panel,
+                    Filtered = filtered,
+                    Sizes = sizes,
+                    SourceBitmaps = sourceBitmaps
+                });
+            }
+
+            if (allPanelGroups.Count == 0)
+            {
+                originalImage.Position = 0;
+                var output = new MemoryStream();
+                await originalImage.CopyToAsync(output).ConfigureAwait(false);
+                output.Position = 0;
+                return (output, sourceContentType);
+            }
+
+            // Calculate positions: panels at the same position stack on top of each other in Order order
+            // Track cumulative vertical extent per position corner
+            var priorExtents = new Dictionary<BadgePosition, int>
+            {
+                { BadgePosition.TopLeft, 0 }, { BadgePosition.TopRight, 0 },
+                { BadgePosition.BottomLeft, 0 }, { BadgePosition.BottomRight, 0 }
+            };
+
+            foreach (var group in allPanelGroups)
+            {
+                var panel = group.Panel;
+                var marginPercent = Math.Clamp(panel.MarginPercent, MinBadgeMarginPercent, MaxBadgeMarginPercent);
+                var effectiveWidth = cropX > 0 ? image.Width - 2 * cropX : image.Width;
+                var badgeMargin = (int)(effectiveWidth * marginPercent / 100f);
+                var gapPercent = Math.Max(0f, panel.GapPercent);
+                var gap = group.Sizes.Count > 0 ? (int)(group.Sizes.Average(s => s.Height) * gapPercent / 100f) : 0;
+
+                // Reverse order if needed
+                if (ShouldReverseOrder(panel.Layout, panel.Position))
+                {
+                    group.Filtered.Reverse();
+                    group.Sizes.Reverse();
+                    group.SourceBitmaps.Reverse();
+                }
+
+                var priorExtent = priorExtents[panel.Position];
+                group.Positions = CalculateStackedPositions(image.Width, image.Height, group.Sizes, panel.Position, badgeMargin, gap, panel.Layout, priorExtent, cropX, cropY);
+
+                // Update prior extent for this corner
+                var groupExtent = GroupVerticalExtent(group.Sizes, gap, panel.Layout);
+                priorExtents[panel.Position] += groupExtent;
+            }
+
+            // Draw badges onto image
+            using var surface = SKSurface.Create(new SKImageInfo(image.Width, image.Height));
+            var canvas = surface.Canvas;
+            canvas.DrawBitmap(image, 0, 0);
+
+            using var paint = new SKPaint { IsAntialias = true };
+            var sampling = new SKSamplingOptions(SKCubicResampler.Mitchell);
+
+            foreach (var group in allPanelGroups)
+            {
+                var useText = group.Panel.Style == BadgeStyle.Text;
+                RenderBadgeGroup(canvas, group.Filtered, group.SourceBitmaps, group.Positions, group.Sizes, useText, group.Panel, imageConfig, paint, sampling);
+            }
+
+            canvas.Flush();
+
+            using var resultImage = surface.Snapshot();
+            var encodeAs = outputFormat ?? config.OutputFormat;
+            var encodeFormat = encodeAs == OutputImageFormat.WebP ? SKEncodedImageFormat.Webp : SKEncodedImageFormat.Jpeg;
+            var encodeQuality = encodeAs == OutputImageFormat.WebP ? Math.Clamp(config.WebPQuality, 1, 100) : jpegQuality;
+            var contentType = encodeAs == OutputImageFormat.WebP ? "image/webp" : "image/jpeg";
+            using var data = resultImage.Encode(encodeFormat, encodeQuality);
+
+            var outputStream = new MemoryStream();
+            data.SaveTo(outputStream);
+            outputStream.Position = 0;
+            return (outputStream, contentType);
+        }
+        finally
+        {
+            foreach (var bmp in allOwnedBitmaps) bmp.Dispose();
+        }
+    }
+
+    internal static bool TryCombineDolbyVisionAtmosBadges(
+        List<BadgeInfo> hdrBadges,
+        List<BadgeInfo> audioBadges,
+        BadgePanelSettings hdrPanel,
+        BadgePanelSettings audioPanel,
+        bool combineEnabled)
+    {
+        if (!combineEnabled || !hdrPanel.Enabled || !audioPanel.Enabled ||
+            hdrPanel.Style != BadgeStyle.Logo || audioPanel.Style != BadgeStyle.Logo)
+        {
+            return false;
+        }
+
+        var dolbyVisionIndex = hdrBadges.FindIndex(b => string.Equals(b.BadgeKey, "dv", StringComparison.OrdinalIgnoreCase));
+        var atmosIndex = audioBadges.FindIndex(b => string.Equals(b.BadgeKey, "atmos", StringComparison.OrdinalIgnoreCase));
+        if (dolbyVisionIndex < 0 || atmosIndex < 0 ||
+            IsLogoDisabled(hdrPanel, hdrBadges[dolbyVisionIndex]) ||
+            IsLogoDisabled(audioPanel, audioBadges[atmosIndex]))
+        {
+            return false;
+        }
+
+        hdrBadges[dolbyVisionIndex] = new BadgeInfo
+        {
+            Category = BadgeCategory.Hdr,
+            BadgeKey = "dv_atmos",
+            ResourceFileName = "logo-dv-atmos.svg"
+        };
+        audioBadges.RemoveAt(atmosIndex);
+        return true;
+    }
+
+    private static bool IsLogoDisabled(BadgePanelSettings panel, BadgeInfo badge)
+    {
+        if (panel.DisabledLogos == null || panel.DisabledLogos.Count == 0)
+        {
+            return false;
+        }
+
+        var fileKey = badge.ResourceFileName.StartsWith("badge-", StringComparison.OrdinalIgnoreCase)
+            ? badge.ResourceFileName[6..]
+            : badge.ResourceFileName;
+        var fileBaseName = Path.GetFileNameWithoutExtension(fileKey);
+        return panel.DisabledLogos.Contains(badge.BadgeKey, StringComparer.OrdinalIgnoreCase)
+            || panel.DisabledLogos.Contains(fileKey, StringComparer.OrdinalIgnoreCase)
+            || panel.DisabledLogos.Contains(fileBaseName, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private sealed class PanelRenderGroup
+    {
+        public BadgePanelSettings Panel { get; set; } = null!;
+        public List<BadgeInfo> Filtered { get; set; } = new();
+        public List<SKSizeI> Sizes { get; set; } = new();
+        public List<SKBitmap> SourceBitmaps { get; set; } = new();
+        public List<SKPointI> Positions { get; set; } = new();
+    }
+
+    private static List<BadgePanelSettings> GetOrderedPanels(ImageTypeConfig imageConfig)
+    {
+        var panels = new List<BadgePanelSettings>
+        {
+            imageConfig.ResolutionPanel,
+            imageConfig.HdrPanel,
+            imageConfig.CodecPanel,
+            imageConfig.AudioPanel,
+            imageConfig.ChannelPanel,
+            imageConfig.LanguagePanel
+        };
+        panels.Sort((a, b) => a.Order.CompareTo(b.Order));
+        return panels;
+    }
+
+    private static int GroupVerticalExtent(List<SKSizeI> sizes, int gap, BadgeLayout layout)
+    {
+        if (sizes.Count == 0) return 0;
+        return layout == BadgeLayout.Horizontal
+            ? sizes.Max(s => s.Height) + gap
+            : sizes.Sum(s => s.Height) + (sizes.Count - 1) * gap + gap;
+    }
+
+    /// <inheritdoc />
+    public void ReloadBadges()
+    {
+        _badgeLock.Wait();
+        try
+        {
+            // Renders in flight may still be drawing bitmaps from the current generation, so
+            // they are not disposed here; the finalizers release them once nothing uses them.
+            _assets = null;
+            _customBadgeFingerprint = null;
+        }
+        finally
+        {
+            _badgeLock.Release();
+        }
+    }
+
+    private static void AddTextFallback(
+        BadgeInfo badgeInfo, int badgeWidth, bool isSquareOrRound,
+        List<BadgeInfo> filtered, List<SKSizeI> sizes)
+    {
+        var fallbackText = GetBadgeDisplayText(badgeInfo.BadgeKey);
+        if (!string.IsNullOrEmpty(fallbackText))
+        {
+            var fbHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(badgeWidth * 0.5));
+            var textBadge = new BadgeInfo { Category = badgeInfo.Category, BadgeKey = badgeInfo.BadgeKey, ResourceFileName = string.Empty };
+            filtered.Add(textBadge);
+            sizes.Add(new SKSizeI(badgeWidth, fbHeight));
+        }
+    }
+
+    internal async Task PrepareBadgeGroup(
+        List<BadgeInfo> badges, int sizePercent, int imageWidth, bool useTextStyle,
+        List<SKSizeI> sizes, List<SKBitmap> sourceBitmaps, List<BadgeInfo> filtered, List<SKBitmap> ownedBitmaps,
+        BadgePanelSettings panel)
+    {
+        var badgeWidth = Math.Max(1, (int)(imageWidth * (sizePercent / 100.0)));
+
+        if (useTextStyle)
+        {
+            var badgeHeight = Math.Max(1, (int)(badgeWidth * 0.5));
+
+            foreach (var badgeInfo in badges)
+            {
+                var text = GetBadgeDisplayText(badgeInfo.BadgeKey);
+                if (string.IsNullOrEmpty(text)) continue;
+
+                filtered.Add(badgeInfo);
+                sizes.Add(new SKSizeI(badgeWidth, badgeHeight));
+            }
+        }
+        else
+        {
+            var assets = await EnsureBadgesLoaded().ConfigureAwait(false);
+            var isSquareOrRound = panel.IconStyle is BadgeIconStyle.Square or BadgeIconStyle.Round;
+
+            foreach (var badgeInfo in badges)
+            {
+                var resourceFileName = badgeInfo.ResourceFileName;
+
+                if (string.IsNullOrEmpty(resourceFileName))
+                {
+                    AddTextFallback(badgeInfo, badgeWidth, isSquareOrRound, filtered, sizes);
+                    continue;
+                }
+
+                var targetResource = resourceFileName;
+
+                // Brand logos only exist for some badges; the rest keep the generated art.
+                if (panel.Style == BadgeStyle.Logo && resourceFileName.StartsWith("badge-", StringComparison.OrdinalIgnoreCase))
+                {
+                    var fileKey = resourceFileName[6..];
+                    var isLogoDisabled = panel.DisabledLogos != null &&
+                        (panel.DisabledLogos.Contains(badgeInfo.BadgeKey, StringComparer.OrdinalIgnoreCase) ||
+                         panel.DisabledLogos.Contains(fileKey, StringComparer.OrdinalIgnoreCase));
+
+                    if (!isLogoDisabled)
+                    {
+                        var useOrigAac = (badgeInfo.BadgeKey.Equals("aac", StringComparison.OrdinalIgnoreCase) || fileKey.StartsWith("aac", StringComparison.OrdinalIgnoreCase))
+                            && PluginConfigurationScope.Current?.UseOriginalAacLogo == true;
+                        var aacSuffix = useOrigAac ? "-orig" : "";
+                        var baseKey = fileKey.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? fileKey[..^4] : fileKey;
+                        var logoName = "logo-" + baseKey + aacSuffix + (fileKey.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? ".svg" : "");
+
+                        var isWhite = panel.WhiteLogoBackground ?? PluginConfigurationScope.Current?.WhiteLogoBackground == true;
+                        if (isWhite)
+                        {
+                            var whiteName = "logo-" + baseKey + aacSuffix + "-white.svg";
+                            if (assets.Svg.ContainsKey(whiteName) || assets.Raster.ContainsKey(whiteName))
+                            {
+                                logoName = whiteName;
+                            }
+                        }
+
+                        if (assets.Svg.ContainsKey(logoName) || assets.Raster.ContainsKey(logoName))
+                        {
+                            targetResource = logoName;
+                        }
+                    }
+                }
+                else if (panel.WhiteLogoBackground ?? PluginConfigurationScope.Current?.WhiteLogoBackground == true)
+                {
+                    var whiteBadge = resourceFileName.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+                        ? resourceFileName[..^4] + "-white.svg"
+                        : resourceFileName + "-white";
+                    if (assets.Svg.ContainsKey(whiteBadge) || assets.Raster.ContainsKey(whiteBadge))
+                    {
+                        targetResource = whiteBadge;
+                    }
+                }
+
+                var colorOverride = panel.BadgeTypeOverrides?.FirstOrDefault(o => string.Equals(o.BadgeKey, badgeInfo.BadgeKey, StringComparison.OrdinalIgnoreCase))
+                    ?? PluginConfigurationScope.Current?.CustomBadgeColors?.FirstOrDefault(o => string.Equals(o.BadgeKey, badgeInfo.BadgeKey, StringComparison.OrdinalIgnoreCase));
+
+                if (colorOverride != null && (!string.IsNullOrEmpty(colorOverride.BgColor) || !string.IsNullOrEmpty(colorOverride.TextColor)))
+                {
+                    if (targetResource.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var altSvg = "badge-" + badgeInfo.BadgeKey.Replace('.', '_') + ".svg";
+                        if (assets.Svg.ContainsKey(altSvg))
+                        {
+                            targetResource = altSvg;
+                        }
+                    }
+                }
+
+                if (assets.Svg.TryGetValue(targetResource, out var svgBytes))
+                {
+                    if (colorOverride != null && (!string.IsNullOrEmpty(colorOverride.BgColor) || !string.IsNullOrEmpty(colorOverride.TextColor)))
+                    {
+                        var recolorKey = $"{targetResource}:{colorOverride.BgColor}:{colorOverride.TextColor}";
+                        if (!assets.RecoloredSvg.TryGetValue(recolorKey, out var recolored))
+                        {
+                            recolored = RecolorSvg(svgBytes, colorOverride.BgColor, colorOverride.TextColor, badgeInfo.BadgeKey);
+                            assets.RecoloredSvg[recolorKey] = recolored;
+                        }
+                        svgBytes = recolored;
+                    }
+
+                    if (!assets.AspectRatios.TryGetValue(targetResource, out var ratio))
+                    {
+                        ratio = GetSvgAspectRatio(svgBytes);
+                        assets.AspectRatios[targetResource] = ratio;
+                    }
+
+                    var badgeHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(badgeWidth / ratio));
+                    var rasterWidth = isSquareOrRound ? Math.Max(badgeWidth, (int)(badgeWidth * ratio)) : badgeWidth;
+                    var rasterHeight = isSquareOrRound ? rasterWidth : badgeHeight;
+
+                    var rasterKey = $"{targetResource}:{rasterWidth}x{rasterHeight}:{colorOverride?.BgColor}:{colorOverride?.TextColor}";
+                    bool wasCached = true;
+                    if (!assets.RasterizedSvg.TryGetValue(rasterKey, out var rasterized))
+                    {
+                        wasCached = false;
+                        rasterized = RasterizeSvg(svgBytes, rasterWidth, rasterHeight);
+                        if (rasterized != null && assets.RasterizedSvg.Count < MaxCachedRasterBitmaps)
+                        {
+                            assets.RasterizedSvg[rasterKey] = rasterized;
+                            wasCached = true;
+                        }
+                    }
+
+                    if (rasterized != null)
+                    {
+                        var processed = ProcessBitmapStyle(rasterized, isSquareOrRound);
+                        if (processed != rasterized)
+                        {
+                            ownedBitmaps.Add(processed);
+                            if (!wasCached) rasterized.Dispose();
+                        }
+                        else if (!wasCached)
+                        {
+                            ownedBitmaps.Add(rasterized);
+                        }
+
+                        sourceBitmaps.Add(processed);
+                        filtered.Add(badgeInfo);
+                        sizes.Add(new SKSizeI(badgeWidth, badgeHeight));
+                        continue;
+                    }
+
+                    AddTextFallback(badgeInfo, badgeWidth, isSquareOrRound, filtered, sizes);
+                    continue;
+                }
+
+                if (assets.Raster.TryGetValue(targetResource, out var rasterBitmap) && rasterBitmap != null)
+                {
+                    var processed = ProcessBitmapStyle(rasterBitmap, isSquareOrRound);
+                    if (processed != rasterBitmap)
+                    {
+                        ownedBitmaps.Add(processed);
+                    }
+
+                    var badgeHeight = isSquareOrRound ? badgeWidth : Math.Max(1, (int)(processed.Height * ((double)badgeWidth / processed.Width)));
+
+                    sourceBitmaps.Add(processed);
+                    filtered.Add(badgeInfo);
+                    sizes.Add(new SKSizeI(badgeWidth, badgeHeight));
+                }
+                else
+                {
+                    // Resource not found in any cache — fall back to text badge
+                    AddTextFallback(badgeInfo, badgeWidth, isSquareOrRound, filtered, sizes);
+                }
+            }
+        }
+    }
+
+    private static SKBitmap ProcessBitmapStyle(SKBitmap source, bool makeSquare)
+    {
+        if (!makeSquare) return source;
+        if (source.Width == source.Height) return source;
+        int side = Math.Min(source.Width, source.Height);
+        int x = (source.Width - side) / 2;
+        int y = (source.Height - side) / 2;
+        var dest = new SKBitmap(side, side, source.ColorType, source.AlphaType);
+        using var canvas = new SKCanvas(dest);
+        canvas.DrawBitmap(source, new SKRect(x, y, x + side, y + side), new SKRect(0, 0, side, side));
+        canvas.Flush();
+        return dest;
+    }
+
+    private async Task<BadgeAssets> EnsureBadgesLoaded()
+    {
+        var assets = _assets;
+        if (assets != null)
+        {
+            return assets;
+        }
+
+        await _badgeLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            assets = _assets;
+            if (assets == null)
+            {
+                assets = new BadgeAssets();
+                LoadBadges(assets);
+                _assets = assets;
+            }
+
+            return assets;
+        }
+        finally
+        {
+            _badgeLock.Release();
+        }
+    }
+
+    private static SKBitmap? RasterizeSvg(byte[] svgBytes, int targetWidth, int targetHeight)
+    {
+        using var svg = new SKSvg();
+        using var stream = new MemoryStream(svgBytes);
+        svg.Load(stream);
+        var picture = svg.Picture;
+        if (picture == null || picture.CullRect.Width <= 0 || picture.CullRect.Height <= 0) return null;
+
+        var bitmap = new SKBitmap(targetWidth, targetHeight, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Transparent);
+
+        var scaleX = targetWidth / picture.CullRect.Width;
+        var scaleY = targetHeight / picture.CullRect.Height;
+        canvas.Scale((float)scaleX, (float)scaleY);
+        canvas.DrawPicture(picture);
+        canvas.Flush();
+
+        return bitmap;
+    }
+
+    private static float GetSvgAspectRatio(byte[] svgBytes)
+    {
+        try
+        {
+            using var stream = new MemoryStream(svgBytes);
+            var doc = XDocument.Load(stream);
+            var root = doc.Root;
+            if (root == null) return 2f;
+
+            var viewBox = root.Attribute("viewBox")?.Value;
+            if (!string.IsNullOrEmpty(viewBox))
+            {
+                var parts = viewBox.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 4 &&
+                    float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var w) &&
+                    float.TryParse(parts[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var h) &&
+                    h > 0)
+                {
+                    return w / h;
+                }
+            }
+
+            var widthAttr = root.Attribute("width")?.Value;
+            var heightAttr = root.Attribute("height")?.Value;
+            if (!string.IsNullOrEmpty(widthAttr) && !string.IsNullOrEmpty(heightAttr))
+            {
+                widthAttr = widthAttr.Replace("px", string.Empty);
+                heightAttr = heightAttr.Replace("px", string.Empty);
+                if (float.TryParse(widthAttr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var w2) &&
+                    float.TryParse(heightAttr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var h2) &&
+                    h2 > 0)
+                {
+                    return w2 / h2;
+                }
+            }
+        }
+        catch
+        {
+            // Fallback
+        }
+
+        return 2f;
+    }
+
+    private void LoadBadges(BadgeAssets assets)
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        var resourceNames = assembly.GetManifestResourceNames();
+
+        _logger.LogDebug("Loading badges. Available resources: {Resources}", string.Join(", ", resourceNames));
+
+        var assetsMarker = ".Assets.";
+        var badgeBaseNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var embeddedFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var resourceName in resourceNames)
+        {
+            var assetsIdx = resourceName.IndexOf(assetsMarker, StringComparison.OrdinalIgnoreCase);
+            if (assetsIdx < 0) continue;
+
+            var fileName = resourceName[(assetsIdx + assetsMarker.Length)..];
+            embeddedFiles[fileName] = resourceName;
+            if (fileName.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ||
+                fileName.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+            {
+                var baseName = Path.GetFileNameWithoutExtension(fileName);
+                badgeBaseNames.Add(baseName);
+            }
+        }
+
+        var customDir = GetCustomBadgeDir();
+
+        foreach (var baseName in badgeBaseNames)
+        {
+            var svgFileName = baseName + ".svg";
+            var pngFileName = baseName + ".png";
+
+            if (customDir != null)
+            {
+                var customSvg = Path.Combine(customDir, svgFileName);
+                if (File.Exists(customSvg))
+                {
+                    try
+                    {
+                        var bytes = File.ReadAllBytes(customSvg);
+                        assets.Svg[svgFileName] = bytes;
+                        _logger.LogDebug("Loaded custom SVG badge: {FileName}", svgFileName);
+                        continue;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to load custom SVG badge: {Path}", customSvg);
+                    }
+                }
+
+                var customPng = Path.Combine(customDir, pngFileName);
+                if (File.Exists(customPng))
+                {
+                    try
+                    {
+                        var customBadge = SKBitmap.Decode(customPng);
+                        if (customBadge != null)
+                        {
+                            customBadge = TrimTransparent(customBadge);
+                            assets.Raster[svgFileName] = customBadge;
+                            assets.Raster[pngFileName] = customBadge;
+                            _logger.LogDebug("Loaded custom PNG badge: {FileName}", pngFileName);
+                            continue;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to load custom PNG badge: {Path}", customPng);
+                    }
+                }
+
+                var foundJpeg = false;
+                foreach (var ext in new[] { ".jpg", ".jpeg" })
+                {
+                    var customJpg = Path.Combine(customDir, baseName + ext);
+                    if (File.Exists(customJpg))
+                    {
+                        try
+                        {
+                            var customBadge = SKBitmap.Decode(customJpg);
+                            if (customBadge != null)
+                            {
+                                customBadge = TrimTransparent(customBadge);
+                                assets.Raster[svgFileName] = customBadge;
+                                _logger.LogDebug("Loaded custom JPEG badge: {FileName}", baseName + ext);
+                                foundJpeg = true;
+                                break;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to load custom JPEG badge: {Path}", customJpg);
+                        }
+                    }
+                }
+
+                if (foundJpeg) continue;
+            }
+
+            if (embeddedFiles.TryGetValue(svgFileName, out var svgResourceName))
+            {
+                try
+                {
+                    using var stream = assembly.GetManifestResourceStream(svgResourceName);
+                    if (stream != null)
+                    {
+                        using var ms = new MemoryStream();
+                        stream.CopyTo(ms);
+                        assets.Svg[svgFileName] = ms.ToArray();
+                        _logger.LogDebug("Loaded embedded SVG badge: {FileName}", svgFileName);
+                        continue;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to load embedded SVG badge: {FileName}", svgFileName);
+                }
+            }
+
+            if (embeddedFiles.TryGetValue(pngFileName, out var pngResourceName))
+            {
+                try
+                {
+                    using var stream = assembly.GetManifestResourceStream(pngResourceName);
+                    if (stream != null)
+                    {
+                        var badge = SKBitmap.Decode(stream);
+                        if (badge != null)
+                        {
+                            badge = TrimTransparent(badge);
+                            assets.Raster[svgFileName] = badge;
+                            assets.Raster[pngFileName] = badge;
+                            _logger.LogDebug("Loaded embedded PNG fallback: {FileName}", pngFileName);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to load embedded PNG badge: {FileName}", pngFileName);
+                }
+            }
+        }
+
+        _logger.LogInformation("Badge loading complete. SVG: {SvgCount}, Raster: {RasterCount}", assets.Svg.Count, assets.Raster.Count);
+    }
+
+    private static SKBitmap TrimTransparent(SKBitmap bitmap)
+    {
+        int minX = bitmap.Width, minY = bitmap.Height, maxX = 0, maxY = 0;
+        var pixelBytes = bitmap.GetPixelSpan();
+        var bitmapWidth = bitmap.Width;
+        var bytesPerPixel = bitmap.BytesPerPixel;
+        var alphaOffset = 3;
+
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            var rowOffset = y * bitmapWidth * bytesPerPixel;
+            for (int x = 0; x < bitmapWidth; x++)
+            {
+                if (pixelBytes[rowOffset + (x * bytesPerPixel) + alphaOffset] > 25)
+                {
+                    minX = Math.Min(minX, x);
+                    minY = Math.Min(minY, y);
+                    maxX = Math.Max(maxX, x);
+                    maxY = Math.Max(maxY, y);
+                }
+            }
+        }
+
+        if (maxX < minX || maxY < minY) return bitmap;
+
+        var trimWidth = maxX - minX + 1;
+        var trimHeight = maxY - minY + 1;
+
+        var trimmed = new SKBitmap(trimWidth, trimHeight, bitmap.ColorType, bitmap.AlphaType);
+        using var canvas = new SKCanvas(trimmed);
+        canvas.DrawBitmap(bitmap, SKRect.Create(minX, minY, trimWidth, trimHeight), SKRect.Create(0, 0, trimWidth, trimHeight));
+        canvas.Flush();
+
+        bitmap.Dispose();
+        return trimmed;
+    }
+
+    /// <summary>
+    /// Identifies the uploaded custom badge artwork, which changes the rendered output without
+    /// touching the configuration. Recomputed after <see cref="ReloadBadges"/>.
+    /// </summary>
+    internal static string GetCustomBadgeFingerprint()
+        => _customBadgeFingerprint ??= ComputeCustomBadgeFingerprint(GetCustomBadgeDir());
+
+    internal static string ComputeCustomBadgeFingerprint(string? dir)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+            {
+                return string.Empty;
+            }
+
+            var sb = new System.Text.StringBuilder();
+            foreach (var file in new DirectoryInfo(dir).EnumerateFiles().OrderBy(f => f.Name, StringComparer.Ordinal))
+            {
+                sb.Append(file.Name).Append('|').Append(file.Length).Append('|').Append(file.LastWriteTimeUtc.Ticks).Append('\n');
+            }
+
+            var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
+            return Convert.ToHexString(hash, 0, 8);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string? GetCustomBadgeDir()
+    {
+        var dataFolder = Plugin.Instance?.DataFolderPath;
+        if (string.IsNullOrEmpty(dataFolder)) return null;
+        return Path.Combine(dataFolder, "custom-badges");
+    }
+
+    private static bool ShouldReverseOrder(BadgeLayout layout, BadgePosition position) =>
+        (layout == BadgeLayout.Vertical && (position == BadgePosition.BottomLeft || position == BadgePosition.BottomRight))
+        || (layout == BadgeLayout.Horizontal && (position == BadgePosition.TopRight || position == BadgePosition.BottomRight));
+
+    /// <summary>
+    /// Frame aspect ratios (width / height) of jellyfin-web's large list-view image:
+    /// 22vw x 16vw below 64em, 19.5vw x 13vw on desktop and 30vw x 20vw on TV.
+    /// </summary>
+    private static readonly float[] ListViewFrameRatios = { 22f / 16f, 3f / 2f };
+
+    internal const int MinListViewBadgeScalePercent = 25;
+    internal const int MaxListViewBadgeScalePercent = 100;
+
+    /// <summary>
+    /// Width that panel size percentages are taken from. On cards that is the whole image, as
+    /// before. In the list view only the frame's visible part counts, so badges keep the same
+    /// proportion to what the viewer sees, and they are scaled by the list-view setting.
+    /// </summary>
+    internal static int GetBadgeReferenceWidth(int imageWidth, int cropX, ImageDisplayContext displayContext, int listViewScalePercent)
+    {
+        if (displayContext != ImageDisplayContext.ListView)
+        {
+            return imageWidth;
+        }
+
+        var visibleWidth = Math.Max(1, imageWidth - (2 * cropX));
+        var scale = Math.Clamp(listViewScalePercent, MinListViewBadgeScalePercent, MaxListViewBadgeScalePercent) / 100.0;
+        return Math.Max(1, (int)Math.Round(visibleWidth * scale));
+    }
+
+    internal static (int cropX, int cropY) CalculateSafeAreaCrop(int imageWidth, int imageHeight, ImageDisplayContext displayContext)
+    {
+        if (displayContext != ImageDisplayContext.ListView)
+        {
+            return CalculateSafeAreaCrop(imageWidth, imageHeight);
+        }
+
+        // The frame depends on the screen width, so keep badges inside the part that is
+        // visible in every list-view frame.
+        int cropX = 0, cropY = 0;
+        foreach (var frameRatio in ListViewFrameRatios)
+        {
+            var (x, y) = CalculateCoverCrop(imageWidth, imageHeight, frameRatio);
+            cropX = Math.Max(cropX, x);
+            cropY = Math.Max(cropY, y);
+        }
+
+        return (cropX, cropY);
+    }
+
+    /// <summary>
+    /// Returns how much of each edge <c>background-size: cover</c> hides when an image is shown
+    /// in a frame with the given aspect ratio (width / height).
+    /// </summary>
+    internal static (int cropX, int cropY) CalculateCoverCrop(int imageWidth, int imageHeight, float frameRatio)
+    {
+        if (imageHeight <= 0 || imageWidth <= 0 || frameRatio <= 0) return (0, 0);
+
+        var imageRatio = (float)imageWidth / imageHeight;
+        if (imageRatio > frameRatio)
+        {
+            var visibleWidth = (int)Math.Round(imageHeight * frameRatio);
+            return (Math.Max(0, (imageWidth - visibleWidth) / 2), 0);
+        }
+
+        if (imageRatio < frameRatio)
+        {
+            var visibleHeight = (int)Math.Round(imageWidth / frameRatio);
+            return (0, Math.Max(0, (imageHeight - visibleHeight) / 2));
+        }
+
+        return (0, 0);
+    }
+
+    internal static (int cropX, int cropY) CalculateSafeAreaCrop(int imageWidth, int imageHeight)
+    {
+        if (imageHeight <= 0 || imageWidth <= 0) return (0, 0);
+
+        if (imageHeight > imageWidth)
+        {
+            // Portrait card in Jellyfin has 2:3 aspect ratio (height / width = 1.5)
+            const float targetRatio = 1.5f;
+            var currentRatio = (float)imageHeight / imageWidth;
+            if (currentRatio < targetRatio)
+            {
+                // Image is wider than 2:3 (e.g. TVDB posters 1000x1426, ratio ~1.426)
+                // Left and right edges are cropped by Jellyfin client's background-size: cover
+                var visibleWidth = (int)Math.Round(imageHeight / targetRatio);
+                return (Math.Max(0, (imageWidth - visibleWidth) / 2), 0);
+            }
+
+            if (currentRatio > targetRatio)
+            {
+                // Image is taller than 2:3
+                // Top and bottom edges are cropped by Jellyfin client's background-size: cover
+                var visibleHeight = (int)Math.Round(imageWidth * targetRatio);
+                return (0, Math.Max(0, (imageHeight - visibleHeight) / 2));
+            }
+        }
+        else if (imageWidth > imageHeight)
+        {
+            // Landscape card in Jellyfin has 16:9 aspect ratio (width / height = 16/9)
+            const float targetRatio = 16f / 9f;
+            var currentRatio = (float)imageWidth / imageHeight;
+            if (currentRatio < targetRatio)
+            {
+                // Image is taller than 16:9 (e.g. 4:3 thumbnail)
+                var visibleHeight = (int)Math.Round(imageWidth / targetRatio);
+                return (0, Math.Max(0, (imageHeight - visibleHeight) / 2));
+            }
+
+            if (currentRatio > targetRatio)
+            {
+                // Image is wider than 16:9 (e.g. 21:9 ultrawide)
+                var visibleWidth = (int)Math.Round(imageHeight * targetRatio);
+                return (Math.Max(0, (imageWidth - visibleWidth) / 2), 0);
+            }
+        }
+
+        return (0, 0);
+    }
+
+    internal static List<SKPointI> CalculateStackedPositions(
+        int imageWidth, int imageHeight,
+        List<SKSizeI> badges,
+        BadgePosition position, int margin, int gap,
+        BadgeLayout layout, int priorExtent = 0,
+        int cropX = 0, int cropY = 0)
+    {
+        var positions = new List<SKPointI>();
+        if (badges.Count == 0) return positions;
+
+        if (layout == BadgeLayout.Horizontal)
+        {
+            var totalWidth = badges.Sum(b => b.Width) + (badges.Count - 1) * gap;
+            var maxHeight = badges.Max(b => b.Height);
+
+            int startX, startY;
+            switch (position)
+            {
+                case BadgePosition.TopLeft:
+                    startX = cropX + margin;
+                    startY = cropY + margin + priorExtent;
+                    break;
+                case BadgePosition.TopRight:
+                    startX = Math.Max(0, imageWidth - totalWidth - margin - cropX);
+                    startY = cropY + margin + priorExtent;
+                    break;
+                case BadgePosition.BottomLeft:
+                    startX = cropX + margin;
+                    startY = Math.Max(0, imageHeight - maxHeight - margin - priorExtent - cropY);
+                    break;
+                case BadgePosition.BottomRight:
+                    startX = Math.Max(0, imageWidth - totalWidth - margin - cropX);
+                    startY = Math.Max(0, imageHeight - maxHeight - margin - priorExtent - cropY);
+                    break;
+                default:
+                    startX = cropX + margin;
+                    startY = cropY + margin + priorExtent;
+                    break;
+            }
+
+            var currentX = startX;
+            for (int i = 0; i < badges.Count; i++)
+            {
+                var yOffset = (maxHeight - badges[i].Height) / 2;
+                positions.Add(new SKPointI(currentX, startY + yOffset));
+                currentX += badges[i].Width + gap;
+            }
+        }
+        else
+        {
+            var totalHeight = badges.Sum(b => b.Height) + (badges.Count - 1) * gap;
+            var maxWidth = badges.Max(b => b.Width);
+
+            int startX, startY;
+            switch (position)
+            {
+                case BadgePosition.TopLeft:
+                    startX = cropX + margin;
+                    startY = cropY + margin + priorExtent;
+                    break;
+                case BadgePosition.TopRight:
+                    startX = Math.Max(0, imageWidth - maxWidth - margin - cropX);
+                    startY = cropY + margin + priorExtent;
+                    break;
+                case BadgePosition.BottomLeft:
+                    startX = cropX + margin;
+                    startY = Math.Max(0, imageHeight - totalHeight - margin - priorExtent - cropY);
+                    break;
+                case BadgePosition.BottomRight:
+                    startX = Math.Max(0, imageWidth - maxWidth - margin - cropX);
+                    startY = Math.Max(0, imageHeight - totalHeight - margin - priorExtent - cropY);
+                    break;
+                default:
+                    startX = cropX + margin;
+                    startY = cropY + margin + priorExtent;
+                    break;
+            }
+
+            var currentY = startY;
+            for (int i = 0; i < badges.Count; i++)
+            {
+                int x;
+                if (position == BadgePosition.TopRight || position == BadgePosition.BottomRight)
+                {
+                    x = Math.Max(0, imageWidth - badges[i].Width - margin - cropX);
+                }
+                else
+                {
+                    x = startX;
+                }
+
+                positions.Add(new SKPointI(x, currentY));
+                currentY += badges[i].Height + gap;
+            }
+        }
+
+        return positions;
+    }
+
+    private static string GetBadgeDisplayText(string badgeKey)
+    {
+        var config = PluginConfigurationScope.Current;
+        var customText = config?.CustomBadgeTexts?.FirstOrDefault(x => string.Equals(x.Key, badgeKey, StringComparison.OrdinalIgnoreCase))?.Text;
+        if (!string.IsNullOrEmpty(customText)) return customText;
+        return BadgeDisplayText.TryGetValue(badgeKey, out var text) ? text : badgeKey.ToUpperInvariant();
+    }
+
+    internal static string DetectImageContentType(Stream stream)
+    {
+        Span<byte> header = stackalloc byte[12];
+        var read = stream.Read(header);
+        stream.Position = 0;
+        if (read >= 8 && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47)
+            return "image/png";
+        if (read >= 4 && header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46
+            && read >= 12 && header[8] == 0x57 && header[9] == 0x45 && header[10] == 0x42 && header[11] == 0x50)
+            return "image/webp";
+        return "image/jpeg";
+    }
+
+    private static SKColor ParseHexColor(string hex, byte alpha)
+    {
+        if (SKColor.TryParse(hex, out var color))
+        {
+            return color.WithAlpha(alpha);
+        }
+
+        return new SKColor(0, 0, 0, alpha);
+    }
+
+    /// <summary>
+    /// Resolves colors for a badge, checking per-badge-type overrides in the panel first.
+    /// </summary>
+    private static (string bg, string text, byte opacity, int cornerRadius) ResolveBadgeStyle(BadgeInfo badge, BadgePanelSettings panel, ImageTypeConfig imageConfig)
+    {
+        var isWhite = panel.WhiteLogoBackground ?? PluginConfigurationScope.Current?.WhiteLogoBackground == true;
+        var defaultBg = isWhite ? "#FFFFFF" : "#000000";
+        var defaultText = isWhite ? "#000000" : "#FFFFFF";
+
+        var bgColor = string.IsNullOrEmpty(panel.TextBgColor) || (panel.TextBgColor == "#000000" && isWhite) ? defaultBg : panel.TextBgColor;
+        var textColor = string.IsNullOrEmpty(panel.TextColor) || (panel.TextColor == "#FFFFFF" && isWhite) ? defaultText : panel.TextColor;
+        var opacity = (byte)Math.Clamp(panel.TextBgOpacity, 0, 255);
+        var cornerRadius = Math.Clamp(panel.TextCornerRadius, 0, 50);
+
+        // VOST override for subtitle badges
+        if (badge.Category == BadgeCategory.Subtitle)
+        {
+            if (!string.IsNullOrEmpty(imageConfig.VostBgColor)) bgColor = imageConfig.VostBgColor;
+            if (!string.IsNullOrEmpty(imageConfig.VostTextColor)) textColor = imageConfig.VostTextColor;
+            if (imageConfig.VostBgOpacity > 0) opacity = (byte)Math.Clamp(imageConfig.VostBgOpacity, 0, 255);
+            if (imageConfig.VostCornerRadius >= 0) cornerRadius = Math.Clamp(imageConfig.VostCornerRadius, 0, 50);
+        }
+
+        // Per-badge-type overrides
+        var typeOverride = panel.BadgeTypeOverrides?.FirstOrDefault(o => string.Equals(o.BadgeKey, badge.BadgeKey, StringComparison.OrdinalIgnoreCase))
+            ?? PluginConfigurationScope.Current?.CustomBadgeColors?.FirstOrDefault(o => string.Equals(o.BadgeKey, badge.BadgeKey, StringComparison.OrdinalIgnoreCase));
+        if (typeOverride != null)
+        {
+            if (!string.IsNullOrEmpty(typeOverride.BgColor)) bgColor = typeOverride.BgColor;
+            if (!string.IsNullOrEmpty(typeOverride.TextColor)) textColor = typeOverride.TextColor;
+            if (typeOverride.BgOpacity.HasValue) opacity = (byte)Math.Clamp(typeOverride.BgOpacity.Value, 0, 255);
+            if (typeOverride.CornerRadius.HasValue) cornerRadius = Math.Clamp(typeOverride.CornerRadius.Value, 0, 50);
+        }
+
+        return (bgColor, textColor, opacity, cornerRadius);
+    }
+
+    private static void RenderTextBadges(SKCanvas canvas, List<BadgeInfo> badges, List<SKPointI> positions, List<SKSizeI> sizes, BadgePanelSettings panel, ImageTypeConfig imageConfig)
+    {
+        using var bgPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
+        using var textPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
+        using var font = new SKFont(SKTypeface.Default);
+        font.Edging = SKFontEdging.SubpixelAntialias;
+
+        for (int i = 0; i < badges.Count; i++)
+        {
+            var (bgHex, textHex, bgAlpha, cornerRadiusPct) = ResolveBadgeStyle(badges[i], panel, imageConfig);
+            bgPaint.Color = ParseHexColor(bgHex, bgAlpha);
+            textPaint.Color = SKColor.TryParse(textHex, out var tc) ? tc : SKColors.White;
+
+            var text = GetBadgeDisplayText(badges[i].BadgeKey);
+            var width = sizes[i].Width;
+            var height = sizes[i].Height;
+            var rect = SKRect.Create(positions[i].X, positions[i].Y, width, height);
+            var cornerRadius = height * (cornerRadiusPct / 100f);
+
+            canvas.DrawRoundRect(rect, cornerRadius, cornerRadius, bgPaint);
+
+            var padding = width * 0.1f;
+            var availableWidth = width - (2 * padding);
+
+            var fontSize = height * 0.7f;
+            font.Size = fontSize;
+            var textWidth = font.MeasureText(text);
+            if (textWidth > availableWidth && fontSize > 1f)
+            {
+                fontSize *= (availableWidth / textWidth) * 0.95f;
+                fontSize = Math.Max(fontSize, 1f);
+                font.Size = fontSize;
+                textWidth = font.MeasureText(text);
+            }
+
+            var textX = rect.MidX - (textWidth / 2f);
+            var textY = rect.MidY + (fontSize / 3f);
+
+            canvas.DrawText(text, textX, textY, font, textPaint);
+        }
+    }
+
+    private static void RenderBadgeGroup(
+        SKCanvas canvas, List<BadgeInfo> filtered, List<SKBitmap> sourceBitmaps,
+        List<SKPointI> positions, List<SKSizeI> sizes, bool useText,
+        BadgePanelSettings panel, ImageTypeConfig imageConfig, SKPaint paint, SKSamplingOptions sampling)
+    {
+        if (filtered.Count == 0) return;
+
+        if (useText)
+        {
+            RenderTextBadges(canvas, filtered, positions, sizes, panel, imageConfig);
+        }
+        else
+        {
+            int bitmapIdx = 0;
+            var textBadges = new List<BadgeInfo>();
+            var textPositions = new List<SKPointI>();
+            var textSizes = new List<SKSizeI>();
+
+            for (int i = 0; i < filtered.Count; i++)
+            {
+                if (bitmapIdx < sourceBitmaps.Count && !string.IsNullOrEmpty(filtered[i].ResourceFileName))
+                {
+                    var destRect = SKRect.Create(positions[i].X, positions[i].Y, sizes[i].Width, sizes[i].Height);
+                    using var badgeImage = SKImage.FromBitmap(sourceBitmaps[bitmapIdx]);
+                    
+                    if (panel.IconStyle == BadgeIconStyle.Round)
+                    {
+                        canvas.Save();
+                        using var path = new SKPath();
+                        path.AddOval(destRect);
+                        canvas.ClipPath(path, antialias: true);
+                        canvas.DrawImage(badgeImage, destRect, sampling, paint);
+                        canvas.Restore();
+                    }
+                    else
+                    {
+                        canvas.DrawImage(badgeImage, destRect, sampling, paint);
+                    }
+                    
+                    bitmapIdx++;
+                }
+                else
+                {
+                    textBadges.Add(filtered[i]);
+                    textPositions.Add(positions[i]);
+                    textSizes.Add(sizes[i]);
+                }
+            }
+
+            if (textBadges.Count > 0)
+            {
+                RenderTextBadges(canvas, textBadges, textPositions, textSizes, panel, imageConfig);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Recolors an SVG badge with custom background and text/foreground colors.
+    /// </summary>
+    public static byte[] RecolorSvg(byte[] svgBytes, string? bgColor, string? textColor, string badgeKey)
+    {
+        if (string.IsNullOrWhiteSpace(bgColor) && string.IsNullOrWhiteSpace(textColor))
+        {
+            return svgBytes;
+        }
+
+        try
+        {
+            bgColor = NormalizeHexColor(bgColor);
+            textColor = NormalizeHexColor(textColor);
+
+            if (string.IsNullOrWhiteSpace(textColor) && !string.IsNullOrWhiteSpace(bgColor))
+            {
+                textColor = IsColorLight(bgColor) ? "#000000" : "#FFFFFF";
+            }
+            else if (string.IsNullOrWhiteSpace(bgColor) && !string.IsNullOrWhiteSpace(textColor))
+            {
+                bgColor = IsColorLight(textColor) ? "#000000" : "#FFFFFF";
+            }
+
+            using var ms = new MemoryStream(svgBytes);
+            var doc = XDocument.Load(ms);
+            var root = doc.Root;
+            if (root == null) return svgBytes;
+
+            var key = badgeKey.Replace('_', '.').ToLowerInvariant();
+
+            if (key == "4k")
+            {
+                if (!string.IsNullOrWhiteSpace(bgColor))
+                {
+                    root.SetAttributeValue("fill", bgColor);
+                }
+                var screenRect = root.Elements().FirstOrDefault(e => e.Name.LocalName == "rect");
+                var groups = root.Elements().Where(e => e.Name.LocalName == "g").ToList();
+
+                if (!string.IsNullOrWhiteSpace(textColor))
+                {
+                    // ULTRA & HD in bottom bar
+                    for (int i = 1; i < groups.Count; i++)
+                    {
+                        groups[i].SetAttributeValue("fill", textColor);
+                    }
+                    if (screenRect != null)
+                    {
+                        screenRect.SetAttributeValue("fill", textColor);
+                    }
+                    if (groups.Count > 0 && !string.IsNullOrWhiteSpace(bgColor))
+                    {
+                        groups[0].SetAttributeValue("fill", bgColor);
+                    }
+                }
+            }
+            else if (key is "1080p" or "720p" or "sd")
+            {
+                if (!string.IsNullOrWhiteSpace(bgColor))
+                {
+                    root.SetAttributeValue("fill", bgColor);
+                }
+                var screenRect = root.Elements().FirstOrDefault(e => e.Name.LocalName == "rect");
+                if (screenRect != null && !string.IsNullOrWhiteSpace(textColor))
+                {
+                    screenRect.SetAttributeValue("fill", textColor);
+                }
+            }
+            else
+            {
+                // Standard badges or brand logos
+                var plateRect = root.Elements().FirstOrDefault(e => e.Name.LocalName == "rect");
+                if (plateRect != null && !string.IsNullOrWhiteSpace(bgColor))
+                {
+                    plateRect.SetAttributeValue("fill", bgColor);
+                }
+
+                if (!string.IsNullOrWhiteSpace(textColor))
+                {
+                    var textElements = root.Descendants().Where(e => e.Name.LocalName == "text").ToList();
+                    if (textElements.Count > 0)
+                    {
+                        foreach (var t in textElements)
+                        {
+                            t.SetAttributeValue("fill", textColor);
+                        }
+                    }
+                    else
+                    {
+                        // Vector logo / icon: update <g fill="..."> and monochrome <path fill="...">
+                        var filledGroups = root.Descendants().Where(e => e.Name.LocalName == "g" && e.Attribute("fill") != null).ToList();
+                        foreach (var g in filledGroups)
+                        {
+                            var gFill = g.Attribute("fill")?.Value;
+                            if (gFill != null && IsMonochrome(gFill))
+                            {
+                                g.SetAttributeValue("fill", textColor);
+                            }
+                        }
+
+                        var filledPaths = root.Descendants().Where(e => e.Name.LocalName == "path" && e.Attribute("fill") != null).ToList();
+                        foreach (var p in filledPaths)
+                        {
+                            var pFill = p.Attribute("fill")?.Value;
+                            if (pFill != null && IsMonochrome(pFill))
+                            {
+                                p.SetAttributeValue("fill", textColor);
+                            }
+                        }
+                    }
+                }
+            }
+
+            using var outMs = new MemoryStream();
+            doc.Save(outMs);
+            return outMs.ToArray();
+        }
+        catch
+        {
+            return svgBytes;
+        }
+    }
+
+    private static string? NormalizeHexColor(string? color)
+    {
+        if (string.IsNullOrWhiteSpace(color)) return null;
+        color = color.Trim();
+        if (!color.StartsWith('#') && (color.Length == 6 || color.Length == 8 || color.Length == 3))
+        {
+            color = "#" + color;
+        }
+        return color;
+    }
+
+    private static bool IsColorLight(string hex)
+    {
+        if (SKColor.TryParse(hex, out var c))
+        {
+            var lum = (0.299 * c.Red + 0.587 * c.Green + 0.114 * c.Blue) / 255.0;
+            return lum > 0.5;
+        }
+
+        return false;
+    }
+
+    private static bool IsMonochrome(string hex)
+    {
+        var h = hex.Trim().ToLowerInvariant();
+        if (h is "#fff" or "#ffffff" or "#000" or "#000000" or "white" or "black") return true;
+        if (SKColor.TryParse(hex, out var c))
+        {
+            return Math.Abs(c.Red - c.Green) < 10 && Math.Abs(c.Green - c.Blue) < 10;
+        }
+        return false;
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+
+        if (disposing)
+        {
+            _assets?.DisposeBitmaps();
+            _assets = null;
+            _badgeLock.Dispose();
+        }
+
+        _disposed = true;
+    }
+}

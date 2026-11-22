@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Jellyfin.Plugin.BadgeFin</RootNamespace>
+    <AssemblyName>Jellyfin.Plugin.BadgeFin</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <AnalysisMode>AllDisabledByDefault</AnalysisMode>
+    <AssemblyVersion>2.7.1.0</AssemblyVersion>
+    <Version>2.7.1.0</Version>
+    <FileVersion>2.7.1.0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Jellyfin.Controller" Version="12.0.0">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Jellyfin.Model" Version="12.0.0">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="SkiaSharp" Version="3.116.*">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="3.116.*">
+      <ExcludeAssets>all</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="3.116.*">
+      <ExcludeAssets>all</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Svg.Skia" Version="3.4.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Detection helpers shared with the other plugin. Compiled in (not referenced as a DLL)
+         so this plugin stays a single self-contained assembly. -->
+    <Compile Include="..\..\Shared\MediaDetection\*.cs" Link="Shared\MediaDetection\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Configuration/configPage.html" />
+    <EmbeddedResource Include="Assets/*.svg" />
+    <EmbeddedResource Include="Assets/logo-*.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Jellyfin.Plugin.BadgeFin.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

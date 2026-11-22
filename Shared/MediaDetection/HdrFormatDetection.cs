@@ -1,4 +1,4 @@
-// Shared between JellyTag and Metadata Notifier. This file is compiled into each plugin
+// Shared between BadgeFin and Metadata Notifier. This file is compiled into each plugin
 // (see the <Compile Include="..\..\Shared\..." Link="..."> items in both .csproj files) so that
 // each plugin still ships as a single self-contained DLL. Keep everything here internal and free
 // of plugin-specific types, and change it in one place only.
@@ -138,7 +138,7 @@ internal static partial class HdrFormatDetection
         var combined = $"{profile} {title} {displayTitle}";
 
         // Stream metadata describes this very stream, so the plain "DOVI" substring (used by
-        // Metadata Notifier, e.g. "DOVIWithHDR10") is kept alongside the token regex (used by JellyTag).
+        // Metadata Notifier, e.g. "DOVIWithHDR10") is kept alongside the token regex (used by BadgeFin).
         return combined.Contains("DOVI", StringComparison.OrdinalIgnoreCase)
             || DolbyVisionTokenRegex().IsMatch(combined);
     }

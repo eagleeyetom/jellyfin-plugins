@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>BadgeFin</title>
+</head>
+<body>
+    <div id="BadgeFinConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
+        <style>
+            .badgefin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1em; }
+            .badgefin-section { border: 1px solid rgba(255,255,255,.12); border-radius: .4em; margin: 1em 0; overflow: hidden; }
+            .badgefin-section > summary { display: flex; align-items: center; gap: .6em; padding: .75em 1.2em; margin: 0; background: #00a4dc; color: #fff; cursor: pointer; font-size: 1.15em; font-weight: 600; letter-spacing: .02em; list-style: none; user-select: none; }
+            .badgefin-section > summary::-webkit-details-marker { display: none; }
+            .badgefin-section > summary::before { content: '\25B6'; font-size: .65em; transition: transform .2s ease; }
+            .badgefin-section[open] > summary::before { transform: rotate(90deg); }
+            .badgefin-section-body { padding: .8em 1.2em 1.2em; }
+            .badgefin-sub { border: 1px solid rgba(255,255,255,.1); border-radius: .3em; margin: 1em 0 .5em; overflow: hidden; }
+            .badgefin-sub > summary { display: flex; align-items: center; gap: .5em; padding: .55em 1em; background: rgba(255,255,255,.06); cursor: pointer; font-weight: 500; list-style: none; user-select: none; }
+            .badgefin-sub > summary::-webkit-details-marker { display: none; }
+            .badgefin-sub > summary::before { content: '\25B6'; font-size: .55em; transition: transform .2s ease; }
+            .badgefin-sub[open] > summary::before { transform: rotate(90deg); }
+            .badgefin-sub-body { padding: .5em 1em 1em; }
+            .badgefin-sub > summary { position: relative; padding-right: 4.5em; }
+            .panel-arrows { position: absolute; right: .6em; top: 50%; transform: translateY(-50%); display: flex; gap: .25em; }
+            .panel-arrows button { background: rgba(255,255,255,.15); border: none; color: #fff; width: 26px; height: 26px; border-radius: .2em; cursor: pointer; font-size: .85em; line-height: 26px; text-align: center; padding: 0; }
+            .panel-arrows button:hover { background: rgba(0,164,220,.6); }
+            .panel-arrows button:disabled { opacity: .3; cursor: default; }
+            .hidden { display: none !important; }
+            .badgefin-text-box { padding: .6em; border: 1px solid rgba(255,255,255,.08); border-radius: .3em; margin-top: .5em; }
+            .badgefin-rgba { display: flex; gap: .5em; align-items: center; }
+            .badgefin-rgba input[type="number"] { width: 80px; }
+            .badge-card { display: flex; flex-direction: column; align-items: center; border: 1px solid rgba(255,255,255,.15); border-radius: .4em; padding: .6em; cursor: pointer; transition: border-color .2s; position: relative; }
+            .badge-card:hover { border-color: #00a4dc; }
+            .badge-card.custom { border-color: #4caf50; }
+            .badge-card img { width: 80px; height: 80px; object-fit: contain; }
+            .badge-card .badge-preview-fallback { width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: .8em; color: rgba(255,255,255,.7); }
+            .badge-card .badge-label { margin-top: .4em; font-size: .85em; text-align: center; }
+            .badge-card .badge-reset { position: absolute; top: 4px; right: 4px; background: #c62828; color: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; line-height: 20px; text-align: center; cursor: pointer; display: none; padding: 0; }
+            .badge-card.custom .badge-reset { display: block; }
+            .badgefin-config-layout { display: block; margin-right: 350px; }
+            .badgefin-config-layout > form { min-width: 0; }
+            .badgefin-preview-panel { position: fixed; top: 4.5em; width: 322px; max-height: calc(100vh - 5.5em); overflow-y: auto; border: 1px solid rgba(255,255,255,.12); border-radius: .4em; background: rgba(20,20,20,.95); padding: 1em; z-index: 50; }
+            .badgefin-preview-panel h3 { margin: 0 0 .8em; font-size: 1.1em; }
+            .badgefin-preview-panel .preview-search-wrap { position: relative; margin-bottom: 1em; }
+            .badgefin-preview-panel .preview-search-wrap input { width: 100%; box-sizing: border-box; }
+            .badgefin-preview-panel .preview-search-results { position: absolute; top: 100%; left: 0; right: 0; z-index: 100; background: #1c1c1e; border: 1px solid rgba(255,255,255,.2); border-radius: .3em; max-height: 250px; overflow-y: auto; display: none; }
+            .badgefin-preview-panel .preview-search-results .preview-search-item { padding: .5em .8em; cursor: pointer; font-size: .9em; }
+            .badgefin-preview-panel .preview-search-results .preview-search-item:hover { background: rgba(0,164,220,.3); }
+            .badgefin-preview-panel .preview-selected { font-size: .85em; color: #aaa; margin-bottom: .8em; }
+            .badgefin-preview-panel .preview-img { width: 100%; max-width: 300px; border-radius: .3em; margin-bottom: .8em; }
+            .badgefin-preview-panel .preview-img.poster { aspect-ratio: 2/3; object-fit: cover; max-height: 440px; }
+            .badgefin-preview-panel .preview-img.thumb { aspect-ratio: 16/9; object-fit: cover; }
+            .badgefin-preview-panel .preview-spinner { display: none; text-align: center; color: #aaa; padding: .5em 0; font-size: .9em; }
+            .cbc-filter-btn { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15); color: #fff; border-radius: 14px; padding: 4px 12px; cursor: pointer; font-size: 0.85em; transition: background .2s, border-color .2s; }
+            .cbc-filter-btn:hover { background: rgba(0,164,220,.4); }
+            .cbc-filter-btn.active { background: #00a4dc; border-color: #00a4dc; font-weight: 600; }
+            .badgefin-color-card { display: flex; flex-direction: column; gap: 8px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.12); border-radius: .4em; padding: .8em; transition: border-color .2s, background .2s; position: relative; }
+            .badgefin-color-card.active-custom { border-color: #00a4dc; background: rgba(0,164,220,.06); }
+            .badgefin-color-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+            .badgefin-color-card-title { font-weight: 600; font-size: 0.95em; }
+            .badgefin-color-card-cat { font-size: 0.72em; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.04em; background: rgba(255,255,255,.08); padding: 2px 6px; border-radius: 4px; }
+            .badgefin-color-preview-box { display: flex; align-items: center; justify-content: center; min-height: 52px; background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1); border-radius: 4px; padding: 4px 8px; }
+            .badgefin-color-preview-box img { max-height: 44px; max-width: 100%; object-fit: contain; }
+            .badgefin-color-preview-fallback { font-size: 0.8em; color: rgba(255,255,255,0.6); }
+            .badgefin-color-controls { display: flex; flex-direction: column; gap: 6px; }
+            .badgefin-color-row { display: flex; align-items: center; gap: 6px; }
+            .badgefin-color-row label { flex: 1; font-size: 0.82em; opacity: 0.85; margin: 0; }
+            .badgefin-color-row input[type="color"] { width: 30px; height: 30px; padding: 0; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; background: none; cursor: pointer; flex-shrink: 0; }
+            .badgefin-color-row input[type="text"] { width: 75px; font-family: monospace; font-size: 0.82em; text-transform: uppercase; padding: 4px 6px; text-align: center; }
+            .badgefin-color-clear-btn { background: rgba(255,255,255,0.1); border: none; border-radius: 4px; color: #aaa; cursor: pointer; font-size: 0.85em; width: 24px; height: 26px; line-height: 24px; text-align: center; padding: 0; flex-shrink: 0; }
+            .badgefin-color-clear-btn:hover { background: rgba(255,0,0,0.3); color: #fff; }
+            .badgefin-color-card-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
+            .badgefin-color-reset-card-btn { background: transparent; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 0.78em; padding: 2px 8px; }
+            .badgefin-color-reset-card-btn:hover { border-color: #ff5252; color: #ff5252; }
+            @media (max-width: 1000px) {
+                .badgefin-config-layout { margin-right: 0; }
+                .badgefin-preview-panel { position: static; width: 100%; max-width: 100%; max-height: none; margin-bottom: 1em; }
+            }
+        </style>
+        <div data-role="content">
+            <div class="content-primary">
+                <div class="badgefin-config-layout">
+                <form id="BadgeFinConfigForm">
+                    <div class="sectionTitleContainer flex align-items-center">
+                        <h2 class="sectionTitle">BadgeFin Configuration</h2>
+                    </div>
+                    <div id="LegacyJellyTagWarning" style="display:none; margin:0 0 1.5em; padding:1em 1.2em; border-radius:6px; border-left:4px solid #ff9800; background:rgba(255,152,0,0.12);">
+                        <strong>JellyTag is still installed.</strong>
+                        BadgeFin is the renamed JellyTag fork, and with both enabled every badge is drawn twice.
+                        Your JellyTag settings and custom badges have been copied to BadgeFin, so uninstall JellyTag
+                        under Dashboard &rarr; Plugins and restart Jellyfin.
+                    </div>
+                    <!-- 1. General -->
+                    <details class="badgefin-section" id="GeneralSettingsSection" open>
+                        <summary>General</summary>
+                        <div class="badgefin-section-body">
+                            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom:1.5em; padding-bottom:1em; border-bottom:1px solid rgba(255,255,255,0.1);">
+                                <label class="emby-checkbox-label">
+                                    <input id="Enabled" type="checkbox" is="emby-checkbox" />
+                                    <span style="font-size:1.15em; font-weight:600;">Enable BadgeFin</span>
+                                </label>
+                                <div class="fieldDescription">Master toggle for the BadgeFin badge overlay plugin.</div>
+                            </div>
+
+                            <details class="badgefin-sub" open>
+                                <summary>Client Compatibility</summary>
+                                <div class="badgefin-sub-body">
+                                    <div class="checkboxContainer checkboxContainer-withDescription">
+                                        <label class="emby-checkbox-label">
+                                            <input id="HideDolbyVisionOnSamsungClients" type="checkbox" is="emby-checkbox" />
+                                            <span>Hide Dolby Vision badges on Samsung clients</span>
+                                        </label>
+                                        <div class="fieldDescription">Samsung clients will continue to show HDR10+ when enabled in the HDR panel. Other clients are unaffected.</div>
+                                    </div>
+                                    <div class="checkboxContainer checkboxContainer-withDescription">
+                                        <label class="emby-checkbox-label">
+                                            <input id="HideDolbyVisionOnFireTvClients" type="checkbox" is="emby-checkbox" />
+                                            <span>Hide Dolby Vision badges on Fire TV clients</span>
+                                        </label>
+                                        <div class="fieldDescription">Fire TV clients will show HDR10+ (or HDR10) instead of Dolby Vision. Enable if your Fire TV is connected to a Samsung or non-DV display.</div>
+                                    </div>
+                                    <div class="checkboxContainer checkboxContainer-withDescription">
+                                        <label class="emby-checkbox-label">
+                                            <input id="HideHdrOnWindowsClients" type="checkbox" is="emby-checkbox" />
+                                            <span>Hide HDR badges on Windows clients (SDR only)</span>
+                                        </label>
+                                        <div class="fieldDescription">Windows clients (Emby Theater, web browser) will not show HDR/DV badges. Useful for SDR-only setups.</div>
+                                    </div>
+                                    <div id="DebugCountryCodeContainer" class="inputContainer" style="display:none; margin-top:1em;">
+                                        <label class="inputLabel inputLabelUnfocused" for="DebugCountryCode">Debug Country Code Override</label>
+                                        <input id="DebugCountryCode" type="text" is="emby-input" placeholder="e.g. fr, jp, de" />
+                                        <div class="fieldDescription">Manually force country flags for testing (comma-separated country codes, e.g. fr, jp, de).</div>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <details class="badgefin-sub">
+                                <summary>Libraries</summary>
+                                <div class="badgefin-section-body">
+                                    <div class="fieldDescription" style="margin-bottom:1em;">Uncheck a library to disable badge generation for its items.</div>
+                                    <div id="LibraryCheckboxes"><em>Loading libraries...</em></div>
+                                </div>
+                            </details>
+
+                            <details class="badgefin-sub">
+                                <summary>Users</summary>
+                                <div class="badgefin-section-body">
+                                    <div class="selectContainer">
+                                        <label class="selectLabel" for="UserFilterMode">Show badges to</label>
+                                        <select id="UserFilterMode" is="emby-select">
+                                            <option value="AllUsers">All users</option>
+                                            <option value="AllExceptSelected">All users except the selected ones</option>
+                                            <option value="OnlySelected">Only the selected users</option>
+                                        </select>
+                                        <div class="fieldDescription">Posters requested without a sign-in (e.g. by the web client) are matched to a user through their device's session. When that isn't possible, the request doesn't count as a selected user.</div>
+                                    </div>
+                                    <div id="UserCheckboxes"><em>Loading users...</em></div>
+                                </div>
+                            </details>
+
+                            <details class="badgefin-sub">
+                                <summary>Performance & Cache</summary>
+                                <div class="badgefin-sub-body">
+                                    <div class="inputContainer">
+                                        <label class="inputLabel inputLabelUnfocused" for="CacheDurationHours">Cache Duration (hours)</label>
+                                        <input id="CacheDurationHours" type="number" min="1" max="720" step="1" is="emby-input" />
+                                    </div>
+                                    <div class="inputContainer">
+                                        <label class="inputLabel inputLabelUnfocused" for="OutputFormat">Output Format</label>
+                                        <select id="OutputFormat" is="emby-select">
+                                            <option value="Jpeg">JPEG</option>
+                                            <option value="WebP">WebP (experimental)</option>
+                                        </select>
+                                    </div>
+                                    <div id="JpegQualityContainer" class="inputContainer">
+                                        <label class="inputLabel inputLabelUnfocused" for="JpegQuality">JPEG Quality</label>
+                                        <input id="JpegQuality" type="number" min="1" max="100" step="1" is="emby-input" />
+                                    </div>
+                                    <div id="WebPQualityContainer" class="inputContainer" style="display:none;">
+                                        <label class="inputLabel inputLabelUnfocused" for="WebPQuality">WebP Quality</label>
+                                        <input id="WebPQuality" type="number" min="1" max="100" step="1" is="emby-input" />
+                                    </div>
+                                    <div id="CacheStatsInfo" class="fieldDescription" style="margin-top:.5em;"></div>
+                                </div>
+                            </details>
+                        </div>
+                    </details>
+
+                    <!-- 2. Badge Style & Theme -->
+                    <details class="badgefin-section" id="BadgeThemeSection">
+                        <summary>Badge Style & Theme</summary>
+                        <div class="badgefin-section-body">
+                            <div class="fieldDescription" style="margin-bottom:1.2em;">
+                                Choose the visual appearance of badges across all panels, customize individual badge colors, or upload your own badge images.
+                            </div>
+
+                            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-bottom:1.5em;">
+                                <div class="inputContainer" style="margin-bottom:0;">
+                                    <label class="inputLabel inputLabelUnfocused" for="GlobalBadgeStyle">Default Badge Style</label>
+                                    <select id="GlobalBadgeStyle" is="emby-select">
+                                        <option value="Image">Image Badges (Standard SVG or uploaded graphics)</option>
+                                        <option value="Logo">Brand Logos (Official Dolby, DTS, HDR10+, etc.)</option>
+                                        <option value="Text">Text Badges (Customizable text badges with colors)</option>
+                                    </select>
+                                    <div class="fieldDescription">Applies to all panels. Individual panels can still be overridden in Posters/Thumbnails.</div>
+                                </div>
+                                <div class="inputContainer" style="margin-bottom:0;">
+                                    <label class="inputLabel inputLabelUnfocused" for="GlobalIconStyle">Badge Corner Shape</label>
+                                    <select id="GlobalIconStyle" is="emby-select">
+                                        <option value="Rectangular">Rectangular</option>
+                                        <option value="Square">Square</option>
+                                        <option value="Round">Round</option>
+                                    </select>
+                                    <div class="fieldDescription">Outer shape and corner radius for badges.</div>
+                                </div>
+                            </div>
+
+                            <div id="BrandLogosOptionsCard" style="margin-bottom:1.5em; padding:1em; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1); border-radius:.4em;">
+                                <div style="font-weight:600; font-size:1em; margin-bottom:.6em;">Brand Logo Options</div>
+                                <div class="checkboxContainer checkboxContainer-withDescription">
+                                    <label class="emby-checkbox-label">
+                                        <input id="WhiteLogoBackground" type="checkbox" is="emby-checkbox" />
+                                        <span>Use white background for brand logos</span>
+                                    </label>
+                                    <div class="fieldDescription">When unchecked (default), brand logos (Dolby Atmos, TrueHD, DTS:X, Dolby Vision, HDR10+, etc.) use a black background. When checked, brand logos use a white background.</div>
+                                </div>
+                                <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top:.8em;">
+                                    <label class="emby-checkbox-label">
+                                        <input id="CombineDolbyVisionAtmosLogos" type="checkbox" is="emby-checkbox" />
+                                        <span>Combine Dolby Vision + Atmos into one logo</span>
+                                    </label>
+                                    <div class="fieldDescription">When both badges are selected and the HDR and Audio panels use Brand Logos, show one combined logo in the HDR panel.</div>
+                                </div>
+                                <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top:.8em;">
+                                    <label class="emby-checkbox-label">
+                                        <input id="UseOriginalAacLogo" type="checkbox" is="emby-checkbox" />
+                                        <span>Use original square AAC logo</span>
+                                    </label>
+                                    <div class="fieldDescription">When unchecked (default), uses the redesigned horizontal AAC logo matching other audio badges. When checked, uses the original tall square AAC logo.</div>
+                                </div>
+                            </div>
+
+                            <!-- Custom Badge Colors -->
+                            <div style="margin-top:1.5em; border-top:1px solid rgba(255,255,255,0.1); padding-top:1.2em;">
+                                <h3 style="margin-top:0; margin-bottom:0.4em; font-size:1.05em; font-weight:600;">Custom Badge Colors</h3>
+                                <div class="fieldDescription" style="margin-bottom:1em;">
+                                    Choose custom background and text/foreground colors for individual badge elements (e.g. HEVC, 4K, 1080p, DTS:X, etc.). Leave empty to use the default style.
+                                </div>
+                                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:1.2em;">
+                                    <div id="CbcFilterButtons" style="display:flex; gap:6px; flex-wrap:wrap;">
+                                        <button type="button" class="cbc-filter-btn active" data-category="all">All</button>
+                                        <button type="button" class="cbc-filter-btn" data-category="Resolution">Resolution</button>
+                                        <button type="button" class="cbc-filter-btn" data-category="Codecs">Codecs</button>
+                                        <button type="button" class="cbc-filter-btn" data-category="HDR">HDR</button>
+                                        <button type="button" class="cbc-filter-btn" data-category="Audio">Audio</button>
+                                        <button type="button" class="cbc-filter-btn" data-category="Channels">Channels</button>
+                                    </div>
+                                    <div style="flex:1; min-width:180px;">
+                                        <input id="CbcSearchInput" type="text" placeholder="Filter badges..." is="emby-input" style="width:100%; margin:0;" />
+                                    </div>
+                                    <div style="display:flex; gap:8px; align-items:center;">
+                                        <span id="CbcCustomCount" style="font-size:0.85em; opacity:0.75;">0 customized</span>
+                                        <button type="button" id="CbcResetAllBtn" class="raised" is="emby-button" style="font-size:0.85em; padding:0.4em 0.8em; margin:0;"><span>Reset All Colors</span></button>
+                                    </div>
+                                </div>
+                                <div id="CustomBadgeColorsGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;"></div>
+                            </div>
+
+                            <!-- Upload Custom Badges -->
+                            <div style="margin-top:2em; border-top:1px solid rgba(255,255,255,0.1); padding-top:1.5em;">
+                                <h3 style="margin-top:0; margin-bottom:0.4em; font-size:1.05em; font-weight:600;">Upload Custom Badge Images</h3>
+                                <div class="fieldDescription" style="margin-bottom:1em;">Click a badge to upload a custom replacement image (SVG, PNG or JPEG). Click the reset button to revert to the default.</div>
+                                <div id="BadgeGallery" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:12px;"></div>
+                                <input id="CustomBadgeFile" type="file" accept="image/svg+xml,image/png,image/jpeg" style="display:none;" />
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- 3. Posters (Primary) -->
+                    <details class="badgefin-section" id="PostersSection">
+                        <summary>Posters (Primary)</summary>
+                        <div class="badgefin-section-body">
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="PosterEnabled" type="checkbox" is="emby-checkbox" />
+                                    <span>Enable badges on posters</span>
+                                </label>
+                            </div>
+                            <div id="PosterPanels"></div>
+                        </div>
+                    </details>
+
+                    <!-- 4. Thumbnails (Thumb) -->
+                    <details class="badgefin-section" id="ThumbnailsSection">
+                        <summary>Thumbnails (Thumb)</summary>
+                        <div class="badgefin-section-body">
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="ThumbnailSameAsPoster" type="checkbox" is="emby-checkbox" />
+                                    <span>Same as Poster</span>
+                                </label>
+                                <div class="fieldDescription">Use the same settings as Poster for thumbnails.</div>
+                            </div>
+                            <div id="ThumbSizeReductionWrap" class="inputContainer hidden">
+                                <label class="inputLabel inputLabelUnfocused" for="ThumbnailSizeReduction">Size reduction (percentage points)</label>
+                                <input id="ThumbnailSizeReduction" type="number" min="0" max="50" step="1" is="emby-input" />
+                                <div class="fieldDescription">Reduce badge size on thumbnails compared to posters (e.g. 10 means a 15% poster badge becomes 5% on thumbnails).</div>
+                            </div>
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="ListViewBadgeScalePercent">List view badge size (%)</label>
+                                <input id="ListViewBadgeScalePercent" type="number" min="25" max="100" step="5" is="emby-input" />
+                                <div class="fieldDescription">Badge size in the web client's list view (e.g. a season's episode list) compared to the normal size. That view shows images in a small, cropped frame, so smaller badges take less of it.</div>
+                            </div>
+                            <div id="ThumbFieldsContainer">
+                                <div class="checkboxContainer checkboxContainer-withDescription">
+                                    <label class="emby-checkbox-label">
+                                        <input id="ThumbEnabled" type="checkbox" is="emby-checkbox" />
+                                        <span>Enable badges on thumbnails</span>
+                                    </label>
+                                </div>
+                                <div id="ThumbPanels"></div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- 5. Labels & Flags -->
+                    <details class="badgefin-section" id="LabelsFlagsSection">
+                        <summary>Labels & Flags</summary>
+                        <div class="badgefin-section-body">
+                            <details class="badgefin-sub" open>
+                                <summary>Custom Badge Text</summary>
+                                <div class="badgefin-sub-body">
+                                    <div class="fieldDescription" style="margin-bottom:1em;">Override the display text for any badge. Leave empty to use the default text.</div>
+                                    <div class="badgefin-grid" id="CustomBadgeTextsGrid">
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_4k">4K</label><input id="cbt_4k" data-badge-key="4k" type="text" placeholder="4K" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_1080p">1080p</label><input id="cbt_1080p" data-badge-key="1080p" type="text" placeholder="1080p" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_720p">720p</label><input id="cbt_720p" data-badge-key="720p" type="text" placeholder="720p" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_sd">SD</label><input id="cbt_sd" data-badge-key="sd" type="text" placeholder="SD" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hdr10">HDR10</label><input id="cbt_hdr10" data-badge-key="hdr10" type="text" placeholder="HDR10" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hdr10plus">HDR10+</label><input id="cbt_hdr10plus" data-badge-key="hdr10plus" type="text" placeholder="HDR10+" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dv">Dolby Vision</label><input id="cbt_dv" data-badge-key="dv" type="text" placeholder="DV" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hlg">HLG</label><input id="cbt_hlg" data-badge-key="hlg" type="text" placeholder="HLG" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hdr">HDR (generic)</label><input id="cbt_hdr" data-badge-key="hdr" type="text" placeholder="HDR" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_atmos">Dolby Atmos</label><input id="cbt_atmos" data-badge-key="atmos" type="text" placeholder="ATMOS" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dtsx">DTS:X</label><input id="cbt_dtsx" data-badge-key="dtsx" type="text" placeholder="DTS:X" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_truehd">TrueHD</label><input id="cbt_truehd" data-badge-key="truehd" type="text" placeholder="TrueHD" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_dtshdma">DTS-HD MA</label><input id="cbt_dtshdma" data-badge-key="dtshdma" type="text" placeholder="DTS-HD MA" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_opus">Opus</label><input id="cbt_opus" data-badge-key="opus" type="text" placeholder="OPUS" is="emby-input" /></div>
+
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_7_1">7.1</label><input id="cbt_7_1" data-badge-key="7.1" type="text" placeholder="7.1" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_5_1">5.1</label><input id="cbt_5_1" data-badge-key="5.1" type="text" placeholder="5.1" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_stereo">Stereo</label><input id="cbt_stereo" data-badge-key="stereo" type="text" placeholder="STEREO" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_mono">Mono</label><input id="cbt_mono" data-badge-key="mono" type="text" placeholder="MONO" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_3d">3D</label><input id="cbt_3d" data-badge-key="3d" type="text" placeholder="3D" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_h264">H.264</label><input id="cbt_h264" data-badge-key="h264" type="text" placeholder="H.264" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_hevc">HEVC</label><input id="cbt_hevc" data-badge-key="hevc" type="text" placeholder="HEVC" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_av1">AV1</label><input id="cbt_av1" data-badge-key="av1" type="text" placeholder="AV1" is="emby-input" /></div>
+                                        <div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="cbt_vp9">VP9</label><input id="cbt_vp9" data-badge-key="vp9" type="text" placeholder="VP9" is="emby-input" /></div>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <details class="badgefin-sub">
+                                <summary>Language Flags</summary>
+                                <div class="badgefin-sub-body">
+                                    <div class="fieldDescription" style="margin-bottom:1em;">
+                                        Most languages are spoken in more than one country, so the flag shown is a choice rather than a fact.
+                                        Pick the flag you prefer for each language below. Files tagged with a region (for example <code>pt-BR</code>)
+                                        always use that region's flag and ignore these settings.
+                                    </div>
+                                    <div class="badgefin-grid" id="LanguageFlagGrid"></div>
+                                    <div style="margin-top:1.5em;">
+                                        <div class="fieldDescription" style="margin-bottom:0.5em;">Add another language. Use an ISO 639-1 code (for example <code>sv</code>) and a flag code (for example <code>fi</code>).</div>
+                                        <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+                                            <div class="inputContainer" style="margin-bottom:0;"><label class="inputLabel inputLabelUnfocused" for="LangFlagNewLang">Language code</label><input id="LangFlagNewLang" type="text" maxlength="3" placeholder="sv" is="emby-input" /></div>
+                                            <div class="inputContainer" style="margin-bottom:0;"><label class="inputLabel inputLabelUnfocused" for="LangFlagNewFlag">Flag code</label><input id="LangFlagNewFlag" type="text" maxlength="8" placeholder="fi" is="emby-input" /></div>
+                                            <button is="emby-button" type="button" class="raised" id="LangFlagAddBtn" style="margin-bottom:0;"><span>Add</span></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+                    </details>
+
+                    <div class="verticalSection" style="margin-top:1em;">
+                        <button is="emby-button" type="submit" class="raised button-submit block" style="width:100%;"><span>Save</span></button>
+                        <button id="ClearCache" type="button" is="emby-button" class="raised button-warning block" style="width:100%; margin-top:.5em;"><span>Clear Image Cache</span></button>
+                        <button id="ExportConfig" type="button" is="emby-button" class="raised block" style="width:100%; margin-top:.5em;"><span>Export Config</span></button>
+                        <button id="ImportConfigBtn" type="button" is="emby-button" class="raised block" style="width:100%; margin-top:.5em;"><span>Import Config</span></button>
+                        <input id="ImportConfigFile" type="file" accept="application/json,.json" style="display:none;" />
+                        <button id="ResetAllSettings" type="button" is="emby-button" class="raised block" style="background:#888; width:100%; margin-top:.5em;"><span>Reset All Settings to Default</span></button>
+                    </div>
+                </form>
+                <div class="badgefin-preview-panel">
+                    <h3>Live Preview</h3>
+                    <div class="preview-search-wrap">
+                        <input id="PreviewSearch" type="text" is="emby-input" placeholder="Search for a movie or TV show..." />
+                        <div id="PreviewSearchResults" class="preview-search-results"></div>
+                    </div>
+                    <div id="PreviewSelected" class="preview-selected"></div>
+                    <div id="PreviewSpinner" class="preview-spinner">Refreshing preview...</div>
+                    <img id="PreviewPoster" class="preview-img poster" style="display:none;" />
+                    <img id="PreviewThumb" class="preview-img thumb" style="display:none;" />
+                    <div id="PreviewError" class="preview-error"></div>
+                    <button id="RefreshPreview" type="button" is="emby-button" class="raised block" style="width:100%; margin-top:.5em;"><span>Refresh Preview</span></button>
+                </div>
+                </div>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+        var BadgeFinConfig = { pluginUniqueId: '7354bd14-00d2-410e-9086-4f2b0e1a300d' };
+
+        // ===== Panel definitions =====
+        var PANEL_DEFS = {
+            Res: {
+                title: 'Resolution Badges',
+                badges: [{id:'4K',key:'4k',label:'4K / UHD'},{id:'1080p',key:'1080p',label:'1080p'},{id:'720p',key:'720p',label:'720p'},{id:'SD',key:'sd',label:'SD'}],
+                hasShowMode: true,
+                showModeOptions: [{v:'Highest',l:'Highest only'},{v:'All',l:'All'}]
+            },
+            Hdr: {
+                title: 'HDR / 3D Badges',
+                badges: [{id:'Hdr10',key:'hdr10',label:'HDR10'},{id:'Hdr10Plus',key:'hdr10plus',label:'HDR10+'},{id:'DV',key:'dv',label:'Dolby Vision'},{id:'HLG',key:'hlg',label:'HLG'},{id:'GenericHdr',key:'hdr',label:'Generic HDR'},{id:'3D',key:'3d',label:'3D'}],
+                hasShowMode: false
+            },
+            Codec: {
+                title: 'Codec Badges',
+                badges: [{id:'H264',key:'h264',label:'H.264 / AVC'},{id:'HEVC',key:'hevc',label:'HEVC / H.265'},{id:'AV1',key:'av1',label:'AV1'},{id:'VP9',key:'vp9',label:'VP9'},{id:'MPEG2',key:'mpeg2',label:'MPEG-2'},{id:'VC1',key:'vc1',label:'VC-1'}],
+                hasShowMode: false
+            },
+            Audio: {
+                title: 'Audio Badges',
+                badges: [{id:'Atmos',key:'atmos',label:'Dolby Atmos'},{id:'DtsX',key:'dtsx',label:'DTS:X'},{id:'TrueHD',key:'truehd',label:'Dolby TrueHD'},{id:'DtsHdMa',key:'dtshdma',label:'DTS-HD MA'},{id:'Flac',key:'flac',label:'FLAC'},{id:'Dts',key:'dts',label:'DTS'},{id:'Eac3',key:'eac3',label:'Dolby Digital+ (E-AC-3)'},{id:'Opus',key:'opus',label:'Opus'},{id:'Ac3',key:'ac3',label:'Dolby Digital (AC3)'},{id:'Aac',key:'aac',label:'AAC'}],
+                hasShowMode: true,
+                showModeOptions: [{v:'Highest',l:'Highest only'},{v:'All',l:'All'}]
+            },
+            Channel: {
+                title: 'Channel Badges',
+                badges: [{id:'Ch71',key:'7.1',label:'7.1 Surround'},{id:'Ch51',key:'5.1',label:'5.1 Surround'},{id:'ChStereo',key:'stereo',label:'Stereo / 2.0'},{id:'ChMono',key:'mono',label:'Mono'}],
+                hasShowMode: true,
+                showModeOptions: [{v:'Highest',l:'Highest only'},{v:'All',l:'All'}]
+            }
+        };
+
+        // ===== HTML Generation =====
+        function sel(id, label, options) {
+            var h = '<div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="' + id + '">' + label + '</label>';
+            h += '<select id="' + id + '" is="emby-select">';
+            options.forEach(function(o) { h += '<option value="' + o.v + '">' + o.l + '</option>'; });
+            h += '</select></div>';
+            return h;
+        }
+        function num(id, label, min, max, step) {
+            return '<div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="' + id + '">' + label + '</label>' +
+                '<input id="' + id + '" type="number" min="' + min + '" max="' + max + '" step="' + step + '" is="emby-input" /></div>';
+        }
+        function chk(id, label, desc) {
+            var h = '<div class="checkboxContainer checkboxContainer-withDescription"><label class="emby-checkbox-label">';
+            h += '<input id="' + id + '" type="checkbox" is="emby-checkbox" /><span>' + label + '</span></label>';
+            if (desc) h += '<div class="fieldDescription">' + desc + '</div>';
+            h += '</div>';
+            return h;
+        }
+        function colorAlpha(idColor, idOpacity, label) {
+            return '<div class="inputContainer"><label class="inputLabel inputLabelUnfocused">' + label + '</label>' +
+                '<div class="badgefin-rgba"><input id="' + idColor + '" type="color" value="#000000" />' +
+                '<input id="' + idOpacity + '" type="number" min="0" max="255" step="1" is="emby-input" placeholder="Opacity" /></div></div>';
+        }
+        function colorOnly(id, label) {
+            return '<div class="inputContainer"><label class="inputLabel inputLabelUnfocused">' + label + '</label>' +
+                '<input id="' + id + '" type="color" value="#FFFFFF" /></div>';
+        }
+
+        var POS_OPTS = [{v:'TopLeft',l:'Top Left'},{v:'TopRight',l:'Top Right'},{v:'BottomLeft',l:'Bottom Left'},{v:'BottomRight',l:'Bottom Right'}];
+        var LAYOUT_OPTS = [{v:'Vertical',l:'Vertical'},{v:'Horizontal',l:'Horizontal'}];
+
+        function arrowBtns() {
+            return '<span class="panel-arrows">' +
+                '<button type="button" class="panel-move-up" title="Move up" onclick="movePanelUp(this)">&#9650;</button>' +
+                '<button type="button" class="panel-move-down" title="Move down" onclick="movePanelDown(this)">&#9660;</button>' +
+                '</span>';
+        }
+
+        var AVAILABLE_LOGOS = {
+            dv: true, hdr10: true, hdr10plus: true,
+            av1: true, h264: true, vp9: true, mpeg2: true,
+            atmos: true, dtsx: true, truehd: true, dtshdma: true, flac: true, dts: true, eac3: true, opus: true, ac3: true, aac: true
+        };
+
+        function panelHTML(p, panelId) {
+            var def = PANEL_DEFS[panelId];
+            var k = p + panelId;
+            var h = '<details class="badgefin-sub" data-panel-id="' + panelId + '"><summary>' + def.title + arrowBtns() + '</summary><div class="badgefin-sub-body">';
+            h += chk(k + 'Enabled', 'Enable');
+            h += '<div id="' + k + 'Settings">';
+
+            // Badges
+            h += '<div class="badgefin-grid">';
+            def.badges.forEach(function(b) { h += chk(k + b.id, b.label); });
+            h += '</div>';
+
+            h += sel(k + 'Position', 'Position', POS_OPTS);
+            if (def.hasShowMode) {
+                h += '<div id="' + k + 'ShowModeWrap">';
+                h += sel(k + 'ShowMode', 'Show', def.showModeOptions);
+                h += '</div>';
+            }
+            h += '<div id="' + k + 'LayoutWrap">' + sel(k + 'Layout', 'Layout', LAYOUT_OPTS) + '</div>';
+            h += '<div id="' + k + 'GapWrap">' + num(k + 'Gap', 'Gap between badges (%)', 0, 50, 1) + '</div>';
+            h += num(k + 'Size', 'Badge Size (%)', 0, 100, 1);
+            h += num(k + 'Margin', 'Margin (%)', 0, 20, 0.5);
+            var logoBadges = (def.badges || []).filter(function(b) { return !!AVAILABLE_LOGOS[b.key]; });
+            var styleOpts = logoBadges.length > 0
+                ? [{v:'Image',l:'Image'},{v:'Text',l:'Text'},{v:'Logo',l:'Brand Logo'}]
+                : [{v:'Image',l:'Image'},{v:'Text',l:'Text'}];
+            h += '<details class="badgefin-sub" style="margin-top:1em;"><summary>Panel Style Overrides</summary><div class="badgefin-sub-body">';
+            h += sel(k + 'Style', 'Badge Style', styleOpts);
+            h += sel(k + 'IconStyle', 'Icon Style', [{v:'Rectangular',l:'Rectangular'},{v:'Square',l:'Square'},{v:'Round',l:'Round'}]);
+
+            // Brand Logo settings (when Style == Logo)
+            if (logoBadges.length > 0) {
+                h += '<div id="' + k + 'LogoSettings" class="badgefin-text-box hidden">';
+                h += '<div style="font-weight:600; margin-bottom:.3em;">Active Brand Logos</div>';
+                h += '<div class="fieldDescription" style="margin-bottom:.6em;">Select which formats use official brand logos. Unchecked formats fall back to standard badges.</div>';
+                h += '<div class="badgefin-grid">';
+                logoBadges.forEach(function(b) {
+                    h += chk(k + 'Logo_' + b.key, b.label);
+                });
+                h += '</div>';
+                h += '<div class="inputContainer" style="margin-top:.8em;">';
+                h += '<label class="inputLabel inputLabelUnfocused" for="' + k + 'LogoBg">Panel Logo Background</label>';
+                h += '<select id="' + k + 'LogoBg" is="emby-select">';
+                h += '<option value="">Inherit global setting</option>';
+                h += '<option value="false">Black</option>';
+                h += '<option value="true">White</option>';
+                h += '</select>';
+                h += '<div class="fieldDescription">Choose whether brand logos in this panel have a black or white background.</div>';
+                h += '</div>';
+
+                if (panelId === 'Audio') {
+                    var aacId = p === 'Poster' ? 'UseOriginalAacLogo' : 'ThumbUseOriginalAacLogo';
+                    h += '<div style="margin-top:.8em;">';
+                    h += chk(aacId, 'Use original square AAC logo', 'When unchecked (default), uses the redesigned horizontal AAC logo matching other audio badges. When checked, uses the original tall square AAC logo.');
+                    h += '</div>';
+                }
+                h += '</div>'; // LogoSettings
+            }
+
+            // Text settings
+            h += '<div id="' + k + 'TextSettings" class="badgefin-text-box hidden">';
+            // Badge type selector
+            h += '<div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="' + k + 'BadgeSel">Apply to</label>';
+            h += '<select id="' + k + 'BadgeSel" is="emby-select"><option value="__global__">Global (all)</option>';
+            def.badges.forEach(function(b) { h += '<option value="' + b.key + '">' + b.label + '</option>'; });
+            h += '</select></div>';
+            h += colorAlpha(k + 'BgColor', k + 'BgOpacity', 'Background Color');
+            h += colorOnly(k + 'TextColor', 'Text Color');
+            h += num(k + 'CornerRadius', 'Corner Radius (%)', 0, 50, 1);
+            h += '</div>'; // TextSettings
+            h += '</div></details>'; // Panel Style Overrides
+
+            h += '</div>'; // Settings
+            h += '</div></details>';
+            return h;
+        }
+
+        function langPanelHTML(p) {
+            var k = p + 'Lang';
+            var h = '<details class="badgefin-sub" data-panel-id="Lang"><summary>Language Badges' + arrowBtns() + '</summary><div class="badgefin-sub-body">';
+            h += chk(k + 'Enabled', 'Enable');
+            h += '<div id="' + k + 'Settings">';
+            h += sel(k + 'Position', 'Position', POS_OPTS);
+            h += sel(k + 'ShowMode', 'Show', [{v:'All',l:'All'},{v:'Highest',l:'Default Only'}]);
+            h += '<div id="' + k + 'LayoutWrap">' + sel(k + 'Layout', 'Layout', LAYOUT_OPTS) + '</div>';
+            h += '<div id="' + k + 'GapWrap">' + num(k + 'Gap', 'Gap between badges (%)', 0, 50, 1) + '</div>';
+            h += num(k + 'Size', 'Badge Size (%)', 0, 100, 1);
+            h += num(k + 'Margin', 'Margin (%)', 0, 20, 0.5);
+            h += '<details class="badgefin-sub" style="margin-top:1em;"><summary>Panel Style Overrides</summary><div class="badgefin-sub-body">';
+            h += sel(k + 'Style', 'Badge Style', [{v:'Image',l:'Image'},{v:'Text',l:'Text'}]);
+            h += sel(k + 'IconStyle', 'Icon Style', [{v:'Rectangular',l:'Rectangular'},{v:'Square',l:'Square'},{v:'Round',l:'Round'}]);
+            h += '<div id="' + k + 'TextSettings" class="badgefin-text-box hidden">';
+            h += colorAlpha(k + 'BgColor', k + 'BgOpacity', 'Background Color');
+            h += colorOnly(k + 'TextColor', 'Text Color');
+            h += num(k + 'CornerRadius', 'Corner Radius (%)', 0, 50, 1);
+            h += '</div>';
+            h += '</div></details>';
+            // VOST
+            h += '<div style="margin-top:1em;">';
+            h += chk(k + 'Vost', 'Show VOST* indicator', 'Show VOST* badge for languages that have subtitles but no matching audio track.');
+            h += '<div id="' + k + 'VostSettings" class="badgefin-text-box hidden">';
+            h += colorAlpha(k + 'VostBgColor', k + 'VostBgOpacity', 'VOST Background Color');
+            h += colorOnly(k + 'VostTextColor', 'VOST Text Color');
+            h += num(k + 'VostCornerRadius', 'VOST Corner Radius (%)', 0, 50, 1);
+            h += '</div></div>';
+            h += '</div>'; // Settings
+            h += '</div></details>';
+            return h;
+        }
+
+        function generatePanels(prefix) {
+            return panelHTML(prefix, 'Res') + panelHTML(prefix, 'Hdr') + panelHTML(prefix, 'Codec') + panelHTML(prefix, 'Audio') + panelHTML(prefix, 'Channel') + langPanelHTML(prefix);
+        }
+
+        // ===== Panel reordering =====
+        function movePanelUp(btn) {
+            var panel = btn.closest('.badgefin-sub');
+            var prev = panel.previousElementSibling;
+            if (prev && prev.classList.contains('badgefin-sub')) {
+                panel.parentNode.insertBefore(panel, prev);
+                updateArrowStates(panel.parentNode);
+            }
+        }
+        function movePanelDown(btn) {
+            var panel = btn.closest('.badgefin-sub');
+            var next = panel.nextElementSibling;
+            if (next && next.classList.contains('badgefin-sub')) {
+                panel.parentNode.insertBefore(next, panel);
+                updateArrowStates(panel.parentNode);
+            }
+        }
+        function updateArrowStates(container) {
+            var panels = container.querySelectorAll(':scope > .badgefin-sub');
+            panels.forEach(function(p, i) {
+                var up = p.querySelector('.panel-move-up');
+                var down = p.querySelector('.panel-move-down');
+                if (up) up.disabled = (i === 0);
+                if (down) down.disabled = (i === panels.length - 1);
+            });
+        }
+        function sortPanelsByOrder(container, orderMap) {
+            var panels = Array.from(container.querySelectorAll(':scope > .badgefin-sub'));
+            panels.sort(function(a, b) {
+                var oa = orderMap[a.getAttribute('data-panel-id')] || 0;
+                var ob = orderMap[b.getAttribute('data-panel-id')] || 0;
+                return oa - ob;
+            });
+            panels.forEach(function(p) { container.appendChild(p); });
+            updateArrowStates(container);
+        }
+        function getPanelOrder(container) {
+            var order = {};
+            container.querySelectorAll(':scope > .badgefin-sub').forEach(function(p, i) {
+                order[p.getAttribute('data-panel-id')] = i;
+            });
+            return order;
+        }
+
+        // ===== Override state management =====
+        var overrideStates = {};
+
+        function initOverrides(key, globalVals, typeOverrides) {
+            var s = { current: '__global__', values: {} };
+            s.values['__global__'] = {
+                bgColor: globalVals.TextBgColor || '#000000',
+                bgOpacity: globalVals.TextBgOpacity != null ? globalVals.TextBgOpacity : 180,
+                textColor: globalVals.TextColor || '#FFFFFF',
+                cornerRadius: globalVals.TextCornerRadius != null ? globalVals.TextCornerRadius : 25
+            };
+            (typeOverrides || []).forEach(function(o) {
+                var bk = o.BadgeKey || o.badgeKey;
+                if (bk) {
+                    s.values[bk] = {
+                        bgColor: o.BgColor || o.bgColor || null,
+                        bgOpacity: o.BgOpacity != null ? o.BgOpacity : (o.bgOpacity != null ? o.bgOpacity : null),
+                        textColor: o.TextColor || o.textColor || null,
+                        cornerRadius: o.CornerRadius != null ? o.CornerRadius : (o.cornerRadius != null ? o.cornerRadius : null)
+                    };
+                }
+            });
+            overrideStates[key] = s;
+        }
+
+        function saveCurrentOverride(key) {
+            var s = overrideStates[key]; if (!s) return;
+            var bgc = document.querySelector('#' + key + 'BgColor');
+            if (!bgc) return;
+            var vals = {
+                bgColor: bgc.value,
+                bgOpacity: parseInt(document.querySelector('#' + key + 'BgOpacity').value, 10),
+                textColor: document.querySelector('#' + key + 'TextColor').value,
+                cornerRadius: parseInt(document.querySelector('#' + key + 'CornerRadius').value, 10)
+            };
+            if (s.current === '__global__') {
+                s.values['__global__'] = vals;
+            } else {
+                var g = s.values['__global__'];
+                if (vals.bgColor !== g.bgColor || vals.bgOpacity !== g.bgOpacity || vals.textColor !== g.textColor || vals.cornerRadius !== g.cornerRadius) {
+                    s.values[s.current] = vals;
+                } else {
+                    delete s.values[s.current];
+                }
+            }
+        }
+
+        function loadOverrideValues(key, badgeKey) {
+            var s = overrideStates[key]; if (!s) return;
+            saveCurrentOverride(key);
+            s.current = badgeKey;
+            var v = s.values[badgeKey] || s.values['__global__'];
+            document.querySelector('#' + key + 'BgColor').value = v.bgColor || '#000000';
+            document.querySelector('#' + key + 'BgOpacity').value = v.bgOpacity != null ? v.bgOpacity : 180;
+            document.querySelector('#' + key + 'TextColor').value = v.textColor || '#FFFFFF';
+            document.querySelector('#' + key + 'CornerRadius').value = v.cornerRadius != null ? v.cornerRadius : 25;
+        }
+
+        function collectOverrides(key) {
+            saveCurrentOverride(key);
+            var s = overrideStates[key]; if (!s) return { textBgColor: '#000000', textBgOpacity: 180, textColor: '#FFFFFF', textCornerRadius: 25, overrides: [] };
+            var g = s.values['__global__'];
+            var ov = [];
+            Object.keys(s.values).forEach(function(bk) {
+                if (bk === '__global__') return;
+                var v = s.values[bk];
+                ov.push({ BadgeKey: bk, BgColor: v.bgColor, BgOpacity: v.bgOpacity, TextColor: v.textColor, CornerRadius: v.cornerRadius });
+            });
+            return { textBgColor: g.bgColor, textBgOpacity: g.bgOpacity, textColor: g.textColor, textCornerRadius: g.cornerRadius, overrides: ov };
+        }
+
+        // ===== Show/hide toggles =====
+        function setupStyleToggle(key) {
+            var styleEl = document.querySelector('#' + key + 'Style');
+            var textDiv = document.querySelector('#' + key + 'TextSettings');
+            var logoDiv = document.querySelector('#' + key + 'LogoSettings');
+            if (!styleEl) return;
+            function toggle() {
+                if (textDiv) textDiv.classList.toggle('hidden', styleEl.value !== 'Text');
+                if (logoDiv) logoDiv.classList.toggle('hidden', styleEl.value !== 'Logo');
+            }
+            function onStyleChanged() {
+                toggle();
+                // Switching to or from Brand Logo changes which asset the gallery edits.
+                if (document.getElementById('BadgeGallery')) loadBadgeGallery();
+            }
+            styleEl.addEventListener('change', onStyleChanged);
+            styleEl.addEventListener('input', onStyleChanged);
+            toggle();
+        }
+
+        function setupEnableToggle(key) {
+            var enEl = document.querySelector('#' + key + 'Enabled');
+            var setDiv = document.querySelector('#' + key + 'Settings');
+            if (!enEl || !setDiv) return;
+            function toggle() { enEl.checked ? setDiv.classList.remove('hidden') : setDiv.classList.add('hidden'); }
+            enEl.addEventListener('change', toggle);
+            toggle();
+        }
+
+        function setupBadgeSelToggle(key) {
+            var selEl = document.querySelector('#' + key + 'BadgeSel');
+            if (!selEl) return;
+            selEl.addEventListener('change', function() { loadOverrideValues(key, selEl.value); });
+        }
+
+        function setupLangShowModeToggle(prefix) {
+            var k = prefix + 'Lang';
+            var showEl = document.querySelector('#' + k + 'ShowMode');
+            var layoutWrap = document.querySelector('#' + k + 'LayoutWrap');
+            var gapWrap = document.querySelector('#' + k + 'GapWrap');
+            if (!showEl) return;
+            function toggle() {
+                var hide = showEl.value === 'Highest';
+                if (layoutWrap) layoutWrap.classList.toggle('hidden', hide);
+                if (gapWrap) gapWrap.classList.toggle('hidden', hide);
+            }
+            showEl.addEventListener('change', toggle);
+            toggle();
+        }
+
+        function setupVostToggle(prefix) {
+            var k = prefix + 'Lang';
+            var vostEl = document.querySelector('#' + k + 'Vost');
+            var vostDiv = document.querySelector('#' + k + 'VostSettings');
+            if (!vostEl || !vostDiv) return;
+            function toggle() { vostEl.checked ? vostDiv.classList.remove('hidden') : vostDiv.classList.add('hidden'); }
+            vostEl.addEventListener('change', toggle);
+            toggle();
+        }
+
+        function setupHdrCodecShowMode(prefix) {
+            var resEn = document.querySelector('#' + prefix + 'ResEnabled');
+            var resShow = document.querySelector('#' + prefix + 'ResShowMode');
+            if (!resEn || !resShow) return;
+            function update() {
+                var mode = resEn.checked ? resShow.value : 'All';
+                ['Hdr', 'Codec'].forEach(function(pid) {
+                    var el = document.querySelector('#' + prefix + pid + 'ShowMode');
+                    if (el) el.value = mode;
+                });
+            }
+            resEn.addEventListener('change', update);
+            resShow.addEventListener('change', update);
+        }
+
+        function setupThumbShowHideLayout(prefix) {
+            if (prefix !== 'Thumb') return;
+            ['Res', 'Hdr', 'Codec'].forEach(function(pid) {
+                var showEl = document.querySelector('#' + prefix + pid + 'ShowMode');
+                if (!showEl && pid !== 'Res') return;
+                var effectiveShow = function() {
+                    if (pid === 'Res') return document.querySelector('#' + prefix + 'ResShowMode').value;
+                    var resEn = document.querySelector('#' + prefix + 'ResEnabled');
+                    var resShow = document.querySelector('#' + prefix + 'ResShowMode');
+                    return (resEn && resEn.checked) ? resShow.value : 'All';
+                };
+                function toggle() {
+                    var hide = effectiveShow() === 'Highest';
+                    var lw = document.querySelector('#' + prefix + pid + 'LayoutWrap');
+                    var gw = document.querySelector('#' + prefix + pid + 'GapWrap');
+                    if (lw) lw.classList.toggle('hidden', hide);
+                    if (gw) gw.classList.toggle('hidden', hide);
+                }
+                var resShowEl = document.querySelector('#' + prefix + 'ResShowMode');
+                var resEnEl = document.querySelector('#' + prefix + 'ResEnabled');
+                if (resShowEl) resShowEl.addEventListener('change', toggle);
+                if (resEnEl) resEnEl.addEventListener('change', toggle);
+                toggle();
+            });
+        }
+
+        function setupAllToggles(prefix) {
+            ['Res', 'Hdr', 'Codec', 'Audio', 'Channel'].forEach(function(pid) {
+                setupEnableToggle(prefix + pid);
+                setupStyleToggle(prefix + pid);
+                setupBadgeSelToggle(prefix + pid);
+            });
+            setupEnableToggle(prefix + 'Lang');
+            setupStyleToggle(prefix + 'Lang');
+            setupLangShowModeToggle(prefix);
+            setupVostToggle(prefix);
+            setupHdrCodecShowMode(prefix);
+            setupThumbShowHideLayout(prefix);
+        }
+
+        // ===== Config loading =====
+        function q(id) { return document.getElementById(id); }
+
+        function loadPanelConfig(prefix, panelId, pc) {
+            if (!pc) return;
+            var k = prefix + panelId;
+            q(k + 'Enabled').checked = pc.Enabled !== false;
+            q(k + 'Position').value = pc.Position || 'TopLeft';
+            if (pc.ShowMode && q(k + 'ShowMode')) q(k + 'ShowMode').value = pc.ShowMode;
+            q(k + 'Layout').value = pc.Layout || 'Vertical';
+            q(k + 'Gap').value = pc.GapPercent != null ? pc.GapPercent : 10;
+            q(k + 'Size').value = pc.SizePercent != null ? pc.SizePercent : 15;
+            q(k + 'Margin').value = pc.MarginPercent != null ? pc.MarginPercent : 2.5;
+            q(k + 'Style').value = pc.Style || 'Image';
+            if (q(k + 'IconStyle')) q(k + 'IconStyle').value = pc.IconStyle || 'Rectangular';
+
+            // Badges
+            var en = pc.EnabledBadges || [];
+            var def = PANEL_DEFS[panelId];
+            if (def) {
+                def.badges.forEach(function(b) {
+                    var el = q(k + b.id);
+                    if (el) {
+                        el.checked = en.indexOf(b.key) >= 0;
+                    }
+
+                    var logoEl = q(k + 'Logo_' + b.key);
+                    if (logoEl) {
+                        var disLogos = pc.DisabledLogos || [];
+                        logoEl.checked = disLogos.indexOf(b.key) < 0;
+                        logoEl.addEventListener('change', function() {
+                            if (document.getElementById('BadgeGallery')) loadBadgeGallery();
+                        });
+                    }
+                });
+
+                var logoBgEl = q(k + 'LogoBg');
+                if (logoBgEl) {
+                    logoBgEl.value = pc.WhiteLogoBackground === true ? 'true' : (pc.WhiteLogoBackground === false ? 'false' : '');
+                    logoBgEl.addEventListener('change', function() {
+                        if (document.getElementById('BadgeGallery')) loadBadgeGallery();
+                    });
+                }
+            }
+
+            // Text override state
+            initOverrides(k, pc, pc.BadgeTypeOverrides || []);
+            var g = overrideStates[k].values['__global__'];
+            q(k + 'BgColor').value = g.bgColor;
+            q(k + 'BgOpacity').value = g.bgOpacity;
+            q(k + 'TextColor').value = g.textColor;
+            q(k + 'CornerRadius').value = g.cornerRadius;
+            if (q(k + 'BadgeSel')) q(k + 'BadgeSel').value = '__global__';
+        }
+
+        function loadLangConfig(prefix, lc, itc) {
+            if (!lc) return;
+            var k = prefix + 'Lang';
+            q(k + 'Enabled').checked = lc.Enabled !== false;
+            q(k + 'Position').value = lc.Position || 'TopLeft';
+            q(k + 'ShowMode').value = lc.ShowMode || 'All';
+            q(k + 'Layout').value = lc.Layout || 'Vertical';
+            q(k + 'Gap').value = lc.GapPercent != null ? lc.GapPercent : 10;
+            q(k + 'Size').value = lc.SizePercent != null ? lc.SizePercent : 15;
+            q(k + 'Margin').value = lc.MarginPercent != null ? lc.MarginPercent : 2.5;
+            q(k + 'Style').value = lc.Style || 'Image';
+            if (q(k + 'IconStyle')) q(k + 'IconStyle').value = lc.IconStyle || 'Rectangular';
+            q(k + 'BgColor').value = lc.TextBgColor || '#000000';
+            q(k + 'BgOpacity').value = lc.TextBgOpacity != null ? lc.TextBgOpacity : 180;
+            q(k + 'TextColor').value = lc.TextColor || '#FFFFFF';
+            q(k + 'CornerRadius').value = lc.TextCornerRadius != null ? lc.TextCornerRadius : 25;
+            // VOST
+            q(k + 'Vost').checked = itc.ShowVostIndicator !== false;
+            q(k + 'VostBgColor').value = itc.VostBgColor || '#000000';
+            q(k + 'VostBgOpacity').value = itc.VostBgOpacity != null ? itc.VostBgOpacity : 0;
+            q(k + 'VostTextColor').value = itc.VostTextColor || '#FFFFFF';
+            q(k + 'VostCornerRadius').value = itc.VostCornerRadius != null ? itc.VostCornerRadius : 1;
+        }
+
+        // ===== Language flags =====
+        // Languages where the "right" flag is a matter of opinion. `def` mirrors
+        // DefaultFlagForLanguage in QualityDetectionService.
+        var LANG_FLAG_CHOICES = [
+            { code:'en', label:'English',    def:'gb', opts:['gb','us','au','ca','nz','ie'] },
+            { code:'es', label:'Spanish',    def:'es', opts:['es','mx','ar','co','cl','pe'] },
+            { code:'pt', label:'Portuguese', def:'pt', opts:['pt','br'] },
+            { code:'fr', label:'French',     def:'fr', opts:['fr','ca','be','ch'] },
+            { code:'ar', label:'Arabic',     def:'sa', opts:['sa','eg','ae','ma','lb'] },
+            { code:'zh', label:'Chinese',    def:'cn', opts:['cn','tw','hk','sg'] },
+            { code:'de', label:'German',     def:'de', opts:['de','at','ch'] },
+            { code:'nl', label:'Dutch',      def:'nl', opts:['nl','be'] },
+            { code:'ru', label:'Russian',    def:'ru', opts:['ru','by','kz'] },
+            { code:'sv', label:'Swedish',    def:'se', opts:['se','fi'] },
+            { code:'ko', label:'Korean',     def:'kr', opts:['kr','kp'] },
+            { code:'ms', label:'Malay',      def:'my', opts:['my','bn','sg'] },
+            { code:'eu', label:'Basque',     def:'es-pv', opts:['es-pv','es'] },
+            { code:'ca', label:'Catalan',    def:'es-ct', opts:['es-ct','es','ad'] },
+            { code:'cy', label:'Welsh',      def:'gb-wls', opts:['gb-wls','gb'] },
+            { code:'ta', label:'Tamil',      def:'in', opts:['in','lk','sg'] }
+        ];
+
+        function langFlagRowHTML(code, label, def, opts, current) {
+            var id = 'lfo_' + code.replace(/[^a-z0-9]/g, '_');
+            var h = '<div class="inputContainer"><label class="inputLabel inputLabelUnfocused" for="' + id + '">' + label + '</label>';
+            h += '<select id="' + id + '" data-lang="' + code + '" is="emby-select">';
+            h += '<option value="">Default (' + def.toUpperCase() + ')</option>';
+            opts.forEach(function(o) {
+                var selAttr = (current && current.toLowerCase() === o) ? ' selected' : '';
+                h += '<option value="' + o + '"' + selAttr + '>' + o.toUpperCase() + '</option>';
+            });
+            h += '</select></div>';
+            return h;
+        }
+
+        function langFlagCustomRowHTML(code, flag) {
+            var id = 'lfoc_' + code.replace(/[^a-z0-9]/g, '_');
+            var h = '<div class="inputContainer" data-custom-lang-row="' + code + '">';
+            h += '<label class="inputLabel inputLabelUnfocused" for="' + id + '">' + code.toUpperCase() + '</label>';
+            h += '<div style="display:flex; gap:8px; align-items:center;">';
+            h += '<input id="' + id + '" data-lang="' + code + '" type="text" value="' + flag + '" is="emby-input" />';
+            h += '<button is="emby-button" type="button" class="raised langflag-remove" title="Remove">&#10005;</button>';
+            h += '</div></div>';
+            return h;
+        }
+
+        function renderLanguageFlagGrid(overrides) {
+            var grid = document.getElementById('LanguageFlagGrid');
+            if (!grid) return;
+
+            var map = {};
+            (overrides || []).forEach(function(o) {
+                var lc = (o.LanguageCode || o.languageCode || '').toLowerCase();
+                if (lc) map[lc] = o.FlagCode || o.flagCode || '';
+            });
+
+            var curated = {};
+            var h = '';
+            LANG_FLAG_CHOICES.forEach(function(item) {
+                curated[item.code] = true;
+                var current = map[item.code];
+                // An override outside the preset list still needs to be selectable.
+                var opts = item.opts.slice();
+                if (current && opts.indexOf(current.toLowerCase()) === -1) opts.push(current.toLowerCase());
+                h += langFlagRowHTML(item.code, item.label, item.def, opts, current);
+            });
+
+            Object.keys(map).forEach(function(lc) {
+                if (!curated[lc] && map[lc]) h += langFlagCustomRowHTML(lc, map[lc]);
+            });
+
+            grid.innerHTML = h;
+        }
+
+        function collectLanguageFlagOverrides() {
+            var out = [];
+            document.querySelectorAll('#LanguageFlagGrid [data-lang]').forEach(function(el) {
+                var lang = (el.getAttribute('data-lang') || '').trim().toLowerCase();
+                var flag = (el.value || '').trim().toLowerCase();
+                if (lang && flag) out.push({ LanguageCode: lang, FlagCode: flag });
+            });
+            return out;
+        }
+
+        var langFlagControlsReady = false;
+        function setupLanguageFlagControls() {
+            // pageshow fires repeatedly; these elements persist so bind only once.
+            if (langFlagControlsReady) return;
+            langFlagControlsReady = true;
+
+            var grid = document.getElementById('LanguageFlagGrid');
+            if (grid) {
+                grid.addEventListener('click', function(e) {
+                    var btn = e.target.closest('.langflag-remove');
+                    if (!btn) return;
+                    var row = btn.closest('[data-custom-lang-row]');
+                    if (row) row.remove();
+                });
+            }
+
+            var addBtn = document.getElementById('LangFlagAddBtn');
+            if (!addBtn) return;
+            addBtn.addEventListener('click', function() {
+                var langEl = q('LangFlagNewLang');
+                var flagEl = q('LangFlagNewFlag');
+                var lang = (langEl.value || '').trim().toLowerCase();
+                var flag = (flagEl.value || '').trim().toLowerCase();
+                if (!/^[a-z]{2,3}$/.test(lang) || !/^[a-z]{2}(-[a-z]{2,3})?$/.test(flag)) {
+                    Dashboard.alert('Enter a 2-3 letter language code and a flag code such as "us" or "es-ct".');
+                    return;
+                }
+
+                var existing = document.querySelector('#LanguageFlagGrid [data-lang="' + lang + '"]');
+                if (existing) {
+                    if (existing.tagName === 'SELECT' && !Array.prototype.some.call(existing.options, function(o) { return o.value === flag; })) {
+                        existing.add(new Option(flag.toUpperCase(), flag));
+                    }
+                    existing.value = flag;
+                } else {
+                    document.getElementById('LanguageFlagGrid').insertAdjacentHTML('beforeend', langFlagCustomRowHTML(lang, flag));
+                }
+
+                langEl.value = '';
+                flagEl.value = '';
+            });
+        }
+
+        function loadImageTypeConfig(prefix, itc) {
+            if (!itc) return;
+            q(prefix + 'Enabled').checked = itc.Enabled !== false;
+            loadPanelConfig(prefix, 'Res', itc.ResolutionPanel);
+            loadPanelConfig(prefix, 'Hdr', itc.HdrPanel);
+            loadPanelConfig(prefix, 'Codec', itc.CodecPanel);
+            loadPanelConfig(prefix, 'Audio', itc.AudioPanel);
+            if (!itc.ChannelPanel || !itc.ChannelPanel.EnabledBadges || itc.ChannelPanel.EnabledBadges.length === 0) {
+                var chBadges = (itc.AudioPanel && itc.AudioPanel.EnabledBadges ? itc.AudioPanel.EnabledBadges : []).filter(function(x) {
+                    return x === '7.1' || x === '5.1' || x === 'stereo' || x === 'mono';
+                });
+                itc.ChannelPanel = Object.assign({}, itc.AudioPanel || {}, {
+                    EnabledBadges: chBadges.length > 0 ? chBadges : ['7.1', '5.1', 'stereo', 'mono'],
+                    Order: 4,
+                    Style: 'Image'
+                });
+            }
+            loadPanelConfig(prefix, 'Channel', itc.ChannelPanel);
+            loadLangConfig(prefix, itc.LanguagePanel, itc);
+            // Sort panels by Order
+            var orderMap = {
+                Res: (itc.ResolutionPanel || {}).Order || 0,
+                Hdr: (itc.HdrPanel || {}).Order || 0,
+                Codec: (itc.CodecPanel || {}).Order || 0,
+                Audio: (itc.AudioPanel || {}).Order || 0,
+                Channel: (itc.ChannelPanel || {}).Order != null ? itc.ChannelPanel.Order : 4,
+                Lang: (itc.LanguagePanel || {}).Order != null ? itc.LanguagePanel.Order : 5
+            };
+            var container = document.getElementById(prefix + 'Panels');
+            if (container) sortPanelsByOrder(container, orderMap);
+        }
+
+        // ===== Config saving =====
+        function collectPanelBadges(prefix, panelId) {
+            var def = PANEL_DEFS[panelId];
+            var k = prefix + panelId;
+            var badges = [];
+            def.badges.forEach(function(b) {
+                var el = q(k + b.id);
+                if (el && el.checked) {
+                    badges.push(b.key);
+                }
+            });
+            return badges;
+        }
+
+        function collectPanelConfig(prefix, panelId, order) {
+            var k = prefix + panelId;
+            var ov = collectOverrides(k);
+            var def = PANEL_DEFS[panelId];
+            var disabledLogos = [];
+            if (def) {
+                def.badges.forEach(function(b) {
+                    var logoEl = q(k + 'Logo_' + b.key);
+                    if (logoEl && !logoEl.checked) {
+                        disabledLogos.push(b.key);
+                    }
+                });
+            }
+            return {
+                Enabled: q(k + 'Enabled').checked,
+                Position: q(k + 'Position').value,
+                ShowMode: q(k + 'ShowMode') ? q(k + 'ShowMode').value : 'Highest',
+                Layout: q(k + 'Layout').value,
+                GapPercent: parseFloat(q(k + 'Gap').value) || 0,
+                SizePercent: parseInt(q(k + 'Size').value, 10) || 15,
+                MarginPercent: parseFloat(q(k + 'Margin').value) || 2.5,
+                Style: q(k + 'Style').value,
+                IconStyle: q(k + 'IconStyle') ? q(k + 'IconStyle').value : 'Rectangular',
+                Order: order,
+                TextBgColor: ov.textBgColor,
+                TextBgOpacity: ov.textBgOpacity,
+                TextColor: ov.textColor,
+                TextCornerRadius: ov.textCornerRadius,
+                EnabledBadges: collectPanelBadges(prefix, panelId),
+                DisabledLogos: disabledLogos,
+                WhiteLogoBackground: (function() {
+                    var v = q(k + 'LogoBg') ? q(k + 'LogoBg').value : '';
+                    return v === 'true' ? true : (v === 'false' ? false : null);
+                })(),
+                BadgeTypeOverrides: ov.overrides
+            };
+        }
+
+        function collectLangConfig(prefix) {
+            var k = prefix + 'Lang';
+            var container = document.getElementById(prefix + 'Panels');
+            var order = container ? getPanelOrder(container) : {Lang:5};
+            return {
+                Enabled: q(k + 'Enabled').checked,
+                Position: q(k + 'Position').value,
+                ShowMode: q(k + 'ShowMode').value,
+                Layout: q(k + 'Layout').value,
+                GapPercent: parseFloat(q(k + 'Gap').value) || 0,
+                SizePercent: parseInt(q(k + 'Size').value, 10) || 15,
+                MarginPercent: parseFloat(q(k + 'Margin').value) || 2.5,
+                Style: q(k + 'Style').value,
+                IconStyle: q(k + 'IconStyle') ? q(k + 'IconStyle').value : 'Rectangular',
+                Order: order.Lang != null ? order.Lang : 5,
+                TextBgColor: q(k + 'BgColor').value,
+                TextBgOpacity: parseInt(q(k + 'BgOpacity').value, 10) || 0,
+                TextColor: q(k + 'TextColor').value,
+                TextCornerRadius: parseInt(q(k + 'CornerRadius').value, 10) || 0,
+                EnabledBadges: [],
+                BadgeTypeOverrides: []
+            };
+        }
+
+        function collectImageTypeConfig(prefix) {
+            var k = prefix + 'Lang';
+            var container = document.getElementById(prefix + 'Panels');
+            var order = container ? getPanelOrder(container) : {Res:0,Hdr:1,Codec:2,Audio:3,Channel:4,Lang:5};
+            return {
+                Enabled: q(prefix + 'Enabled').checked,
+                ResolutionPanel: collectPanelConfig(prefix, 'Res', order.Res || 0),
+                HdrPanel: collectPanelConfig(prefix, 'Hdr', order.Hdr || 0),
+                CodecPanel: collectPanelConfig(prefix, 'Codec', order.Codec || 0),
+                AudioPanel: collectPanelConfig(prefix, 'Audio', order.Audio || 0),
+                ChannelPanel: collectPanelConfig(prefix, 'Channel', order.Channel != null ? order.Channel : 4),
+                LanguagePanel: collectLangConfig(prefix),
+                ShowVostIndicator: q(k + 'Vost').checked,
+                VostBgColor: q(k + 'VostBgColor').value || null,
+                VostTextColor: q(k + 'VostTextColor').value || null,
+                VostBgOpacity: parseInt(q(k + 'VostBgOpacity').value, 10) || 0,
+                VostCornerRadius: parseInt(q(k + 'VostCornerRadius').value, 10) || 0
+            };
+        }
+
+        function collectConfigFromForm(config) {
+            config.Enabled = q('Enabled').checked;
+            config.HideDolbyVisionOnSamsungClients = q('HideDolbyVisionOnSamsungClients').checked;
+            config.HideDolbyVisionOnFireTvClients = q('HideDolbyVisionOnFireTvClients').checked;
+            config.HideHdrOnWindowsClients = q('HideHdrOnWindowsClients').checked;
+            config.WhiteLogoBackground = q('WhiteLogoBackground').checked;
+            config.CombineDolbyVisionAtmosLogos = q('CombineDolbyVisionAtmosLogos').checked;
+            config.UseOriginalAacLogo = q('UseOriginalAacLogo').checked;
+            var debugContainer = document.getElementById('DebugCountryCodeContainer');
+            if (debugContainer && debugContainer.style.display === 'none') {
+                config.DebugCountryCode = null;
+            } else {
+                config.DebugCountryCode = q('DebugCountryCode').value.trim() || null;
+            }
+            config.ThumbnailSameAsPoster = q('ThumbnailSameAsPoster').checked;
+            config.ThumbnailSizeReduction = parseInt(q('ThumbnailSizeReduction').value, 10) || 0;
+            config.ListViewBadgeScalePercent = Math.min(100, Math.max(25, parseInt(q('ListViewBadgeScalePercent').value, 10) || 75));
+            config.PosterConfig = collectImageTypeConfig('Poster');
+            config.ThumbnailConfig = collectImageTypeConfig('Thumb');
+            config.ExcludedLibraryIds = collectExcludedLibraries();
+            config.UserFilterMode = q('UserFilterMode').value;
+            config.FilteredUserIds = collectFilteredUsers();
+
+            // Nullify legacy
+            config.PosterSettings = null;
+            config.ThumbnailSettings = null;
+            config.BackdropSettings = null;
+            config.Show4K = null; config.Show1080p = null; config.Show720p = null; config.ShowSD = null;
+            config.ShowHdr10 = null; config.ShowHdr10Plus = null; config.ShowDolbyVision = null;
+            config.ShowHlg = null; config.ShowGenericHdr = null; config.Show3D = null;
+            config.ShowH264 = null; config.ShowHevc = null; config.ShowAv1 = null; config.ShowVp9 = null;
+            config.ShowDolbyAtmos = null; config.ShowDtsX = null; config.ShowTrueHD = null;
+            config.ShowDtsHdMa = null; config.ShowOpus = null; config.ShowChannelBadge = null;
+            config.LanguageBadgeMode = null; config.ShowSubtitleIndicator = null;
+
+            // Custom Badge Texts
+            var saveCbt = [];
+            document.querySelectorAll('#CustomBadgeTextsGrid input[data-badge-key]').forEach(function(el) {
+                var val = el.value.trim();
+                if (val) saveCbt.push({ Key: el.getAttribute('data-badge-key'), Text: val });
+            });
+            config.CustomBadgeTexts = saveCbt;
+
+            // Custom Badge Colors
+            var saveCbc = [];
+            Object.keys(customBadgeColorsState).forEach(function(k) {
+                var s = customBadgeColorsState[k];
+                if (s && (s.bg || s.text)) {
+                    saveCbc.push({ BadgeKey: k, BgColor: s.bg || null, TextColor: s.text || null });
+                }
+            });
+            config.CustomBadgeColors = saveCbc;
+
+            config.LanguageFlagOverrides = collectLanguageFlagOverrides();
+
+            config.CacheDurationHours = parseInt(q('CacheDurationHours').value, 10);
+            config.OutputFormat = q('OutputFormat').value;
+            config.JpegQuality = parseInt(q('JpegQuality').value, 10);
+            config.WebPQuality = parseInt(q('WebPQuality').value, 10);
+            return config;
+        }
+
+        // ===== Utility =====
+        function toggleOutputQuality() {
+            var fmt = q('OutputFormat').value;
+            document.querySelector('#JpegQualityContainer').style.display = fmt === 'Jpeg' ? '' : 'none';
+            document.querySelector('#WebPQualityContainer').style.display = fmt === 'WebP' ? '' : 'none';
+        }
+
+        function toggleThumbSameAsPoster() {
+            var same = q('ThumbnailSameAsPoster').checked;
+            var c = document.querySelector('#ThumbFieldsContainer');
+            if (c) c.classList.toggle('hidden', same);
+            var r = document.querySelector('#ThumbSizeReductionWrap');
+            if (r) r.classList.toggle('hidden', !same);
+        }
+
+        // ===== Library filter =====
+        function loadLibraryCheckboxes(excludedIds) {
+            var container = document.querySelector('#LibraryCheckboxes');
+            var token = ApiClient.accessToken();
+            var headers = {}; if (token) headers['Authorization'] = 'MediaBrowser Token="' + token + '"';
+            fetch(ApiClient.getUrl('Library/VirtualFolders'), {headers:headers}).then(function(r){return r.json();}).then(function(folders) {
+                container.innerHTML = '';
+                folders.forEach(function(folder) {
+                    var folderId = folder.ItemId;
+                    var isExcluded = excludedIds.indexOf(folderId) >= 0;
+                    var div = document.createElement('div');
+                    div.className = 'checkboxContainer checkboxContainer-withDescription';
+                    div.innerHTML = '<label class="emby-checkbox-label">' +
+                        '<input type="checkbox" is="emby-checkbox" class="libCheckbox" data-library-id="' + folderId + '"' + (isExcluded ? '' : ' checked') + ' />' +
+                        '<span>' + folder.Name + '</span></label>';
+                    container.appendChild(div);
+                });
+                if (folders.length === 0) container.innerHTML = '<em>No libraries found.</em>';
+            }).catch(function(err) {
+                console.error('[BadgeFin] Failed to load libraries:', err);
+                container.innerHTML = '<em>Failed to load libraries.</em>';
+            });
+        }
+
+        function loadUserCheckboxes(selectedIds) {
+            var container = document.querySelector('#UserCheckboxes');
+            ApiClient.getUsers().then(function(users) {
+                container.innerHTML = '';
+                users.forEach(function(user) {
+                    var div = document.createElement('div');
+                    div.className = 'checkboxContainer';
+                    var label = document.createElement('label');
+                    label.className = 'emby-checkbox-label';
+                    var input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.setAttribute('is', 'emby-checkbox');
+                    input.className = 'userCheckbox';
+                    input.setAttribute('data-user-id', user.Id);
+                    input.checked = selectedIds.indexOf(user.Id) >= 0;
+                    var span = document.createElement('span');
+                    span.textContent = user.Name;
+                    label.appendChild(input);
+                    label.appendChild(span);
+                    div.appendChild(label);
+                    container.appendChild(div);
+                });
+                if (users.length === 0) container.innerHTML = '<em>No users found.</em>';
+                toggleUserCheckboxes();
+            }).catch(function(err) {
+                console.error('[BadgeFin] Failed to load users:', err);
+                container.innerHTML = '<em>Failed to load users.</em>';
+            });
+        }
+
+        function toggleUserCheckboxes() {
+            document.querySelector('#UserCheckboxes').style.display = q('UserFilterMode').value === 'AllUsers' ? 'none' : '';
+        }
+
+        function collectFilteredUsers() {
+            var selected = [];
+            document.querySelectorAll('#UserCheckboxes .userCheckbox').forEach(function(cb) {
+                if (cb.checked) selected.push(cb.getAttribute('data-user-id'));
+            });
+            return selected;
+        }
+
+        function collectExcludedLibraries() {
+            var excluded = [];
+            document.querySelectorAll('#LibraryCheckboxes .libCheckbox').forEach(function(cb) {
+                if (!cb.checked) excluded.push(cb.getAttribute('data-library-id'));
+            });
+            return excluded;
+        }
+
+        // ===== Badge Definitions & Custom Badge Colors =====
+        var allBadgeKeys = [
+            {key:'4k',label:'4K',category:'Resolution'},
+            {key:'1080p',label:'1080p',category:'Resolution'},
+            {key:'720p',label:'720p',category:'Resolution'},
+            {key:'sd',label:'SD',category:'Resolution'},
+            {key:'hdr10',label:'HDR10',category:'HDR'},
+            {key:'hdr10plus',label:'HDR10+',category:'HDR'},
+            {key:'dv',label:'Dolby Vision',category:'HDR'},
+            {key:'hlg',label:'HLG',category:'HDR'},
+            {key:'hdr',label:'Generic HDR',category:'HDR'},
+            {key:'3d',label:'3D',category:'Resolution'},
+            {key:'h264',label:'H.264',category:'Codecs'},
+            {key:'hevc',label:'HEVC',category:'Codecs'},
+            {key:'av1',label:'AV1',category:'Codecs'},
+            {key:'vp9',label:'VP9',category:'Codecs'},
+            {key:'mpeg2',label:'MPEG-2',category:'Codecs'},
+            {key:'vc1',label:'VC-1',category:'Codecs'},
+            {key:'atmos',label:'Dolby Atmos',category:'Audio'},
+            {key:'dtsx',label:'DTS:X',category:'Audio'},
+            {key:'truehd',label:'TrueHD',category:'Audio'},
+            {key:'dtshdma',label:'DTS-HD MA',category:'Audio'},
+            {key:'flac',label:'FLAC',category:'Audio'},
+            {key:'dts',label:'DTS',category:'Audio'},
+            {key:'eac3',label:'E-AC-3',category:'Audio'},
+            {key:'opus',label:'Opus',category:'Audio'},
+            {key:'ac3',label:'AC3',category:'Audio'},
+            {key:'aac',label:'AAC',category:'Audio'},
+            {key:'7.1',label:'7.1',category:'Channels'},
+            {key:'5.1',label:'5.1',category:'Channels'},
+            {key:'stereo',label:'Stereo',category:'Channels'},
+            {key:'mono',label:'Mono',category:'Channels'}
+        ];
+
+        var customBadgeColorsState = {};
+        var currentCbcFilterCategory = 'all';
+
+        function updateCbcCounter() {
+            var count = 0;
+            Object.keys(customBadgeColorsState).forEach(function(k) {
+                var s = customBadgeColorsState[k];
+                if (s && (s.bg || s.text)) count++;
+            });
+            var el = document.getElementById('CbcCustomCount');
+            if (el) el.textContent = count + ' customized';
+        }
+
+        function updateBadgeColorPreview(badgeKey) {
+            var safeKey = badgeKey.replace('.', '_');
+            var img = document.getElementById('cbc_preview_' + safeKey);
+            if (!img) return;
+            var token = ApiClient.accessToken();
+            var headers = {}; if (token) headers['Authorization'] = 'MediaBrowser Token="' + token + '"';
+            var state = customBadgeColorsState[badgeKey] || {};
+            var isWhitePreview = (q('WhiteLogoBackground') && q('WhiteLogoBackground').checked);
+            var isOrigAac = (q('UseOriginalAacLogo') && q('UseOriginalAacLogo').checked);
+            var url = ApiClient.getUrl('BadgeFin/BadgePreview/' + badgeKey) + '?t=' + Date.now();
+            if (isWhitePreview) url += '&white=true';
+            if (isOrigAac && badgeKey.toLowerCase() === 'aac') url += '&origAac=true';
+            if (state.bg) url += '&bgColor=' + encodeURIComponent(state.bg);
+            if (state.text) url += '&textColor=' + encodeURIComponent(state.text);
+
+            fetch(url, { headers: headers })
+                .then(function(r) { if (!r.ok) throw new Error(r.status); return r.blob(); })
+                .then(function(blob) {
+                    var objectUrl = URL.createObjectURL(blob);
+                    img.onload = function() { URL.revokeObjectURL(objectUrl); };
+                    img.src = objectUrl;
+                })
+                .catch(function(err) {
+                    console.warn('[BadgeFin] Preview error for', badgeKey, err);
+                });
+        }
+
+        function filterCustomBadgeCards() {
+            var searchVal = (document.getElementById('CbcSearchInput') ? document.getElementById('CbcSearchInput').value : '').toLowerCase().trim();
+            var cards = document.querySelectorAll('#CustomBadgeColorsGrid .badgefin-color-card');
+            cards.forEach(function(card) {
+                var cat = card.getAttribute('data-category') || '';
+                var key = card.getAttribute('data-badge-key') || '';
+                var title = card.querySelector('.badgefin-color-card-title')?.textContent || '';
+
+                var isCatMatch = currentCbcFilterCategory === 'all' || cat.toLowerCase() === currentCbcFilterCategory.toLowerCase();
+                var isSearchMatch = !searchVal || title.toLowerCase().indexOf(searchVal) >= 0 || key.toLowerCase().indexOf(searchVal) >= 0;
+
+                card.style.display = (isCatMatch && isSearchMatch) ? 'flex' : 'none';
+            });
+        }
+
+        function renderCustomBadgeColorsGrid() {
+            var grid = document.getElementById('CustomBadgeColorsGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            var searchVal = (document.getElementById('CbcSearchInput') ? document.getElementById('CbcSearchInput').value : '').toLowerCase().trim();
+
+            allBadgeKeys.forEach(function(b) {
+                var safeKey = b.key.replace('.', '_');
+                var state = customBadgeColorsState[b.key] || { bg: null, text: null };
+                var hasCustom = !!(state.bg || state.text);
+
+                var isCategoryMatch = currentCbcFilterCategory === 'all' || b.category.toLowerCase() === currentCbcFilterCategory.toLowerCase();
+                var isSearchMatch = !searchVal || b.label.toLowerCase().indexOf(searchVal) >= 0 || b.key.toLowerCase().indexOf(searchVal) >= 0;
+
+                var card = document.createElement('div');
+                card.className = 'badgefin-color-card' + (hasCustom ? ' active-custom' : '');
+                card.setAttribute('data-badge-key', b.key);
+                card.setAttribute('data-category', b.category);
+                if (!isCategoryMatch || !isSearchMatch) {
+                    card.style.display = 'none';
+                }
+
+                var header = document.createElement('div');
+                header.className = 'badgefin-color-card-header';
+                header.innerHTML = '<span class="badgefin-color-card-title">' + b.label + '</span><span class="badgefin-color-card-cat">' + b.category + '</span>';
+                card.appendChild(header);
+
+                var previewBox = document.createElement('div');
+                previewBox.className = 'badgefin-color-preview-box';
+                var previewImg = document.createElement('img');
+                previewImg.id = 'cbc_preview_' + safeKey;
+                previewImg.alt = b.label;
+                previewImg.onerror = function() {
+                    var fb = document.createElement('span');
+                    fb.className = 'badgefin-color-preview-fallback';
+                    fb.textContent = b.label;
+                    previewImg.replaceWith(fb);
+                };
+                previewBox.appendChild(previewImg);
+                card.appendChild(previewBox);
+
+                var controls = document.createElement('div');
+                controls.className = 'badgefin-color-controls';
+
+                // Background Color row
+                var bgRow = document.createElement('div');
+                bgRow.className = 'badgefin-color-row';
+                var bgPickerVal = state.bg || '#000000';
+                var bgTextVal = state.bg || '';
+                bgRow.innerHTML = '<label>Background:</label>' +
+                    '<input type="color" id="cbc_bg_color_' + safeKey + '" value="' + bgPickerVal + '" />' +
+                    '<input type="text" id="cbc_bg_hex_' + safeKey + '" placeholder="Default" value="' + bgTextVal + '" is="emby-input" />' +
+                    '<button type="button" class="badgefin-color-clear-btn" id="cbc_bg_clear_' + safeKey + '" title="Reset Background to Default">&#10005;</button>';
+                controls.appendChild(bgRow);
+
+                // Text Color row
+                var textRow = document.createElement('div');
+                textRow.className = 'badgefin-color-row';
+                var textPickerVal = state.text || '#FFFFFF';
+                var textTextVal = state.text || '';
+                textRow.innerHTML = '<label>Text / Icon:</label>' +
+                    '<input type="color" id="cbc_text_color_' + safeKey + '" value="' + textPickerVal + '" />' +
+                    '<input type="text" id="cbc_text_hex_' + safeKey + '" placeholder="Default" value="' + textTextVal + '" is="emby-input" />' +
+                    '<button type="button" class="badgefin-color-clear-btn" id="cbc_text_clear_' + safeKey + '" title="Reset Text to Default">&#10005;</button>';
+                controls.appendChild(textRow);
+
+                card.appendChild(controls);
+
+                var actions = document.createElement('div');
+                actions.className = 'badgefin-color-card-actions';
+                var resetCardBtn = document.createElement('button');
+                resetCardBtn.type = 'button';
+                resetCardBtn.className = 'badgefin-color-reset-card-btn';
+                resetCardBtn.textContent = 'Reset to Default';
+                actions.appendChild(resetCardBtn);
+                card.appendChild(actions);
+
+                grid.appendChild(card);
+
+                // Wire event listeners for this card
+                var bgPicker = card.querySelector('#cbc_bg_color_' + safeKey);
+                var bgHex = card.querySelector('#cbc_bg_hex_' + safeKey);
+                var bgClear = card.querySelector('#cbc_bg_clear_' + safeKey);
+                var textPicker = card.querySelector('#cbc_text_color_' + safeKey);
+                var textHex = card.querySelector('#cbc_text_hex_' + safeKey);
+                var textClear = card.querySelector('#cbc_text_clear_' + safeKey);
+
+                function syncCardState() {
+                    var curBg = bgHex.value.trim();
+                    var curText = textHex.value.trim();
+                    if (!curBg && !curText) {
+                        delete customBadgeColorsState[b.key];
+                        card.classList.remove('active-custom');
+                    } else {
+                        customBadgeColorsState[b.key] = {
+                            bg: curBg || null,
+                            text: curText || null
+                        };
+                        card.classList.add('active-custom');
+                    }
+                    updateCbcCounter();
+                    updateBadgeColorPreview(b.key);
+                }
+
+                bgPicker.addEventListener('input', function() {
+                    bgHex.value = bgPicker.value.toUpperCase();
+                    syncCardState();
+                });
+                bgHex.addEventListener('input', function() {
+                    var val = bgHex.value.trim();
+                    if (/^#?[0-9A-Fa-f]{6}$/.test(val)) {
+                        if (!val.startsWith('#')) val = '#' + val;
+                        bgPicker.value = val;
+                    }
+                    syncCardState();
+                });
+                bgClear.addEventListener('click', function() {
+                    bgHex.value = '';
+                    syncCardState();
+                });
+
+                textPicker.addEventListener('input', function() {
+                    textHex.value = textPicker.value.toUpperCase();
+                    syncCardState();
+                });
+                textHex.addEventListener('input', function() {
+                    var val = textHex.value.trim();
+                    if (/^#?[0-9A-Fa-f]{6}$/.test(val)) {
+                        if (!val.startsWith('#')) val = '#' + val;
+                        textPicker.value = val;
+                    }
+                    syncCardState();
+                });
+                textClear.addEventListener('click', function() {
+                    textHex.value = '';
+                    syncCardState();
+                });
+
+                resetCardBtn.addEventListener('click', function() {
+                    bgHex.value = '';
+                    textHex.value = '';
+                    syncCardState();
+                });
+
+                // Load initial preview
+                updateBadgeColorPreview(b.key);
+            });
+
+            updateCbcCounter();
+        }
+
+        function initCustomBadgeColorsUI() {
+            var filterBtns = document.querySelectorAll('#CbcFilterButtons .cbc-filter-btn');
+            filterBtns.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    filterBtns.forEach(function(b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    currentCbcFilterCategory = btn.getAttribute('data-category');
+                    filterCustomBadgeCards();
+                });
+            });
+
+            var searchInput = document.getElementById('CbcSearchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', filterCustomBadgeCards);
+            }
+
+            var resetAllBtn = document.getElementById('CbcResetAllBtn');
+            if (resetAllBtn) {
+                resetAllBtn.addEventListener('click', function() {
+                    if (confirm('Reset all custom badge colors to default?')) {
+                        customBadgeColorsState = {};
+                        renderCustomBadgeColorsGrid();
+                    }
+                });
+            }
+        }
+
+        function loadBadgeGallery() {
+            // The gallery must edit whatever the renderer uses, so a badge whose panel is in
+            // Brand Logo style points at the logo asset instead of the generated one.
+            var panelOfBadge = {};
+            ['Res','Hdr','Codec','Audio','Channel'].forEach(function(pid) {
+                (PANEL_DEFS[pid].badges || []).forEach(function(b) {
+                    panelOfBadge[b.key] = pid;
+                });
+            });
+            function usesLogo(key) {
+                var pid = panelOfBadge[key];
+                if (!pid) return false;
+                var el = q('Poster' + pid + 'Style');
+                if (!el || el.value !== 'Logo') return false;
+                var logoEl = q('Poster' + pid + 'Logo_' + key);
+                return !logoEl || logoEl.checked;
+            }
+
+            var url = ApiClient.getUrl('BadgeFin/CustomBadges');
+            var token = ApiClient.accessToken();
+            var headers = {}; if (token) headers['Authorization'] = 'MediaBrowser Token="' + token + '"';
+            Promise.all([
+                fetch(url, {headers:headers}).then(function(r){return r.json();}),
+                fetch(url + '?logo=true', {headers:headers}).then(function(r){return r.json();})
+            ]).then(function(lists) {
+                var customBadges = lists[0] || [], customLogos = lists[1] || [];
+                var gallery = document.querySelector('#BadgeGallery'); gallery.innerHTML = '';
+                allBadgeKeys.forEach(function(b) {
+                    var logo = usesLogo(b.key);
+                    var suffix = logo ? '?logo=true' : '';
+                    var isCustom = (logo ? customLogos : customBadges).indexOf(b.key) >= 0;
+                    var card = document.createElement('div'); card.className = 'badge-card' + (isCustom ? ' custom' : '');
+                    card.setAttribute('data-badge-key', b.key);
+                    var img = document.createElement('img');
+                    var previewUrl = ApiClient.getUrl('BadgeFin/BadgePreview/' + b.key);
+                    img.alt = b.label;
+                    img.onerror = function() {
+                        var fallback = document.createElement('span');
+                        fallback.className = 'badge-preview-fallback';
+                        fallback.textContent = b.label;
+                        img.replaceWith(fallback);
+                    };
+                    // Jellyfin rejects ?api_key= on these requests, so the image has to be
+                    // fetched with an auth header and handed to the <img> as a blob.
+                    var isWhitePreview = (q('WhiteLogoBackground') && q('WhiteLogoBackground').checked);
+                    var isOrigAac = (q('UseOriginalAacLogo') && q('UseOriginalAacLogo').checked);
+                    var extraParams = (logo ? '&logo=true' : '') + (isWhitePreview ? '&white=true' : '') + ((isOrigAac && b.key.toLowerCase() === 'aac') ? '&origAac=true' : '');
+                    fetch(previewUrl + '?t=' + Date.now() + extraParams, {headers:headers})
+                        .then(function(r) { if (!r.ok) throw new Error(r.status); return r.blob(); })
+                        .then(function(blob) {
+                            var objectUrl = URL.createObjectURL(blob);
+                            img.onload = function() { URL.revokeObjectURL(objectUrl); };
+                            img.src = objectUrl;
+                        })
+                        .catch(function() { if (img.onerror) img.onerror(); });
+                    card.appendChild(img);
+                    var lbl = document.createElement('div'); lbl.className = 'badge-label';
+                    lbl.textContent = b.label + (isCustom ? ' (custom)' : (logo ? ' (logo)' : '')); card.appendChild(lbl);
+                    if (isCustom) {
+                        var resetBtn = document.createElement('button'); resetBtn.className = 'badge-reset';
+                        resetBtn.textContent = '\u00D7'; resetBtn.title = 'Reset to default';
+                        resetBtn.addEventListener('click', function(ev) { ev.stopPropagation();
+                            if (confirm('Reset "' + b.label + '" badge to default?')) {
+                                Dashboard.showLoadingMsg();
+                                ApiClient.ajax({type:'DELETE',url:ApiClient.getUrl('BadgeFin/CustomBadge/'+b.key) + suffix}).then(function(){Dashboard.hideLoadingMsg();loadBadgeGallery();});
+                            }
+                        }); card.appendChild(resetBtn);
+                    }
+                    card.addEventListener('click', function() {
+                        var fi = document.querySelector('#CustomBadgeFile');
+                        fi.setAttribute('data-target-key', b.key);
+                        fi.setAttribute('data-target-logo', logo ? 'true' : 'false');
+                        fi.click();
+                    });
+                    gallery.appendChild(card);
+                });
+            }).catch(function(err) { console.error('[BadgeFin] Badge gallery error:', err); });
+        }
+
+        function loadCacheStats() {
+            var url = ApiClient.getUrl('BadgeFin/CacheStats');
+            var token = ApiClient.accessToken(); var headers = {};
+            if (token) headers['Authorization'] = 'MediaBrowser Token="' + token + '"';
+            fetch(url, {headers:headers}).then(function(r){return r.json();}).then(function(stats) {
+                var el = document.querySelector('#CacheStatsInfo');
+                if (stats.FileCount > 0) {
+                    var oldest = stats.OldestEntry ? new Date(stats.OldestEntry).toLocaleString() : 'N/A';
+                    el.textContent = stats.FileCount + ' files | ' + stats.TotalSizeMB + ' MB | oldest: ' + oldest;
+                } else { el.textContent = 'Cache is empty.'; }
+            }).catch(function(){document.querySelector('#CacheStatsInfo').textContent='';});
+        }
+
+        // ===== Page Show =====
+        document.querySelector('#BadgeFinConfigPage').addEventListener('pageshow', function() {
+            // Generate panels
+            document.getElementById('PosterPanels').innerHTML = generatePanels('Poster');
+            document.getElementById('ThumbPanels').innerHTML = generatePanels('Thumb');
+            setupLanguageFlagControls();
+
+            Dashboard.showLoadingMsg();
+            ApiClient.getJSON(ApiClient.getUrl('BadgeFin/IsDebug')).then(function(isDebug) {
+                if (isDebug === true) {
+                    var el = document.getElementById('DebugCountryCodeContainer');
+                    if (el) el.style.display = '';
+                } else {
+                    var input = q('DebugCountryCode');
+                    if (input) input.value = '';
+                }
+            }).catch(function(){
+                var input = q('DebugCountryCode');
+                if (input) input.value = '';
+            });
+
+            ApiClient.getJSON(ApiClient.getUrl('BadgeFin/LegacyPluginStatus')).then(function(status) {
+                var active = status && (status.JellyTagActive === true || status.jellyTagActive === true);
+                document.getElementById('LegacyJellyTagWarning').style.display = active ? '' : 'none';
+            }).catch(function(){});
+
+            initCustomBadgeColorsUI();
+
+            ApiClient.getPluginConfiguration(BadgeFinConfig.pluginUniqueId).then(function(config) {
+                q('Enabled').checked = config.Enabled;
+                q('HideDolbyVisionOnSamsungClients').checked = config.HideDolbyVisionOnSamsungClients === true;
+                q('HideDolbyVisionOnFireTvClients').checked = config.HideDolbyVisionOnFireTvClients === true;
+                q('HideHdrOnWindowsClients').checked = config.HideHdrOnWindowsClients === true;
+                q('WhiteLogoBackground').checked = config.WhiteLogoBackground === true;
+                q('CombineDolbyVisionAtmosLogos').checked = config.CombineDolbyVisionAtmosLogos === true;
+                q('UseOriginalAacLogo').checked = config.UseOriginalAacLogo === true;
+                if (q('ThumbUseOriginalAacLogo')) q('ThumbUseOriginalAacLogo').checked = config.UseOriginalAacLogo === true;
+                q('DebugCountryCode').value = config.DebugCountryCode || '';
+                q('ThumbnailSameAsPoster').checked = config.ThumbnailSameAsPoster === true;
+                q('ThumbnailSizeReduction').value = config.ThumbnailSizeReduction != null ? config.ThumbnailSizeReduction : 10;
+                q('ListViewBadgeScalePercent').value = config.ListViewBadgeScalePercent != null ? config.ListViewBadgeScalePercent : 75;
+
+                loadImageTypeConfig('Poster', config.PosterConfig || {});
+                loadImageTypeConfig('Thumb', config.ThumbnailConfig || {});
+
+                // Initialize Global Badge Style & Icon Shape selectors
+                var pRes = (config.PosterConfig && config.PosterConfig.ResolutionPanel) || {};
+                var pAudio = (config.PosterConfig && config.PosterConfig.AudioPanel) || {};
+                var pStyle = (pAudio.Style === 'Logo' || pRes.Style === 'Logo') ? 'Logo' : ((pAudio.Style === 'Text' || pRes.Style === 'Text') ? 'Text' : 'Image');
+                if (q('GlobalBadgeStyle')) q('GlobalBadgeStyle').value = pStyle;
+                if (q('GlobalIconStyle')) q('GlobalIconStyle').value = pRes.IconStyle || 'Rectangular';
+
+                // Custom Badge Texts
+                var cbtInputs = document.querySelectorAll('#CustomBadgeTextsGrid input[data-badge-key]');
+                var cbtList = config.CustomBadgeTexts || [];
+                var cbtMap = {};
+                cbtList.forEach(function(item) { cbtMap[item.Key || item.key] = item.Text || item.text; });
+                cbtInputs.forEach(function(el) { el.value = cbtMap[el.getAttribute('data-badge-key')] || ''; });
+
+                // Custom Badge Colors
+                var cbcList = config.CustomBadgeColors || [];
+                customBadgeColorsState = {};
+                cbcList.forEach(function(item) {
+                    var k = (item.BadgeKey || item.badgeKey || '').toLowerCase();
+                    if (k) {
+                        customBadgeColorsState[k] = {
+                            bg: item.BgColor || item.bgColor || null,
+                            text: item.TextColor || item.textColor || null
+                        };
+                    }
+                });
+                renderCustomBadgeColorsGrid();
+
+                renderLanguageFlagGrid(config.LanguageFlagOverrides);
+
+                q('CacheDurationHours').value = config.CacheDurationHours;
+                q('OutputFormat').value = config.OutputFormat;
+                q('JpegQuality').value = config.JpegQuality;
+                q('WebPQuality').value = config.WebPQuality;
+                toggleOutputQuality();
+
+                // Setup all toggles
+                setupAllToggles('Poster');
+                setupAllToggles('Thumb');
+                q('ThumbnailSameAsPoster').addEventListener('change', toggleThumbSameAsPoster);
+                toggleThumbSameAsPoster();
+                q('WhiteLogoBackground').addEventListener('change', function() {
+                    if (document.getElementById('BadgeGallery')) loadBadgeGallery();
+                    if (document.getElementById('CustomBadgeColorsGrid')) renderCustomBadgeColorsGrid();
+                });
+                if (q('UseOriginalAacLogo')) {
+                    q('UseOriginalAacLogo').addEventListener('change', function() {
+                        if (q('ThumbUseOriginalAacLogo')) q('ThumbUseOriginalAacLogo').checked = this.checked;
+                        if (document.getElementById('BadgeGallery')) loadBadgeGallery();
+                        if (document.getElementById('CustomBadgeColorsGrid')) renderCustomBadgeColorsGrid();
+                    });
+                }
+                if (q('ThumbUseOriginalAacLogo')) {
+                    q('ThumbUseOriginalAacLogo').addEventListener('change', function() {
+                        if (q('UseOriginalAacLogo')) {
+                            q('UseOriginalAacLogo').checked = this.checked;
+                            q('UseOriginalAacLogo').dispatchEvent(new Event('change'));
+                        }
+                    });
+                }
+
+                if (q('GlobalBadgeStyle')) {
+                    q('GlobalBadgeStyle').addEventListener('change', function() {
+                        var val = this.value;
+                        ['Poster', 'Thumb'].forEach(function(pfx) {
+                            ['Res','Hdr','Codec','Audio','Channel'].forEach(function(pid) {
+                                var el = q(pfx + pid + 'Style');
+                                if (el) {
+                                    var hasLogo = false;
+                                    for (var i = 0; i < el.options.length; i++) {
+                                        if (el.options[i].value === 'Logo') { hasLogo = true; break; }
+                                    }
+                                    el.value = (val === 'Logo' && !hasLogo) ? 'Image' : val;
+                                    el.dispatchEvent(new Event('change'));
+                                }
+                            });
+                            var langEl = q(pfx + 'LangStyle');
+                            if (langEl) {
+                                langEl.value = (val === 'Logo') ? 'Image' : val;
+                                langEl.dispatchEvent(new Event('change'));
+                            }
+                        });
+                        if (document.getElementById('BadgeGallery')) loadBadgeGallery();
+                        if (document.getElementById('CustomBadgeColorsGrid')) renderCustomBadgeColorsGrid();
+                    });
+                }
+                if (q('GlobalIconStyle')) {
+                    q('GlobalIconStyle').addEventListener('change', function() {
+                        var val = this.value;
+                        ['Poster', 'Thumb'].forEach(function(pfx) {
+                            ['Res','Hdr','Codec','Audio','Channel','Lang'].forEach(function(pid) {
+                                var el = q(pfx + pid + 'IconStyle');
+                                if (el) {
+                                    el.value = val;
+                                    el.dispatchEvent(new Event('change'));
+                                }
+                            });
+                        });
+                    });
+                }
+
+                loadLibraryCheckboxes(config.ExcludedLibraryIds || []);
+                q('UserFilterMode').value = config.UserFilterMode || 'AllUsers';
+                loadUserCheckboxes(config.FilteredUserIds || []);
+                Dashboard.hideLoadingMsg();
+                loadBadgeGallery();
+                loadCacheStats();
+                toggleOutputQuality();
+            }).catch(function(err) {
+                console.error('[BadgeFin] Failed to load config:', err);
+                Dashboard.hideLoadingMsg();
+                Dashboard.alert('Failed to load BadgeFin configuration.');
+                loadBadgeGallery();
+                loadCacheStats();
+                toggleOutputQuality();
+            });
+
+            var panel = document.querySelector('.badgefin-preview-panel');
+            var form = document.querySelector('#BadgeFinConfigForm');
+            if (panel && form) {
+                function positionPanel() {
+                    if (window.innerWidth <= 1000) { panel.style.left = ''; return; }
+                    var rect = form.getBoundingClientRect();
+                    panel.style.left = (rect.right + 16) + 'px';
+                }
+                positionPanel();
+                window.addEventListener('resize', positionPanel);
+            }
+        });
+
+        // ===== Form Submit =====
+        document.querySelector('#BadgeFinConfigForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            Dashboard.showLoadingMsg();
+            ApiClient.getPluginConfiguration(BadgeFinConfig.pluginUniqueId).then(function(config) {
+                collectConfigFromForm(config);
+                ApiClient.updatePluginConfiguration(BadgeFinConfig.pluginUniqueId, config).then(function() {
+                    Dashboard.processPluginConfigurationUpdateResult();
+                    loadBadgeGallery();
+                    renderCustomBadgeColorsGrid();
+                });
+            });
+            return false;
+        });
+
+        // ===== Other Handlers =====
+        document.querySelector('#ClearCache').addEventListener('click', function() {
+            if (confirm('Are you sure you want to clear the image cache?')) {
+                Dashboard.showLoadingMsg();
+                ApiClient.ajax({type:'POST',url:ApiClient.getUrl('BadgeFin/ClearCache')}).then(function(){
+                    Dashboard.hideLoadingMsg(); Dashboard.alert('Cache cleared successfully.'); loadCacheStats();
+                }).catch(function(){Dashboard.hideLoadingMsg();Dashboard.alert('Failed to clear cache.');});
+            }
+        });
+
+        document.querySelector('#CustomBadgeFile').addEventListener('change', function() {
+            var fi = this; var bk = fi.getAttribute('data-target-key');
+            if (!bk || !fi.files || fi.files.length === 0) return;
+            var isLogo = fi.getAttribute('data-target-logo') === 'true';
+            var fd = new FormData(); fd.append('file', fi.files[0]);
+            Dashboard.showLoadingMsg();
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', ApiClient.getUrl('BadgeFin/CustomBadge/' + bk) + (isLogo ? '?logo=true' : ''), true);
+            var token = ApiClient.accessToken();
+            if (token) xhr.setRequestHeader('Authorization', 'MediaBrowser Token="' + token + '"');
+            xhr.onload = function(){Dashboard.hideLoadingMsg();fi.value='';if(xhr.status===204){Dashboard.alert('Badge uploaded.');loadBadgeGallery();}else{Dashboard.alert('Upload failed.');}};
+            xhr.onerror = function(){Dashboard.hideLoadingMsg();fi.value='';Dashboard.alert('Upload failed.');};
+            xhr.send(fd);
+        });
+
+        document.querySelector('#ExportConfig').addEventListener('click', function() {
+            var token = ApiClient.accessToken();
+            var headers = {};
+            if (token) headers['Authorization'] = 'MediaBrowser Token="' + token + '"';
+
+            Dashboard.showLoadingMsg();
+            fetch(ApiClient.getUrl('BadgeFin/ExportConfig'), { headers: headers })
+                .then(function(response) {
+                    Dashboard.hideLoadingMsg();
+                    if (!response.ok) {
+                        return response.text().then(function(text) {
+                            throw new Error(text || ('Export failed with status ' + response.status));
+                        });
+                    }
+                    return response.blob();
+                })
+                .then(function(blob) {
+                    var url = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'badgefin-config.json';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                })
+                .catch(function(err) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Failed to export configuration: ' + (err.message || err));
+                });
+        });
+        document.querySelector('#ImportConfigBtn').addEventListener('click', function() { document.querySelector('#ImportConfigFile').click(); });
+        document.querySelector('#ImportConfigFile').addEventListener('change', function() {
+            var fi = this; var file = fi.files[0]; if (!file) return;
+            if (confirm('Import this configuration? Current settings will be overwritten.')) {
+                Dashboard.showLoadingMsg(); var fd = new FormData(); fd.append('file', file);
+                fetch(ApiClient.getUrl('BadgeFin/ImportConfig'), {method:'POST',headers:{'Authorization':'MediaBrowser Token="'+ApiClient.accessToken()+'"'},body:fd}).then(function(r){
+                    Dashboard.hideLoadingMsg();fi.value='';if(r.ok){Dashboard.alert('Configuration imported. Reloading...');window.location.reload();}else{r.text().then(function(t){Dashboard.alert('Import failed: '+t);});}
+                }).catch(function(){Dashboard.hideLoadingMsg();fi.value='';Dashboard.alert('Failed to import configuration.');});
+            } else { fi.value=''; }
+        });
+        document.querySelector('#ResetAllSettings').addEventListener('click', function() {
+            if (confirm('Reset ALL settings to their default values? This cannot be undone.')) {
+                Dashboard.showLoadingMsg();
+                ApiClient.ajax({type:'POST',url:ApiClient.getUrl('BadgeFin/ResetConfig')}).then(function(){
+                    Dashboard.hideLoadingMsg();Dashboard.alert('Settings reset. Reloading...');window.location.reload();
+                }).catch(function(){Dashboard.hideLoadingMsg();Dashboard.alert('Failed to reset settings.');});
+            }
+        });
+
+        document.querySelector('#UserFilterMode').addEventListener('change', toggleUserCheckboxes);
+
+        var outputFmtEl = document.querySelector('#OutputFormat');
+        outputFmtEl.addEventListener('change', toggleOutputQuality);
+        outputFmtEl.addEventListener('input', toggleOutputQuality);
+
+        // ===== Live Preview =====
+        (function() {
+            var previewItemId=null,previewItemName='',searchTimer=null,refreshTimer=null,refreshing=false;
+            var searchInput=document.querySelector('#PreviewSearch'),searchResults=document.querySelector('#PreviewSearchResults');
+            var selectedEl=document.querySelector('#PreviewSelected'),spinner=document.querySelector('#PreviewSpinner');
+            var posterImg=document.querySelector('#PreviewPoster'),thumbImg=document.querySelector('#PreviewThumb');
+            var errorEl=document.querySelector('#PreviewError'),refreshBtn=document.querySelector('#RefreshPreview');
+            searchInput.addEventListener('input',function(){clearTimeout(searchTimer);var qry=searchInput.value.trim();
+                if(qry.length<2){searchResults.style.display='none';return;}
+                searchTimer=setTimeout(function(){ApiClient.getItems(ApiClient.getCurrentUserId(),{SearchTerm:qry,IncludeItemTypes:'Movie,Series',Limit:8,Recursive:true,Fields:'PrimaryImageAspectRatio'}).then(function(result){
+                    searchResults.innerHTML='';if(!result.Items||result.Items.length===0){searchResults.innerHTML='<div class="preview-search-item" style="color:#aaa;">No results</div>';searchResults.style.display='block';return;}
+                    result.Items.forEach(function(item){var div=document.createElement('div');div.className='preview-search-item';var label=item.Name+(item.ProductionYear?' ('+item.ProductionYear+')':'')+(item.Type==='Series'?' [TV]':'');div.textContent=label;
+                        div.addEventListener('click',function(){previewItemId=item.Id;previewItemName=label;selectedEl.textContent=previewItemName;searchResults.style.display='none';searchInput.value='';refreshPreview();});
+                        searchResults.appendChild(div);});searchResults.style.display='block';});},300);});
+            document.addEventListener('click',function(e){if(!searchResults.contains(e.target)&&e.target!==searchInput)searchResults.style.display='none';});
+            // Renders the unsaved form state server-side; nothing is saved and the image cache is left alone.
+            function renderPreviewImage(config,imageType,imgEl){
+                var headers={'Content-Type':'application/json'};var token=ApiClient.accessToken();if(token)headers['Authorization']='MediaBrowser Token="'+token+'"';
+                var url=ApiClient.getUrl('BadgeFin/Preview/'+previewItemId)+'?imageType='+imageType;
+                return fetch(url,{method:'POST',headers:headers,body:JSON.stringify(config)}).then(function(r){
+                    if(r.status===404){imgEl.style.display='none';return null;}
+                    if(!r.ok)throw new Error('HTTP '+r.status);
+                    return r.blob();}).then(function(blob){
+                    if(!blob)return;
+                    if(imgEl.dataset.objectUrl)URL.revokeObjectURL(imgEl.dataset.objectUrl);
+                    var objectUrl=URL.createObjectURL(blob);imgEl.dataset.objectUrl=objectUrl;imgEl.src=objectUrl;imgEl.style.display='block';});}
+            function refreshPreview(){if(!previewItemId||refreshing)return;refreshing=true;errorEl.style.display='none';errorEl.textContent='';spinner.style.display='block';
+                ApiClient.getPluginConfiguration(BadgeFinConfig.pluginUniqueId).then(function(config){collectConfigFromForm(config);
+                    return Promise.all([renderPreviewImage(config,'Primary',posterImg),renderPreviewImage(config,'Thumb',thumbImg)]);}).then(function(){spinner.style.display='none';refreshing=false;}).catch(function(err){spinner.style.display='none';refreshing=false;errorEl.textContent='Preview error: '+(err.message||err);errorEl.style.display='block';});}
+            var form=document.querySelector('#BadgeFinConfigForm');
+            form.addEventListener('input',function(e){if(e.target.closest('.badgefin-preview-panel'))return;clearTimeout(refreshTimer);refreshTimer=setTimeout(refreshPreview,1500);});
+            form.addEventListener('change',function(e){if(e.target.closest('.badgefin-preview-panel'))return;clearTimeout(refreshTimer);refreshTimer=setTimeout(refreshPreview,1500);});
+            refreshBtn.addEventListener('click',function(){clearTimeout(refreshTimer);refreshPreview();});
+        })();
+        </script>
+    </div>
+</body>
+</html>

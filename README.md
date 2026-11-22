@@ -20,15 +20,17 @@ A personal fork of [Atilil/jellyfin-plugins](https://github.com/Atilil/jellyfin-
 
 ## Available Plugins
 
-### JellyTag
+### BadgeFin
 
-[![JellyTag Release](https://img.shields.io/github/v/release/eagleeyetom/jellyfin-plugins?filter=jellytag-*&label=release&color=00A4DC)](https://github.com/eagleeyetom/jellyfin-plugins/releases)
+[![BadgeFin Release](https://img.shields.io/github/v/release/eagleeyetom/jellyfin-plugins?filter=badgefin-*&label=release&color=00A4DC)](https://github.com/eagleeyetom/jellyfin-plugins/releases)
 
 <p align="center">
-    <img src="Jellytag/Jellyfin.Plugin.JellyTag/JellyTag.png" />
+    <img src="BadgeFin/Jellyfin.Plugin.BadgeFin/BadgeFin.png" />
 </p>
 
 Adds quality badges for resolution, HDR, video codec, audio, languages, and subtitles to media posters and thumbnails. Badges are applied server-side via HTTP middleware, visible on all Jellyfin clients without client-side configuration.
+
+> **Formerly JellyTag.** BadgeFin is this fork's version of [JellyTag](https://github.com/Atilil/jellyfin-plugins) by Atilil, renamed in 2.8.0.0 (with a new plugin ID) so it no longer gets in the way of the original project. If you used JellyTag from this repository: install BadgeFin, which copies your settings and custom badges on first start, then uninstall JellyTag and restart Jellyfin. [Details](BadgeFin/README.md#moving-from-jellytag)
 
 **Features:**
 - Automatic quality detection from video metadata
@@ -39,7 +41,7 @@ Adds quality badges for resolution, HDR, video codec, audio, languages, and subt
 - File-based image caching for performance
 - Works on all clients (web, mobile, TV, Kodi)
 
-[More details](Jellytag/README.md)
+[More details](BadgeFin/README.md)
 
 ---
 

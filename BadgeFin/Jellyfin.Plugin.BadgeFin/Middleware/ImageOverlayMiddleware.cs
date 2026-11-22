@@ -1,0 +1,897 @@
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+using Jellyfin.Plugin.BadgeFin.Configuration;
+using Jellyfin.Plugin.BadgeFin.Services;
+using Jellyfin.Plugin.Shared.MediaDetection;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Net;
+using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Session;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using Microsoft.Net.Http.Headers;
+
+namespace Jellyfin.Plugin.BadgeFin.Middleware;
+
+/// <summary>
+/// Middleware that intercepts Jellyfin image requests and adds quality badge overlays.
+/// </summary>
+public partial class ImageOverlayMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<ImageOverlayMiddleware> _logger;
+
+    [GeneratedRegex(@"/Items/([0-9a-f]{32}|[0-9a-f-]{36})/Images/(Primary|Thumb)(/\d+)?$", RegexOptions.IgnoreCase)]
+    private static partial Regex ImagePathRegex();
+
+    public ImageOverlayMiddleware(RequestDelegate next, ILogger<ImageOverlayMiddleware> logger)
+    {
+        _next = next;
+        _logger = logger;
+    }
+
+    public async Task InvokeAsync(
+        HttpContext context,
+        IQualityDetectionService qualityService,
+        IImageOverlayService overlayService,
+        IImageCacheService cacheService,
+        MediaBrowser.Controller.Library.ILibraryManager libraryManager,
+        ISessionManager? sessionManager = null)
+    {
+        if (!HttpMethods.IsGet(context.Request.Method))
+        {
+            await _next(context).ConfigureAwait(false);
+            return;
+        }
+
+        var path = context.Request.Path.Value;
+        if (path == null)
+        {
+            await _next(context).ConfigureAwait(false);
+            return;
+        }
+
+        var match = ImagePathRegex().Match(path);
+        if (!match.Success)
+        {
+            await _next(context).ConfigureAwait(false);
+            return;
+        }
+
+        var config = PluginConfigurationScope.Current;
+        if (config == null || !config.Enabled)
+        {
+            await _next(context).ConfigureAwait(false);
+            return;
+        }
+
+        var itemIdStr = match.Groups[1].Value;
+        var imageType = match.Groups[2].Value;
+
+        if (!Guid.TryParse(itemIdStr, out var itemId))
+        {
+            await _next(context).ConfigureAwait(false);
+            return;
+        }
+
+        var item = libraryManager.GetItemById(itemId);
+        if (item == null)
+        {
+            await _next(context).ConfigureAwait(false);
+            return;
+        }
+
+        if (item is not (Movie or Series or Season or Episode or Video))
+        {
+            await _next(context).ConfigureAwait(false);
+            return;
+        }
+
+        // Check if item's library is excluded
+        if (config.ExcludedLibraryIds.Count > 0)
+        {
+            var excludedGuids = new HashSet<Guid>();
+            foreach (var ex in config.ExcludedLibraryIds)
+            {
+                if (Guid.TryParse(ex, out var g))
+                {
+                    excludedGuids.Add(g);
+                }
+            }
+
+            var collectionFolders = libraryManager.GetCollectionFolders(item);
+            if (collectionFolders.Any(f => excludedGuids.Contains(f.Id)))
+            {
+                await PassThroughUncachedAsync(context).ConfigureAwait(false);
+                return;
+            }
+        }
+
+        if (config.UserFilterMode != UserFilterMode.AllUsers)
+        {
+            var userId = await ResolveUserIdAsync(context, sessionManager, null).ConfigureAwait(false);
+            var allowed = userId.HasValue
+                ? IsUserAllowed(config.UserFilterMode, config.FilteredUserIds, userId)
+                : IsAnyOfUsersAllowed(config.UserFilterMode, config.FilteredUserIds, FindIpUserIds(context, sessionManager));
+            if (!allowed)
+            {
+                // The same URL now gets a different answer depending on who asks.
+                await PassThroughUncachedAsync(context).ConfigureAwait(false);
+                return;
+            }
+        }
+
+        var imageConfig = GetImageTypeConfig(config, imageType, item);
+        if (imageConfig == null || !imageConfig.Enabled)
+        {
+            await PassThroughUncachedAsync(context).ConfigureAwait(false);
+            return;
+        }
+
+        // Detect all badges and filter by config
+        var allBadges = qualityService.DetectAllBadges(item);
+        _logger.LogDebug("DetectAllBadges for {Item}: {Count} badges found: {Badges}",
+            item.Name, allBadges.Count, string.Join(", ", allBadges.Select(b => $"{b.Category}:{b.BadgeKey}")));
+
+        sessionManager ??= context.RequestServices?.GetService(typeof(ISessionManager)) as ISessionManager;
+
+        var clientIdentifiers = GetClientIdentifiers(context, sessionManager);
+        var isSamsung = clientIdentifiers.Any(ContainsSamsungIndicator);
+        var isFireTv = clientIdentifiers.Any(ContainsFireTvIndicator);
+        var isWindows = clientIdentifiers.Any(ContainsWindowsIndicator);
+
+        _logger.LogDebug("Client identification for {Item} - isFireTv: {IsFireTv}, isSamsung: {IsSamsung}, isWindows: {IsWindows}",
+            item.Name, isFireTv, isSamsung, isWindows);
+
+        var hideDolbyVision = (config.HideDolbyVisionOnSamsungClients && isSamsung)
+            || (config.HideDolbyVisionOnFireTvClients && isFireTv);
+        var hideHdrOnWindows = config.HideHdrOnWindowsClients && isWindows;
+        var visibleBadges = allBadges
+            .Where(b => overlayService.ShouldShowBadge(b, imageConfig))
+            .Where(b => !hideDolbyVision || !string.Equals(b.BadgeKey, "dv", StringComparison.OrdinalIgnoreCase))
+            .Where(b => !hideHdrOnWindows || !IsHdrBadge(b.BadgeKey))
+            .ToList();
+        
+        _logger.LogDebug("Visible badges after filter: {Count}: {Badges}",
+            visibleBadges.Count, string.Join(", ", visibleBadges.Select(b => b.BadgeKey)));
+
+        if (visibleBadges.Count == 0)
+        {
+            await PassThroughUncachedAsync(context).ConfigureAwait(false);
+            return;
+        }
+
+        var badgeKey = string.Join("_", visibleBadges.Select(b => b.BadgeKey));
+        _logger.LogInformation("Applying {Count} badges to {Item}: {BadgeKey}", visibleBadges.Count, item.Name, badgeKey);
+
+        var query = GetCacheRelevantQuery(context.Request.Query);
+        var tag = context.Request.Query["tag"].FirstOrDefault() ?? item.DateModified.Ticks.ToString();
+        var dvVariant = hideDolbyVision ? (isSamsung ? "samsung-no-dv" : "firetv-no-dv") : "";
+        var clientVariant = dvVariant + (hideHdrOnWindows ? "_windows-sdr" : "");
+        if (string.IsNullOrEmpty(clientVariant)) clientVariant = "default";
+        var outputFormat = ResolveOutputFormat(config.OutputFormat, context.Request);
+        var imageTag = $"{tag}_{imageType}_{clientVariant}_{query}_{outputFormat}";
+
+        // The badged bytes are fully determined by these inputs, so a client that still holds
+        // them gets a 304 without Jellyfin reading the original or the badges being drawn.
+        var etag = ComputeETag(itemId, badgeKey, imageTag, ImageCacheService.ComputeConfigFingerprint(config),
+            ImageOverlayService.GetCustomBadgeFingerprint(), AcceptsWebP(context.Request));
+        if (IfNoneMatchContains(context.Request, etag))
+        {
+            context.Response.StatusCode = StatusCodes.Status304NotModified;
+            SetValidationHeaders(context.Response, etag);
+            return;
+        }
+
+        context.Request.Headers.Remove("If-None-Match");
+        context.Request.Headers.Remove("If-Modified-Since");
+
+        await ServeBadgedImageAsync(context, overlayService, cacheService, itemId, badgeKey, imageTag, visibleBadges, imageConfig, etag, outputFormat)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Lets Jellyfin serve the original image of an item that could carry badges, without its
+    /// long-lived caching headers. Jellyfin marks tagged image URLs cacheable for a year, and the
+    /// URL stays the same once badges do apply (media info probed, panel enabled, filter changed),
+    /// so a client that kept the plain original would never ask again.
+    /// </summary>
+    internal async Task PassThroughUncachedAsync(HttpContext context)
+    {
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers.CacheControl = BadgedImageCacheControl;
+            return Task.CompletedTask;
+        });
+        await _next(context).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Serves the badged image from the disk cache when possible; otherwise lets Jellyfin
+    /// produce the original image, overlays the badges and caches the result.
+    /// </summary>
+    internal async Task ServeBadgedImageAsync(
+        HttpContext context,
+        IImageOverlayService overlayService,
+        IImageCacheService cacheService,
+        Guid itemId,
+        string badgeKey,
+        string imageTag,
+        List<BadgeInfo> visibleBadges,
+        ImageTypeConfig imageConfig,
+        string etag,
+        OutputImageFormat outputFormat)
+    {
+        // A cache entry only exists if the original image was served before, so a hit
+        // skips Jellyfin's own image read/resize entirely.
+        var cachedImage = await cacheService.GetCachedImageAsync(itemId, badgeKey, imageTag).ConfigureAwait(false);
+        if (cachedImage != null)
+        {
+            await using (cachedImage.ConfigureAwait(false))
+            {
+                cachedImage.Position = 0;
+                var cachedContentType = ImageOverlayService.DetectImageContentType(cachedImage);
+                context.Response.StatusCode = StatusCodes.Status200OK;
+                ClearEntityHeaders(context.Response, etag);
+                context.Response.ContentType = cachedContentType;
+                context.Response.ContentLength = cachedImage.Length;
+                await cachedImage.CopyToAsync(context.Response.Body).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        var originalBody = context.Response.Body;
+        using var capturedBody = new MemoryStream();
+        context.Response.Body = capturedBody;
+
+        try
+        {
+            await _next(context).ConfigureAwait(false);
+
+            if (context.Response.StatusCode != 200 || capturedBody.Length == 0)
+            {
+                capturedBody.Position = 0;
+                await capturedBody.CopyToAsync(originalBody).ConfigureAwait(false);
+                return;
+            }
+
+            capturedBody.Position = 0;
+
+            (Stream resultStream, string contentType) result;
+            try
+            {
+                result = await overlayService.AddBadgeOverlaysAsync(capturedBody, visibleBadges, imageConfig, GetDisplayContext(context.Request.Query), outputFormat).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to add badge overlay, serving original image");
+                capturedBody.Position = 0;
+                await capturedBody.CopyToAsync(originalBody).ConfigureAwait(false);
+                return;
+            }
+
+            await using (result.resultStream.ConfigureAwait(false))
+            {
+                result.resultStream.Position = 0;
+                await cacheService.CacheImageAsync(itemId, badgeKey, imageTag, result.resultStream).ConfigureAwait(false);
+
+                result.resultStream.Position = 0;
+                ClearEntityHeaders(context.Response, etag);
+                context.Response.ContentType = result.contentType;
+                context.Response.ContentLength = result.resultStream.Length;
+                await result.resultStream.CopyToAsync(originalBody).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            context.Response.Body = originalBody;
+        }
+    }
+
+    /// <summary>
+    /// jellyfin-web's list view asks for a square box (fillWidth == fillHeight, see listview.js)
+    /// and then crops the image to a 3:2 / 11:8 frame; cards ask for a box matching their own
+    /// aspect ratio. The query is part of the cache key, so both variants are cached separately.
+    /// </summary>
+    internal static ImageDisplayContext GetDisplayContext(IQueryCollection query)
+    {
+        if (int.TryParse(query["fillWidth"].FirstOrDefault(), out var fillWidth)
+            && int.TryParse(query["fillHeight"].FirstOrDefault(), out var fillHeight)
+            && fillWidth > 0
+            && fillWidth == fillHeight)
+        {
+            return ImageDisplayContext.ListView;
+        }
+
+        return ImageDisplayContext.Card;
+    }
+
+    internal static string GetCacheRelevantQuery(IQueryCollection query)
+    {
+        var parameters = query
+            .Where(parameter => !parameter.Key.Equals("api_key", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(parameter => parameter.Key, StringComparer.OrdinalIgnoreCase)
+            .SelectMany(parameter => parameter.Value.Select(value =>
+                new KeyValuePair<string, string?>(parameter.Key, value)));
+
+        return QueryString.Create(parameters).Value ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Badged images change with the plugin configuration while the URL (and Jellyfin's image
+    /// tag) stays the same, and they depend on who is asking (client variant), so clients may
+    /// keep them but must revalidate; the ETag turns that into a cheap 304.
+    /// </summary>
+    internal const string BadgedImageCacheControl = "private, no-cache";
+
+    private static void ClearEntityHeaders(HttpResponse response, string etag)
+    {
+        response.Headers.Remove("ETag");
+        response.Headers.Remove("Last-Modified");
+        response.Headers.Remove("Content-MD5");
+        response.Headers.Remove("Accept-Ranges");
+        SetValidationHeaders(response, etag);
+    }
+
+    private static void SetValidationHeaders(HttpResponse response, string etag)
+    {
+        response.Headers.ETag = etag;
+        response.Headers.CacheControl = BadgedImageCacheControl;
+
+        // The output format follows the Accept header.
+        var vary = response.Headers.Vary.ToString();
+        if (string.IsNullOrEmpty(vary))
+        {
+            response.Headers.Vary = "Accept";
+        }
+        else if (!vary.Split(',', StringSplitOptions.TrimEntries).Any(v => v == "*" || v.Equals("Accept", StringComparison.OrdinalIgnoreCase)))
+        {
+            response.Headers.Vary = vary + ", Accept";
+        }
+    }
+
+    /// <summary>
+    /// Strong ETag over everything that determines the badged bytes.
+    /// </summary>
+    internal static string ComputeETag(Guid itemId, string badgeKey, string imageTag, string configFingerprint, string customBadgeFingerprint, bool acceptsWebP)
+    {
+        // acceptsWebP is included even when the output format is fixed: when no badge can be
+        // drawn the original is passed through, and Jellyfin picks its format from Accept too.
+        var input = string.Join('\n', itemId.ToString("N"), badgeKey, imageTag, configFingerprint, customBadgeFingerprint, acceptsWebP ? "webp" : "-");
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        return $"\"{Convert.ToHexString(hash, 0, 16).ToLowerInvariant()}\"";
+    }
+
+    internal static bool IfNoneMatchContains(HttpRequest request, string etag)
+    {
+        var ifNoneMatch = request.Headers.IfNoneMatch;
+        if (ifNoneMatch.Count == 0
+            || !EntityTagHeaderValue.TryParseList(ifNoneMatch.OfType<string>().ToList(), out var candidates)
+            || !EntityTagHeaderValue.TryParse(etag, out var current))
+        {
+            return false;
+        }
+
+        // If-None-Match uses the weak comparison (RFC 9110 13.1.2), so a proxy that weakened
+        // the tag (W/"...") still revalidates. "*" is ignored: it says nothing about the badges.
+        return candidates.Any(candidate => !candidate.Equals(EntityTagHeaderValue.Any) && candidate.Compare(current, useStrongComparison: false));
+    }
+
+    /// <summary>
+    /// WebP is only sent to clients that can decode it: an explicit <c>format</c> query
+    /// parameter wins, otherwise the Accept header has to list image/webp.
+    /// </summary>
+    internal static OutputImageFormat ResolveOutputFormat(OutputImageFormat configured, HttpRequest request)
+    {
+        if (configured != OutputImageFormat.WebP)
+        {
+            return configured;
+        }
+
+        var requestedFormat = request.Query["format"].FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(requestedFormat))
+        {
+            return requestedFormat.Trim().Equals("webp", StringComparison.OrdinalIgnoreCase)
+                ? OutputImageFormat.WebP
+                : OutputImageFormat.Jpeg;
+        }
+
+        return AcceptsWebP(request) ? OutputImageFormat.WebP : OutputImageFormat.Jpeg;
+    }
+
+    internal static bool AcceptsWebP(HttpRequest request)
+    {
+        var accept = request.Headers.Accept;
+        if (accept.Count == 0 || !MediaTypeHeaderValue.TryParseList(accept.OfType<string>().ToList(), out var mediaTypes))
+        {
+            return false;
+        }
+
+        return mediaTypes.Any(m => m.MediaType.Equals("image/webp", StringComparison.OrdinalIgnoreCase)
+            && (m.Quality ?? 1) > 0);
+    }
+
+    internal static ImageTypeConfig? GetImageTypeConfig(PluginConfiguration config, string imageType, BaseItem item)
+    {
+        var type = imageType.ToUpperInvariant();
+
+        var isThumb = type switch
+        {
+            "PRIMARY" when item is Episode => true,
+            "THUMB" => true,
+            _ => false
+        };
+
+        if (isThumb && config.ThumbnailSameAsPoster)
+        {
+            return ApplySizeReduction(config.PosterConfig, config.ThumbnailSizeReduction);
+        }
+
+        return type switch
+        {
+            "PRIMARY" when item is Episode => config.ThumbnailConfig,
+            "PRIMARY" => config.PosterConfig,
+            "THUMB" => config.ThumbnailConfig,
+            _ => null
+        };
+    }
+
+    internal static bool IsSamsungClient(HttpContext context, ISessionManager? sessionManager = null)
+    {
+        return GetClientIdentifiers(context, sessionManager).Any(ContainsSamsungIndicator);
+    }
+
+    internal static bool ContainsSamsungIndicator(string? value) => ClientDeviceDetection.ContainsSamsungTvIndicator(value);
+
+    internal static bool IsFireTvClient(HttpContext context, ISessionManager? sessionManager = null)
+    {
+        return GetClientIdentifiers(context, sessionManager).Any(ContainsFireTvIndicator);
+    }
+
+    internal static bool ContainsFireTvIndicator(string? value) => ClientDeviceDetection.ContainsFireTvIndicator(value);
+
+    internal static bool IsWindowsClient(HttpContext context, ISessionManager? sessionManager = null)
+    {
+        return GetClientIdentifiers(context, sessionManager).Any(ContainsWindowsIndicator);
+    }
+
+    internal static bool ContainsWindowsIndicator(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        return value.Contains("Windows", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static IReadOnlyCollection<string> GetClientIdentifiers(HttpContext context, ISessionManager? sessionManager = null)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddIfValid(string? str)
+        {
+            if (!string.IsNullOrWhiteSpace(str))
+            {
+                seen.Add(str.Trim());
+            }
+        }
+
+        // 1. Direct request headers
+        AddIfValid(context.Request.Headers["X-Emby-Client"].ToString());
+        AddIfValid(context.Request.Headers["X-Emby-Device-Name"].ToString());
+        AddIfValid(context.Request.Headers["X-Emby-Device"].ToString());
+        AddIfValid(context.Request.Headers["X-Emby-Device-Id"].ToString());
+        AddIfValid(context.Request.Headers.UserAgent.ToString());
+
+        // 2. Authorization and X-Emby-Authorization headers
+        var authHeader = context.Request.Headers.Authorization.ToString();
+        var embyAuthHeader = context.Request.Headers["X-Emby-Authorization"].ToString();
+        var authDict = ParseAuthorizationHeader(authHeader);
+        foreach (var kvp in ParseAuthorizationHeader(embyAuthHeader))
+        {
+            authDict.TryAdd(kvp.Key, kvp.Value);
+        }
+
+        if (authDict.TryGetValue("Client", out var authClient)) AddIfValid(authClient);
+        if (authDict.TryGetValue("Device", out var authDevice)) AddIfValid(authDevice);
+        if (authDict.TryGetValue("DeviceName", out var authDeviceName)) AddIfValid(authDeviceName);
+        if (authDict.TryGetValue("DeviceId", out var authDeviceId)) AddIfValid(authDeviceId);
+
+        // 3. Query string parameters
+        AddIfValid(context.Request.Query["client"].ToString());
+        AddIfValid(context.Request.Query["Client"].ToString());
+        AddIfValid(context.Request.Query["device"].ToString());
+        AddIfValid(context.Request.Query["Device"].ToString());
+        AddIfValid(context.Request.Query["deviceName"].ToString());
+        AddIfValid(context.Request.Query["DeviceName"].ToString());
+        AddIfValid(context.Request.Query["deviceId"].ToString());
+        AddIfValid(context.Request.Query["DeviceId"].ToString());
+
+        // 4. The playback session of this device
+        var matchedSession = FindSession(context, sessionManager);
+        if (matchedSession != null)
+        {
+            AddSessionIdentifiers(matchedSession, AddIfValid);
+        }
+
+        return seen;
+    }
+
+    /// <summary>
+    /// The session of the device making the request: by device ID when the client sends one,
+    /// otherwise the only (active) session on the request's IP. Null when neither identifies one.
+    /// </summary>
+    internal static SessionInfo? FindSession(HttpContext context, ISessionManager? sessionManager)
+    {
+        sessionManager ??= context.RequestServices?.GetService(typeof(ISessionManager)) as ISessionManager;
+        if (sessionManager == null)
+        {
+            return null;
+        }
+
+        var authDict = GetAuthorizationParameters(context.Request);
+        var deviceId = authDict.GetValueOrDefault("DeviceId");
+        if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Headers["X-Emby-Device-Id"].ToString();
+        if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Query["deviceId"].ToString();
+        if (string.IsNullOrEmpty(deviceId)) deviceId = context.Request.Query["DeviceId"].ToString();
+
+        var clientIp = GetClientIp(context);
+
+        try
+        {
+            var sessions = sessionManager.Sessions;
+            if (sessions == null)
+            {
+                return null;
+            }
+
+            SessionInfo? matchedSession = null;
+            if (!string.IsNullOrEmpty(deviceId))
+            {
+                matchedSession = sessions.FirstOrDefault(s => string.Equals(s.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (matchedSession == null && !string.IsNullOrEmpty(clientIp))
+            {
+                matchedSession = FindUnambiguousIpSession(sessions, clientIp);
+            }
+
+            return matchedSession;
+        }
+        catch
+        {
+            // Ignore any session query exceptions to avoid breaking image serving
+            return null;
+        }
+    }
+
+    private static Dictionary<string, string> GetAuthorizationParameters(HttpRequest request)
+    {
+        var authDict = ParseAuthorizationHeader(request.Headers.Authorization.ToString());
+        foreach (var kvp in ParseAuthorizationHeader(request.Headers["X-Emby-Authorization"].ToString()))
+        {
+            authDict.TryAdd(kvp.Key, kvp.Value);
+        }
+
+        return authDict;
+    }
+
+    private static readonly ConcurrentDictionary<string, (Guid UserId, DateTime ExpiresUtc)> TokenUsers = new(StringComparer.Ordinal);
+    private static readonly TimeSpan TokenUserTtl = TimeSpan.FromMinutes(10);
+    private const int MaxCachedTokens = 2000;
+
+    /// <summary>
+    /// The user an image request belongs to. Requests with an access token (native clients usually
+    /// send one) are resolved through Jellyfin's own authorization, cached briefly so posters don't
+    /// cost a database lookup each. Requests without one (jellyfin-web loads posters as plain
+    /// &lt;img&gt;) fall back to the device's session. Null when the user can't be identified.
+    /// </summary>
+    internal static async Task<Guid?> ResolveUserIdAsync(HttpContext context, ISessionManager? sessionManager, IAuthorizationContext? authorizationContext)
+    {
+        var token = GetRequestToken(context.Request);
+        if (!string.IsNullOrEmpty(token))
+        {
+            var now = DateTime.UtcNow;
+            Guid tokenUserId;
+            if (TokenUsers.TryGetValue(token, out var cached) && cached.ExpiresUtc > now)
+            {
+                tokenUserId = cached.UserId;
+            }
+            else
+            {
+                tokenUserId = Guid.Empty;
+                authorizationContext ??= context.RequestServices?.GetService(typeof(IAuthorizationContext)) as IAuthorizationContext;
+                if (authorizationContext != null)
+                {
+                    try
+                    {
+                        var info = await authorizationContext.GetAuthorizationInfo(context).ConfigureAwait(false);
+                        tokenUserId = info.IsAuthenticated ? info.UserId : Guid.Empty;
+                    }
+                    catch
+                    {
+                        // An invalid or expired token just means "not identified by token".
+                    }
+
+                    if (TokenUsers.Count >= MaxCachedTokens)
+                    {
+                        TokenUsers.Clear();
+                    }
+
+                    TokenUsers[token] = (tokenUserId, now + TokenUserTtl);
+                }
+            }
+
+            if (tokenUserId != Guid.Empty)
+            {
+                return tokenUserId;
+            }
+        }
+
+        var session = FindSession(context, sessionManager);
+        return session != null && session.UserId != Guid.Empty ? session.UserId : null;
+    }
+
+    internal static string? GetRequestToken(HttpRequest request)
+    {
+        var token = GetAuthorizationParameters(request).GetValueOrDefault("Token");
+        if (string.IsNullOrEmpty(token)) token = request.Headers["X-Emby-Token"].ToString();
+        if (string.IsNullOrEmpty(token)) token = request.Headers["X-MediaBrowser-Token"].ToString();
+        if (string.IsNullOrEmpty(token)) token = request.Query["api_key"].ToString();
+        if (string.IsNullOrEmpty(token)) token = request.Query["ApiKey"].ToString();
+        return string.IsNullOrWhiteSpace(token) ? null : token.Trim();
+    }
+
+    /// <summary>
+    /// Whether this user gets badges. An unidentified user is never one of the selected users.
+    /// </summary>
+    internal static bool IsUserAllowed(UserFilterMode mode, IReadOnlyCollection<string>? selectedUserIds, Guid? userId)
+    {
+        if (mode == UserFilterMode.AllUsers)
+        {
+            return true;
+        }
+
+        var isSelected = userId.HasValue
+            && userId.Value != Guid.Empty
+            && selectedUserIds != null
+            && selectedUserIds.Any(id => Guid.TryParse(id, out var selected) && selected == userId.Value);
+
+        return mode == UserFilterMode.OnlySelected ? isSelected : !isSelected;
+    }
+
+    /// <summary>
+    /// Whether badges are shown to a request that carries no token or device ID (jellyfin-web
+    /// loads posters as plain &lt;img&gt;) and can only be tied to the users signed in from its IP.
+    /// Several sessions of the same user are fine; users on both sides of the filter leave the
+    /// request unidentified, as does an IP without any session.
+    /// </summary>
+    internal static bool IsAnyOfUsersAllowed(UserFilterMode mode, IReadOnlyCollection<string>? selectedUserIds, IReadOnlyCollection<Guid> ipUserIds)
+    {
+        var allowed = ipUserIds.Count(id => IsUserAllowed(mode, selectedUserIds, id));
+        if (allowed == 0 && ipUserIds.Count > 0)
+        {
+            return false;
+        }
+
+        return allowed == ipUserIds.Count && ipUserIds.Count > 0
+            || IsUserAllowed(mode, selectedUserIds, null);
+    }
+
+    /// <summary>
+    /// The distinct users with a session on the request's IP.
+    /// </summary>
+    internal static IReadOnlyCollection<Guid> FindIpUserIds(HttpContext context, ISessionManager? sessionManager)
+    {
+        sessionManager ??= context.RequestServices?.GetService(typeof(ISessionManager)) as ISessionManager;
+        var clientIp = GetClientIp(context);
+        if (sessionManager == null || string.IsNullOrEmpty(clientIp))
+        {
+            return [];
+        }
+
+        try
+        {
+            return sessionManager.Sessions?
+                .Where(s => s.UserId != Guid.Empty && IsIpMatch(s.RemoteEndPoint, clientIp))
+                .Select(s => s.UserId)
+                .Distinct()
+                .ToList() ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Picks the session for a request IP only when it is unambiguous. Several sessions behind
+    /// one NAT or a reverse proxy without X-Forwarded-For share an IP; mixing their identifiers
+    /// would apply one TV's badge filtering to every client, so an ambiguous IP yields no session.
+    /// </summary>
+    private static SessionInfo? FindUnambiguousIpSession(IEnumerable<SessionInfo> sessions, string clientIp)
+    {
+        var ipSessions = sessions.Where(s => IsIpMatch(s.RemoteEndPoint, clientIp)).ToList();
+        if (ipSessions.Count == 1)
+        {
+            return ipSessions[0];
+        }
+
+        var activeSessions = ipSessions.Where(s => s.IsActive).ToList();
+        return activeSessions.Count == 1 ? activeSessions[0] : null;
+    }
+
+    private static void AddSessionIdentifiers(SessionInfo session, Action<string?> addIfValid)
+    {
+        addIfValid(session.DeviceName);
+        addIfValid(session.Client);
+        addIfValid(session.DeviceType);
+        addIfValid(session.ApplicationVersion);
+        if (session.Capabilities?.DeviceProfile != null)
+        {
+            addIfValid(session.Capabilities.DeviceProfile.Name);
+        }
+    }
+
+    internal static Dictionary<string, string> ParseAuthorizationHeader(string? authHeader)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(authHeader))
+        {
+            return dict;
+        }
+
+        var header = authHeader.Trim();
+        if (header.StartsWith("MediaBrowser ", StringComparison.OrdinalIgnoreCase))
+        {
+            header = header["MediaBrowser ".Length..].Trim();
+        }
+        else if (header.StartsWith("Custom ", StringComparison.OrdinalIgnoreCase))
+        {
+            header = header["Custom ".Length..].Trim();
+        }
+
+        var parts = header.Split(',');
+        foreach (var part in parts)
+        {
+            var eqIdx = part.IndexOf('=');
+            if (eqIdx <= 0) continue;
+
+            var key = part[..eqIdx].Trim();
+            var val = part[(eqIdx + 1)..].Trim().Trim('"', '\'');
+            if (!string.IsNullOrEmpty(key))
+            {
+                dict[key] = val;
+            }
+        }
+
+        return dict;
+    }
+
+    internal static string? GetClientIp(HttpContext context)
+    {
+        var forwardedFor = context.Request.Headers["X-Forwarded-For"].ToString();
+        if (!string.IsNullOrWhiteSpace(forwardedFor))
+        {
+            var firstIp = forwardedFor.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if (!string.IsNullOrEmpty(firstIp))
+            {
+                return firstIp;
+            }
+        }
+
+        var realIp = context.Request.Headers["X-Real-IP"].ToString();
+        if (!string.IsNullOrWhiteSpace(realIp))
+        {
+            return realIp.Trim();
+        }
+
+        var remoteIp = context.Connection.RemoteIpAddress;
+        if (remoteIp != null)
+        {
+            if (remoteIp.IsIPv4MappedToIPv6)
+            {
+                return remoteIp.MapToIPv4().ToString();
+            }
+
+            return remoteIp.ToString();
+        }
+
+        return null;
+    }
+
+    internal static bool IsIpMatch(string? sessionRemoteEndPoint, string? requestIp)
+    {
+        if (string.IsNullOrWhiteSpace(sessionRemoteEndPoint) || string.IsNullOrWhiteSpace(requestIp))
+        {
+            return false;
+        }
+
+        sessionRemoteEndPoint = sessionRemoteEndPoint.Trim();
+        requestIp = requestIp.Trim();
+
+        if (string.Equals(sessionRemoteEndPoint, requestIp, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var colonIdx = sessionRemoteEndPoint.LastIndexOf(':');
+        if (colonIdx > 0 && !sessionRemoteEndPoint.Contains(']'))
+        {
+            var epIp = sessionRemoteEndPoint[..colonIdx];
+            if (string.Equals(epIp, requestIp, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        else if (sessionRemoteEndPoint.StartsWith('[') && sessionRemoteEndPoint.Contains("]:"))
+        {
+            var closeBracket = sessionRemoteEndPoint.IndexOf(']');
+            var epIp = sessionRemoteEndPoint.Substring(1, closeBracket - 1);
+            if (string.Equals(epIp, requestIp, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsHdrBadge(string badgeKey)
+    {
+        return string.Equals(badgeKey, "dv", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(badgeKey, "hdr10", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(badgeKey, "hdr10plus", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(badgeKey, "hlg", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(badgeKey, "hdr", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static ImageTypeConfig ApplySizeReduction(ImageTypeConfig source, int reduction)
+    {
+        if (reduction <= 0) return source;
+
+        var clone = new ImageTypeConfig
+        {
+            Enabled = source.Enabled,
+            ResolutionPanel = ClonePanelWithReduction(source.ResolutionPanel, reduction),
+            HdrPanel = ClonePanelWithReduction(source.HdrPanel, reduction),
+            CodecPanel = ClonePanelWithReduction(source.CodecPanel, reduction),
+            AudioPanel = ClonePanelWithReduction(source.AudioPanel, reduction),
+            ChannelPanel = ClonePanelWithReduction(source.ChannelPanel, reduction),
+            LanguagePanel = ClonePanelWithReduction(source.LanguagePanel, reduction),
+            ShowVostIndicator = source.ShowVostIndicator,
+            VostBgColor = source.VostBgColor,
+            VostTextColor = source.VostTextColor,
+            VostBgOpacity = source.VostBgOpacity,
+            VostCornerRadius = source.VostCornerRadius
+        };
+        return clone;
+    }
+
+    internal static BadgePanelSettings ClonePanelWithReduction(BadgePanelSettings panel, int reduction)
+    {
+        return new BadgePanelSettings
+        {
+            Enabled = panel.Enabled,
+            Position = panel.Position,
+            ShowMode = panel.ShowMode,
+            Layout = panel.Layout,
+            GapPercent = panel.GapPercent,
+            SizePercent = Math.Max(1, panel.SizePercent - reduction),
+            MarginPercent = panel.MarginPercent,
+            Style = panel.Style,
+            IconStyle = panel.IconStyle,
+            Order = panel.Order,
+            TextBgColor = panel.TextBgColor,
+            TextBgOpacity = panel.TextBgOpacity,
+            TextColor = panel.TextColor,
+            TextCornerRadius = panel.TextCornerRadius,
+            BadgeTypeOverrides = new List<BadgeTypeStyleOverride>(panel.BadgeTypeOverrides),
+            EnabledBadges = new List<string>(panel.EnabledBadges),
+            DisabledLogos = new List<string>(panel.DisabledLogos),
+            WhiteLogoBackground = panel.WhiteLogoBackground
+        };
+    }
+}

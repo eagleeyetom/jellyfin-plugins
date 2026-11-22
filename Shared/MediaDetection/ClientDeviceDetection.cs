@@ -1,4 +1,4 @@
-// Shared between JellyTag and Metadata Notifier. This file is compiled into each plugin
+// Shared between BadgeFin and Metadata Notifier. This file is compiled into each plugin
 // (see the <Compile Include="..\..\Shared\..." Link="..."> items in both .csproj files) so that
 // each plugin still ships as a single self-contained DLL. Keep everything here internal and free
 // of plugin-specific types, and change it in one place only.
@@ -13,12 +13,12 @@ namespace Jellyfin.Plugin.Shared.MediaDetection;
 internal static partial class ClientDeviceDetection
 {
     // Amazon model codes are upper-case (AFTMM, AFTKA, AFTKMST, ...). Matched case-sensitively:
-    // JellyTag used to match case-insensitively, which also caught words such as "Aftermath".
+    // BadgeFin used to match case-insensitively, which also caught words such as "Aftermath".
     [GeneratedRegex(@"\bAFT[A-Z0-9]{1,8}\b", RegexOptions.CultureInvariant)]
     private static partial Regex AftModelRegex();
 
     // Whole words only: "Firefox" has no word boundary after "Fire", so it never matches, which
-    // replaces JellyTag's former "contains Firefox" exclusion (that one also rejected values such
+    // replaces BadgeFin's former "contains Firefox" exclusion (that one also rejected values such
     // as "Fire TV (Firefox)"), and "Amazon" no longer matches inside longer words.
     [GeneratedRegex(@"\b(?:Fire|Amazon)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex FireTvWordRegex();
@@ -63,7 +63,7 @@ internal static partial class ClientDeviceDetection
             return false;
         }
 
-        // JellyTag also accepted any "Silk/" (Amazon Silk browser) user agent. That is dropped: on a
+        // BadgeFin also accepted any "Silk/" (Amazon Silk browser) user agent. That is dropped: on a
         // Fire TV the Silk user agent also carries the AFTxxx model code, and on its own it mostly
         // identifies Fire tablets, which are not Fire TV devices.
         return value.Contains("Fire TV", StringComparison.OrdinalIgnoreCase)
