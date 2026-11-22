@@ -32,6 +32,9 @@ Adds quality badges for resolution, HDR, video codec, audio, languages, and subt
 
 > **Formerly JellyTag.** BadgeFin is this fork's version of [JellyTag](https://github.com/Atilil/jellyfin-plugins) by Atilil, renamed in 2.8.0.0 (with a new plugin ID) so it no longer gets in the way of the original project. If you used JellyTag from this repository: install BadgeFin, which copies your settings and custom badges on first start, then uninstall JellyTag and restart Jellyfin. [Details](BadgeFin/README.md#moving-from-jellytag)
 
+> [!WARNING]
+> Do not run BadgeFin and JellyTag at the same time, whether the original JellyTag or this repository's old version. Both draw badges on the same images, so every badge appears twice. Pick one of them.
+
 **Features:**
 - Automatic quality detection from video metadata
 - Samsung/Tizen TV detection with Dolby Vision filtering and HDR10+ preservation

@@ -13,6 +13,11 @@ BadgeFin started as a fork of [JellyTag](https://github.com/Atilil/jellyfin-plug
 
 This is an independent project maintained for personal use. It is not an official Jellyfin project and is not affiliated with or endorsed by Jellyfin or the original JellyTag project. Changes made since the fork include Samsung/Tizen and Fire TV handling for Dolby Vision and HDR10+, brand logo badges, a user filter, HTTP caching with ETags, and many detection fixes; see the changelog in [build.yaml](build.yaml).
 
+## Using BadgeFin and JellyTag together
+
+> [!WARNING]
+> Don't. BadgeFin and JellyTag (the original project as well as this repository's versions up to 2.7.1.0) both intercept the same image requests and draw badges on the same posters, so with both enabled every badge appears twice, and each plugin keeps its own image cache. Keep only one of them enabled. BadgeFin warns in the server log and at the top of its settings page when it finds JellyTag enabled.
+
 ## Moving from JellyTag
 
 1. Install **BadgeFin** from the catalog and restart Jellyfin.
