@@ -25,7 +25,7 @@ A personal fork of [Atilil/jellyfin-plugins](https://github.com/Atilil/jellyfin-
 [![BadgeFin Release](https://img.shields.io/github/v/release/eagleeyetom/jellyfin-plugins?filter=badgefin-*&label=release&color=00A4DC)](https://github.com/eagleeyetom/jellyfin-plugins/releases)
 
 <p align="center">
-    <img src="BadgeFin/Jellyfin.Plugin.BadgeFin/BadgeFin.png" />
+    <img src="BadgeFin/Jellyfin.Plugin.BadgeFin/BadgeFin.png" width="200" />
 </p>
 
 Adds quality badges for resolution, HDR, video codec, audio, languages, and subtitles to media posters and thumbnails. Badges are applied server-side via HTTP middleware, visible on all Jellyfin clients without client-side configuration.

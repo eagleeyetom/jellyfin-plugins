@@ -22,7 +22,7 @@ This is an independent project maintained for personal use. It is not an officia
 The copy only happens while BadgeFin has no settings of its own, so it never overwrites changes made in BadgeFin.
 
 <p align="center">
-    <img src="Jellyfin.Plugin.BadgeFin/BadgeFin.png" />
+    <img src="Jellyfin.Plugin.BadgeFin/BadgeFin.png" width="200" />
 </p>
 
 ## Features
