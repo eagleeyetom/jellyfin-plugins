@@ -123,165 +123,21 @@
     ]
   },
   {
-    "guid": "f4a2e8c1-9b3d-4f7a-b6c5-2d8e1a3f9b04",
-    "name": "JellyTag",
+    "guid": "7354bd14-00d2-410e-9086-4f2b0e1a300d",
+    "name": "BadgeFin",
     "overview": "Overlays quality badges (resolution, HDR, codec, audio, language) on media posters and thumbnails",
-    "description": "JellyTag automatically overlays quality badges on your media posters and thumbnails. Supports resolution, HDR, video codec, audio, language flags, and VOST indicator. Badges are rendered server-side and visible on all Jellyfin clients. Features per-panel configuration, SVG and text badge styles, custom badge upload, live preview, and library filtering.",
+    "description": "BadgeFin automatically overlays quality badges on your media posters and thumbnails. Supports resolution, HDR, video codec, audio, language flags, and VOST indicator. Badges are rendered server-side and visible on all Jellyfin clients. Features per-panel configuration, SVG and text badge styles, custom badge upload, live preview, and library filtering. Formerly JellyTag (this fork): settings and custom badges are copied over automatically.",
     "owner": "eagleeyetom",
     "category": "General",
-    "imageUrl": "https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/main/Jellytag/Jellyfin.Plugin.JellyTag/JellyTag.png",
+    "imageUrl": "https://raw.githubusercontent.com/eagleeyetom/jellyfin-plugins/main/BadgeFin/Jellyfin.Plugin.BadgeFin/BadgeFin.png",
     "versions": [
       {
-        "version": "2.7.1.0",
-        "changelog": "Fix badges missing in the web client with the Users filter by matching unauthenticated image requests to the users signed in from the request's IP, add TV show (Series) search and horizontal backdrop fallback to the Live Preview, and exclude virtual/missing episodes when detecting series and season badges.",
+        "version": "2.8.0.0",
+        "changelog": "Renamed from JellyTag with a new plugin ID; JellyTag settings and custom badges are copied over on first start (uninstall JellyTag afterwards). Also fixes series badges missing when the first children were unprobed items, and keeps unbadged images out of long-term client caches.",
         "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.7.1.0/jellytag-2.7.1.0.zip",
-        "checksum": "B61F97C076913A73536E38A8FBBC32F8",
-        "timestamp": "2026-11-20T11:08:15Z"
-      },
-      {
-        "version": "2.7.0.0",
-        "changelog": "Add a Users section to show badges to selected users only (or everyone but them), revalidate badged images with ETags, send WebP only to clients that accept it, keep badges inside the visible area of the web client list view with a new size setting, render the live preview without saving settings, detect HDR formats from the file name instead of the whole path, and fix Fire TV and shared-IP client detection.",
-        "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.7.0.0/jellytag-2.7.0.0.zip",
-        "checksum": "77C9EDB716BCA70262E7C28E05D25E7F",
-        "timestamp": "2026-10-23T18:48:19Z"
-      },
-      {
-        "version": "2.6.0.0",
-        "changelog": "Overhaul configuration menu into 5 streamlined accordion sections, add global Badge Style and corner shape controls, compensate for TVDB poster cropping, add per-element badge colors and white logo backgrounds, add the optional official combined Dolby Vision + Dolby Atmos logo, redesign AAC logo, crop H.264 logo whitespace, add Fire TV Dolby Vision filtering, and optimize caching.",
-        "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.6.0.0/jellytag-2.6.0.0.zip",
-        "checksum": "7AD302B456FBC3709E376E0E59E26A21",
-        "timestamp": "2026-10-05T16:55:10Z"
-      },
-      {
-        "version": "2.5.0.0",
-        "changelog": "Separate audio channel badges into a dedicated panel allowing simultaneous display with brand logos, add brand logos for FLAC, DTS, Dolby Digital, EAC3, AAC, and MPEG-2, add per-badge brand logo toggles in web config, fix selector escaping in config preview, add automatic settings migration, and include full test suite.",
-        "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.5.0.0/jellytag-2.5.0.0.zip",
-        "checksum": "15015E6B081C6FA7BDA08D1DA904357F",
-        "timestamp": "2026-09-28T21:47:15Z"
-      },
-      {
-        "version": "2.4.2.0",
-        "changelog": "Upgrade plugin target framework to .NET 10 and Jellyfin 12 packages",
-        "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.4.2.0/jellytag-2.4.2.0.zip",
-        "checksum": "DD2BEDC0A94ECE6E900AF10476332217",
-        "timestamp": "2026-09-27T21:18:00Z"
-      },
-      {
-        "version": "2.4.1.0",
-        "changelog": "Fix 401 error on settings export by using fetch with Authorization header and blob download. Fix series and season quality aggregation to select highest quality HDR and audio tracks, increase series episode query limit to 50, improve Atmos, DTS:X, and HDR10+ detection, adjust audio codec priorities, respect channel layouts, fix excluded libraries GUID comparison, include HideHdrOnWindowsClients in image cache fingerprint, and improve brand logo generation for black backgrounds.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.4.1.0/jellytag-2.4.1.0.zip",
-        "checksum": "56F24955CDB00C2E58EBF6B55447638D",
-        "timestamp": "2026-09-27T21:05:00Z"
-      },
-      {
-        "version": "2.4.0.0",
-        "changelog": "Add a Brand Logo badge style with real logos for Dolby Vision, HDR10, HDR10+, Dolby Atmos, Dolby TrueHD, DTS:X, DTS-HD MA, H.264, VP9 and AV1. Make language flags configurable per language, honour region tags such as pt-BR, and normalise language codes so duplicates no longer appear. Add a mono audio badge. Fix custom badge previews failing to load, and make the badge gallery edit the asset that is actually rendered.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.4.0.0/jellytag-2.4.0.0.zip",
-        "checksum": "ED1E4D72210CB842FA4A95A643AE0510",
-        "timestamp": "2026-09-26T13:18:19Z"
-      },
-      {
-        "version": "2.2.0.0",
-        "changelog": "Add option to hide HDR badges on Windows clients (SDR-only mode). Windows client detection via User-Agent and X-Emby headers, with separate image caching for Windows SDR variants.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.2.0.0/jellytag-2.2.0.0.zip",
-        "checksum": "B3B38E6344D1FCACC5F5734E22B84F79",
-        "timestamp": "2026-09-23T00:00:00Z"
-      },
-      {
-        "version": "2.1.0.3",
-        "changelog": "Prevent broken-image icons in the custom badge gallery when a preview cannot be loaded",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.1.0.3/jellytag-2.1.0.3.zip",
-        "checksum": "FF2157E7DBAF841E56205561A035535E",
-        "timestamp": "2026-09-22T00:00:00Z"
-      },
-      {
-        "version": "2.1.0.2",
-        "changelog": "Remove combined DV+Atmos badge and fix custom badge previews for 5.1 and 7.1 keys",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.1.0.2/jellytag-2.1.0.2.zip",
-        "checksum": "3CB876FD78B8CBD79C860B3C0C20B53F",
-        "timestamp": "2026-09-22T00:00:00Z"
-      },
-      {
-        "version": "2.1.0.1",
-        "changelog": "Fix: preserve badge order when combining DV+Atmos to prevent ShowMode=Highest from hiding combined badge",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.1.0.1/jellytag-2.1.0.1.zip",
-        "checksum": "25A7048BBB27EEFAE3626DE6B108AFAA",
-        "timestamp": "2026-09-22T00:00:00Z"
-      },
-      {
-        "version": "2.1.0.0",
-        "changelog": "Add option to combine Dolby Vision + Atmos badges into single visual, matching TV manufacturer UI patterns. Respects existing Samsung client filtering.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.1.0.0/jellytag-2.1.0.0.zip",
-        "checksum": "B9162C455DC0E312EEDE51CDF763EE8D",
-        "timestamp": "2026-09-22T00:00:00Z"
-      },
-      {
-        "version": "2.0.5.0",
-        "changelog": "Invalidate image caches when the plugin version changes to prevent stale client-specific badges",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.0.5.0/jellytag-2.0.5.0.zip",
-        "checksum": "744BC2E1209A89E7E4352F01D83D5E8A",
-        "timestamp": "2026-09-22T00:00:00Z"
-      },
-      {
-        "version": "2.0.4.0",
-        "changelog": "Improve Samsung/Tizen client detection and isolate client-specific image caches when hiding Dolby Vision badges",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.0.4.0/jellytag-2.0.4.0.zip",
-        "checksum": "70869311D4128832538B28A169BDC1FC",
-        "timestamp": "2026-09-22T00:00:00Z"
-      },
-      {
-        "version": "2.0.3.0",
-        "changelog": "Add an option to hide Dolby Vision badges for Samsung clients while preserving HDR10+ badges",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/jellytag-2.0.3.0/jellytag-2.0.3.0.zip",
-        "checksum": "61A1F875B225EE2F8B0207F29F69C265",
-        "timestamp": "2026-09-22T00:00:00Z"
-      },
-      {
-        "version": "2.0.2.0",
-        "changelog": "Fix: exclude SkiaSharp native assets that caused plugin loading crash, pin Jellyfin packages to 10.11.0 for full 10.11.x compatibility",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/Atilil/jellyfin-plugins/releases/download/jellytag-2.0.2.0/jellytag-2.0.2.0.zip",
-        "checksum": "36407dc2a752ad89c57c7d6c3d343433",
-        "timestamp": "2026-02-02T00:00:00Z"
-      },
-      {
-        "version": "2.0.1.0",
-        "changelog": "Fix: support Jellyfin base URL configuration, fix resolution detection thresholds",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/Atilil/jellyfin-plugins/releases/download/jellytag-2.0.1.0/jellytag-2.0.1.0.zip",
-        "checksum": "0211c9e3bf66d80b1def6c05006e3fa2",
-        "timestamp": "2026-02-02T00:00:00Z"
-      },
-      {
-        "version": "2.0.0.0",
-        "changelog": "v2: Multi-category badges (resolution, HDR, codec, audio, language, VOST), per-panel config, SVG rendering with SkiaSharp, custom badge upload, live preview, library filtering, config export/import",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/Atilil/jellyfin-plugins/releases/download/jellytag-2.0.0.0/jellytag-2.0.0.0.zip",
-        "checksum": "19e9d99c4848c413f7cf918754c67b03",
-        "timestamp": "2026-02-02T00:00:00Z"
-      },
-      {
-        "version": "1.0.0.0",
-        "changelog": "Initial release with quality detection, configurable badges, and image caching",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/Atilil/jellyfin-plugins/releases/download/jellytag-1.0.0.0/jellytag-1.0.0.0.zip",
-        "checksum": "ef2835580a7a8ec6efda30e13a41534c",
-        "timestamp": "2025-01-29T00:00:00Z"
+        "sourceUrl": "https://github.com/eagleeyetom/jellyfin-plugins/releases/download/badgefin-2.8.0.0/badgefin-2.8.0.0.zip",
+        "checksum": "00000000000000000000000000000000",
+        "timestamp": "2026-11-22T00:00:00Z"
       }
     ]
   },
